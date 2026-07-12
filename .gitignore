@@ -1,0 +1,19 @@
+# Build output — the ONLY sanctioned build dir, never committed
+/dist/
+/bin/
+
+# Node / JS toolchain (plugins build their bundle here, commit only the bundle)
+node_modules/
+*.tsbuildinfo
+.pnpm-store/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
