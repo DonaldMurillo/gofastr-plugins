@@ -17,3 +17,8 @@ coverage.*
 *.swp
 .idea/
 .vscode/
+
+# Test runner artifacts (Playwright)
+test-results/
+playwright-report/
+/e2e/shots/

@@ -1,0 +1,51 @@
+{
+  "registryVersion": "1",
+  "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities.",
+  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Each runs isolated in an opaque-origin sandboxed iframe and talks to the host only over a versioned postMessage capability bridge. See docs/plugin-platform.md for the platform contract.",
+  "framework": {
+    "name": "gofastr",
+    "modulePath": "github.com/DonaldMurillo/gofastr",
+    "note": "gofastr uses calendar-ish semver (YYYY-MM-DD releases until the API stabilises). These plugins are developed against the v0.20.0 local checkout via a replace directive in go.mod; no published module version of gofastr-plugins exists yet, so frameworkCompat is a best-effort floor, not a tested matrix."
+  },
+  "plugins": [
+    {
+      "name": "wysiwyg",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/wysiwyg",
+      "version": "0.1.0-phase0",
+      "description": "Full WYSIWYG block editor built on ProseMirror. Block-JSON canonical, markdown export + a pure-Go SSR read view (wysiwyg/ssr). The first heavy-JS plugin and the forcing function that proved the third-party isolation contract.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": ["allow-scripts"],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "upload:images",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.20.0",
+      "routePrefix": "/__gofastr/plugin/wysiwyg",
+      "entry": "/__gofastr/plugin/wysiwyg/editor.html",
+      "schema": "wysiwyg-v1",
+      "minHeight": "240px",
+      "docs": "docs/wysiwyg-editor.md"
+    },
+    {
+      "name": "mermaid",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/mermaid",
+      "version": "0.1.0-phase0",
+      "description": "Isolated Mermaid diagram editor/renderer. The second heavy-JS plugin — the completeness canary proving the extracted pluginhost platform generalizes beyond the editor. Canonical doc is {source:\"...\"}; no upload path.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": ["allow-scripts"],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.20.0",
+      "routePrefix": "/__gofastr/plugin/mermaid",
+      "entry": "/__gofastr/plugin/mermaid/diagram.html",
+      "schema": "mermaid-v1",
+      "minHeight": "320px",
+      "docs": "docs/mermaid.md"
+    }
+  ]
+}

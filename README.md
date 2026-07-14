@@ -23,10 +23,15 @@ WYSIWYG editor, etc.) opt in with a single `go get`.
 
 ```
 gofastr-plugins/
-├── wysiwyg/      the ProseMirror block editor plugin (plugin #1)
+├── pluginhost/   the reusable platform: Manifest, AssetServer, Allow,
+│                 MountMarker, broker — distilled from the editor
+├── wysiwyg/      the ProseMirror block editor plugin (#1) + ssr/ read renderer
+├── mermaid/      the Mermaid diagram plugin (#2, the completeness canary)
 ├── example/      ONE gofastr app that imports & mounts every plugin —
 │                 the integration host, visual/e2e surface, completeness canary
-└── docs/PLAN.md  the master plan
+├── plugins.json  the curated registry index (convention, not a service)
+├── docs/         PLAN.md, DECISIONS.md, design/ (frozen) + platform/plugin docs
+└── CHANGELOG.md
 ```
 
 ## Develop
@@ -38,8 +43,26 @@ directive (`../gofastr`). Run it:
 go run ./example
 ```
 
+## Testing
+
+Two layers, because this project is UI-heavy and engine differences are real
+(several shipped bugs were Safari-only and invisible to Chrome-based tests):
+
+- **Go suite** (`go test ./...`) — unit + integration + headless-Chrome checks
+  of isolation, latency, round-tripping, and rendering.
+- **User-journey e2e** (`cd e2e && npm test`) — Playwright drives the editor
+  the way a person does (real clicks, typing, slash-menu selection, toolbar)
+  in **WebKit (Safari's engine) and Chromium**, against **both mounts**: the
+  default sandboxed iframe and the explicit trusted in-page opt-out
+  (`wysiwyg.WithTrustedMount()`, demo at `/__gofastr/plugin/wysiwyg/trusted`).
+  Any console/page error fails the test. `npm run test:headed` watches a run
+  live.
+
 ## Status
 
-Early scaffolding. Phase 0 (the isolation spike) is the current focus — prove a
-sandboxed ProseMirror clears a p99 keystroke latency ≤16 ms bar before the full
-build. See the plan.
+Phase 0 — the isolation spike — is **built and the gate cleared**: an opaque-
+origin sandboxed ProseMirror measured **p99 keystroke latency 8.6 ms** (target
+≤ 16 ms), proven isolated from both sides. The platform glue is extracted into
+`pluginhost`, the editor + a pure-Go SSR read view ship, and a second plugin
+(`mermaid`) proves the platform generalizes. See [`CHANGELOG.md`](CHANGELOG.md)
+and [`docs/`](docs/).
