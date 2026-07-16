@@ -13,8 +13,8 @@ import (
 // the same in its beforeEach).
 func resetDemoDoc(t *testing.T, baseURL string) {
 	t.Helper()
-	payload := `{"docId":"demo","doc":{"type":"doc","content":[{"type":"paragraph"}]},"markdown":"","schemaVersion":"wysiwyg-v1"}`
-	resp, err := http.Post(baseURL+"/__gofastr/plugin/wysiwyg/save", "application/json", strings.NewReader(payload))
+	payload := `{"docId":"demo","doc":{"type":"doc","content":[{"type":"paragraph"}]},"markdown":"","schemaVersion":"richtext-v1"}`
+	resp, err := http.Post(baseURL+"/__gofastr/plugin/richtext/save", "application/json", strings.NewReader(payload))
 	if err != nil {
 		t.Fatalf("reset demo doc: %v", err)
 	}

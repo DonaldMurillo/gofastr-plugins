@@ -1,4 +1,4 @@
-// User-journey e2e tests for the WYSIWYG editor. These drive the editor the
+// User-journey e2e tests for the Rich Text editor. These drive the editor the
 // way a person does — real mouse clicks, real typing, real menu selection —
 // and assert what is VISUALLY rendered, in both WebKit (Safari's engine) and
 // Chromium, against BOTH mounts:
@@ -16,7 +16,7 @@ const EMPTY_DOC = {
   docId: "demo",
   doc: { type: "doc", content: [{ type: "paragraph" }] },
   markdown: "",
-  schemaVersion: "wysiwyg-v1",
+  schemaVersion: "richtext-v1",
 };
 
 interface Surface {
@@ -35,8 +35,8 @@ const SURFACES: Surface[] = [
     ready: (page) =>
       page.waitForFunction(
         () => {
-          const f = document.querySelector("iframe") as (HTMLIFrameElement & { __wysiwygReady?: boolean }) | null;
-          return !!f && f.__wysiwygReady === true;
+          const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
+          return !!f && f.__richtextReady === true;
         },
         undefined,
         { timeout: 15_000 }
@@ -44,11 +44,11 @@ const SURFACES: Surface[] = [
   },
   {
     name: "trusted in-page mount",
-    path: "/__gofastr/plugin/wysiwyg/trusted",
+    path: "/__gofastr/plugin/richtext/trusted",
     ui: (page) => page,
     ready: (page) =>
       page.waitForFunction(
-        () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true,
+        () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true,
         undefined,
         { timeout: 15_000 }
       ),
@@ -64,7 +64,7 @@ for (const surface of SURFACES) {
 
     test.beforeEach(async ({ page, request, baseURL }) => {
       // Reset the persisted demo doc so every journey starts from a blank page.
-      const res = await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, {
+      const res = await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, {
         data: EMPTY_DOC,
       });
       expect(res.ok()).toBeTruthy();
@@ -94,11 +94,11 @@ for (const surface of SURFACES) {
       await editor(page).click();
       await page.keyboard.type("/");
 
-      const menu = ui(page).locator(".wysiwyg-slash-menu");
+      const menu = ui(page).locator(".richtext-slash-menu");
       await expect(menu).toBeVisible();
 
       // The user's exact gesture: click the menu item with the mouse.
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "Heading 1" }).click();
+      await ui(page).locator(".richtext-slash-item", { hasText: "Heading 1" }).click();
 
       await expect(menu).toBeHidden();
 
@@ -123,7 +123,7 @@ for (const surface of SURFACES) {
     test("slash menu: keyboard-only (arrows + Enter) inserts a bulleted list", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/bullet");
-      await expect(ui(page).locator(".wysiwyg-slash-menu")).toBeVisible();
+      await expect(ui(page).locator(".richtext-slash-menu")).toBeVisible();
       await page.keyboard.press("Enter");
 
       await expect(editor(page).locator("ul li")).toHaveCount(1);
@@ -140,7 +140,7 @@ for (const surface of SURFACES) {
       await editor(page).click();
       await page.keyboard.type("/quote");
 
-      const items = ui(page).locator(".wysiwyg-slash-item");
+      const items = ui(page).locator(".richtext-slash-item");
       await expect(items).toHaveCount(1);
       await items.first().click();
 
@@ -169,7 +169,7 @@ for (const surface of SURFACES) {
         if (sel === "please") break;
       }
 
-      const bubble = ui(page).locator(".wysiwyg-bubble");
+      const bubble = ui(page).locator(".richtext-bubble");
       await expect(bubble).toBeVisible();
 
       // The user's gesture under test: a real mouse click on the Bold button.
@@ -186,13 +186,13 @@ for (const surface of SURFACES) {
     test("to-do list: insert via slash, click the checkbox like a user", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/to-do");
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "To-do list" }).click();
+      await ui(page).locator(".richtext-slash-item", { hasText: "To-do list" }).click();
       await page.keyboard.type("buy milk");
       await page.keyboard.press("Enter");
       await page.keyboard.type("walk dog");
 
       await expect(editor(page)).toContainText("buy milk");
-      const items = editor(page).locator("li.wysiwyg-task-item");
+      const items = editor(page).locator("li.richtext-task-item");
       await expect(items).toHaveCount(2);
 
       // The checkbox is a non-editable span decoration (role="checkbox"), not
@@ -202,13 +202,13 @@ for (const surface of SURFACES) {
       // toggled the wrong item / lagged a click behind.)
       await expect(items.nth(0)).toHaveAttribute("data-checked", "false");
       await expect(items.nth(1)).toHaveAttribute("data-checked", "false");
-      await items.nth(1).locator(".wysiwyg-task-checkbox").click();
+      await items.nth(1).locator(".richtext-task-checkbox").click();
       await expect(items.nth(1)).toHaveAttribute("data-checked", "true");
       await expect(items.nth(0)).toHaveAttribute("data-checked", "false");
 
       // And the FIRST item's checkbox toggles the first, from a cold click
       // (no caret in it) — the exact fresh-load case the UX review caught.
-      await items.nth(0).locator(".wysiwyg-task-checkbox").click();
+      await items.nth(0).locator(".richtext-task-checkbox").click();
       await expect(items.nth(0)).toHaveAttribute("data-checked", "true");
       await expect(items.nth(1)).toHaveAttribute("data-checked", "true");
     });
@@ -216,7 +216,7 @@ for (const surface of SURFACES) {
     test("toggle block: insert via slash menu and it renders open with summary + body", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/toggle");
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "Toggle" }).click();
+      await ui(page).locator(".richtext-slash-item", { hasText: "Toggle" }).click();
       await page.keyboard.type("My summary");
       await expect(editor(page)).toContainText("My summary");
     });
@@ -226,14 +226,44 @@ for (const surface of SURFACES) {
       await page.keyboard.type("some intro");
       await page.keyboard.press("Enter");
       await page.keyboard.type("/div");
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "Divider" }).click();
+      await ui(page).locator(".richtext-slash-item", { hasText: "Divider" }).click();
       await expect(editor(page).locator("hr")).toBeVisible();
+    });
+
+    test("code block: syntax highlighting colors keywords, numbers and strings once a language is set", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("/code");
+      await ui(page).locator(".richtext-slash-item", { hasText: "Code" }).click();
+
+      // A code block, no language yet → no highlight spans.
+      await page.keyboard.type('const answer = 42');
+      const code = editor(page).locator("pre code");
+      await expect(code).toContainText("const answer = 42");
+      await expect(code.locator(".hl-keyword")).toHaveCount(0);
+
+      // Pick a language from the floating block controls, the way a user would.
+      await ui(page).locator(".richtext-blockctl-select").selectOption("javascript");
+
+      // `const` is now a keyword span and `42` a number span — and their
+      // computed color differs from the surrounding code text (the stylesheet
+      // actually applied, not just the class).
+      const kw = code.locator(".hl-keyword", { hasText: "const" });
+      const num = code.locator(".hl-number", { hasText: "42" });
+      await expect(kw).toHaveCount(1);
+      await expect(num).toHaveCount(1);
+
+      const colors = await code.evaluate((el: HTMLElement) => {
+        const k = el.querySelector(".hl-keyword") as HTMLElement;
+        const plain = getComputedStyle(el).color;
+        return { keyword: getComputedStyle(k).color, plain };
+      });
+      expect(colors.keyword, "keyword color should differ from default code text").not.toBe(colors.plain);
     });
 
     test("slash menu: arrowing past the fold scrolls the active item into view, Enter applies it", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/");
-      const menu = ui(page).locator(".wysiwyg-slash-menu");
+      const menu = ui(page).locator(".richtext-slash-menu");
       await expect(menu).toBeVisible();
 
       // The unfiltered menu is taller than its 320px max-height. Arrow deep
@@ -241,10 +271,10 @@ for (const surface of SURFACES) {
       // not vanish below the fold.
       for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
 
-      const active = menu.locator(".wysiwyg-slash-item.is-active");
+      const active = menu.locator(".richtext-slash-item.is-active");
       await expect(active).toHaveCount(1);
       const inView = await menu.evaluate((m: HTMLElement) => {
-        const a = m.querySelector(".wysiwyg-slash-item.is-active")!;
+        const a = m.querySelector(".richtext-slash-item.is-active")!;
         const mr = m.getBoundingClientRect();
         const ar = a.getBoundingClientRect();
         return ar.top >= mr.top - 1 && ar.bottom <= mr.bottom + 1;
@@ -255,7 +285,7 @@ for (const surface of SURFACES) {
       await expect(active).toContainText("Toggle");
       await page.keyboard.press("Enter");
       await expect(menu).toBeHidden();
-      await expect(editor(page).locator('[data-type="wysiwyg-toggle"]')).toHaveCount(1);
+      await expect(editor(page).locator('[data-type="richtext-toggle"]')).toHaveCount(1);
     });
 
     test("drag handle: stays visible while reaching for it, and drag reorders blocks", async ({ page }) => {
@@ -268,7 +298,7 @@ for (const surface of SURFACES) {
       const first = editor(page).locator("p", { hasText: "alpha block" });
       const fb = (await first.boundingBox())!;
       await page.mouse.move(fb.x + 60, fb.y + fb.height / 2);
-      const handle = ui(page).locator(".wysiwyg-draghandle");
+      const handle = ui(page).locator(".richtext-draghandle");
       await expect(handle).toBeVisible();
 
       // Travel from the text to the handle (crossing the editor's edge). The
@@ -293,7 +323,7 @@ for (const surface of SURFACES) {
     test("clicking outside the menu dismisses it (no Escape key needed)", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/");
-      const menu = ui(page).locator(".wysiwyg-slash-menu");
+      const menu = ui(page).locator(".richtext-slash-menu");
       await expect(menu).toBeVisible();
 
       // The user's gesture: click somewhere else on the page — the host
@@ -307,42 +337,154 @@ for (const surface of SURFACES) {
       await page.keyboard.type("toolbar heading");
       // The dropdown is the toolbar's signature control (Bold etc. are covered
       // by the bubble test). selectOption avoids fragile coordinate clicks.
-      await ui(page).locator(".wysiwyg-tb-select").selectOption("h1");
+      await ui(page).locator(".richtext-tb-select").selectOption("h1");
       await expect(editor(page).locator("h1")).toContainText("toolbar heading");
       // The dropdown reflects the current block back.
-      await expect(ui(page).locator(".wysiwyg-tb-select")).toHaveValue("h1");
+      await expect(ui(page).locator(".richtext-tb-select")).toHaveValue("h1");
       // Undo button (mobile's only undo path) reverts it.
-      await ui(page).locator(".wysiwyg-toolbar .wysiwyg-tbtn[title='Undo']").click();
+      await ui(page).locator(".richtext-toolbar .richtext-tbtn[title='Undo']").click();
       await expect(editor(page).locator("h1")).toHaveCount(0);
     });
 
     test("word count status bar reflects the document", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("one two three");
-      await expect(ui(page).locator(".wysiwyg-statusbar")).toContainText("3 words");
+      await expect(ui(page).locator(".richtext-statusbar")).toContainText("3 words");
     });
 
     test("alignment: toolbar centers the current block", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("center me");
-      await ui(page).locator(".wysiwyg-toolbar .wysiwyg-tbtn[title='Align center']").click();
+      await ui(page).locator(".richtext-toolbar .richtext-tbtn[title='Align center']").click();
       const align = await editor(page).locator("p").first().evaluate(
         (el: HTMLElement) => getComputedStyle(el).textAlign
       );
       expect(align).toBe("center");
     });
 
+    // Exhaustive toolbar coverage: every button in the persistent toolbar,
+    // exercised the way a user clicks it. (The suite previously covered only the
+    // block dropdown, one alignment, and Bold.)
+    //
+    // KEY: a toolbar click preserves the editor selection (activate() calls
+    // preventDefault on mousedown), so after applying a mark we can toggle it
+    // straight off WITHOUT re-selecting. Re-clicking the editable to re-select
+    // is what to avoid — inside the sandboxed OOPIF that click times out.
+    const tbtn = (page: Page, title: string) =>
+      ui(page).locator(`.richtext-toolbar .richtext-tbtn[title='${title}']`);
+    const selectAll = (page: Page) => page.keyboard.press("ControlOrMeta+a");
+
+    for (const m of [
+      { title: "Bold", tag: "strong" },
+      { title: "Italic", tag: "em" },
+      { title: "Underline", tag: "u" },
+      { title: "Strikethrough", tag: "s" },
+      { title: "Inline code", tag: "code" },
+    ]) {
+      test(`toolbar mark: ${m.title} applies and toggles off`, async ({ page }) => {
+        await editor(page).click();
+        await page.keyboard.type("format this text");
+        await selectAll(page);
+        await tbtn(page, m.title).click();
+        await expect(editor(page).locator(m.tag)).toContainText("format this text");
+        // Selection is still the whole line — toggle straight back off.
+        await tbtn(page, m.title).click();
+        await expect(editor(page).locator(m.tag)).toHaveCount(0);
+      });
+    }
+
+    test("toolbar: Undo and Redo buttons", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("keep this");
+      await page.keyboard.type(" and this");
+      await tbtn(page, "Undo").click();
+      await expect(editor(page)).not.toContainText("and this");
+      await tbtn(page, "Redo").click();
+      await expect(editor(page)).toContainText("and this");
+    });
+
+    test("toolbar: alignment right / center / left", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("align me");
+      const alignOf = () =>
+        editor(page).locator("p").first().evaluate((el: HTMLElement) => getComputedStyle(el).textAlign);
+      await tbtn(page, "Align right").click();
+      expect(await alignOf()).toBe("right");
+      await tbtn(page, "Align center").click();
+      expect(await alignOf()).toBe("center");
+      // "left" is the schema default → emits no inline style → computes as "start".
+      await tbtn(page, "Align left").click();
+      expect(["start", "left"]).toContain(await alignOf());
+    });
+
+    test("toolbar: Link button opens the popover and applies a link", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("linkable words");
+      await selectAll(page);
+      await tbtn(page, "Link").click();
+      const pop = ui(page).locator(".richtext-linkpop");
+      await expect(pop).toBeVisible();
+      await pop.locator(".richtext-link-input").fill("example.com");
+      await pop.locator(".richtext-link-apply").click();
+      // A bare domain is normalized to https://.
+      await expect(editor(page).locator("a[href='https://example.com']")).toHaveCount(1);
+    });
+
+    for (const c of [
+      { title: "Text color", slot: "red" },
+      { title: "Highlight", slot: "yellow" },
+    ]) {
+      test(`toolbar: ${c.title} opens the swatch grid and applies a color`, async ({ page }) => {
+        await editor(page).click();
+        await page.keyboard.type("color these words");
+        await selectAll(page);
+        await tbtn(page, c.title).click();
+        const grid = ui(page).locator(".richtext-colorgrid");
+        await expect(grid).toBeVisible();
+        // Positioning guard: the grid must float as a compact popover, not get
+        // clipped above the toolbar nor stretch full-width (the two bugs that
+        // shipped). Its box sits within the viewport and stays swatch-sized.
+        const box = await grid.boundingBox();
+        expect(box, "color grid has a layout box").not.toBeNull();
+        expect(box!.y, "grid not clipped above the frame").toBeGreaterThanOrEqual(0);
+        expect(box!.width, "grid is compact, not full-width-stretched").toBeLessThan(400);
+        await grid.locator(`.richtext-swatch[data-slot='${c.slot}']`).click();
+        // A styled span now carries the color/background var.
+        await expect(editor(page).locator('span[style*="var(--richtext-"]')).toHaveCount(1);
+      });
+    }
+
+    test("toolbar: Clear formatting strips marks", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("bold then plain");
+      await selectAll(page);
+      await tbtn(page, "Bold").click();
+      await expect(editor(page).locator("strong")).toHaveCount(1);
+      // Selection is still the whole line — clear straight away.
+      await tbtn(page, "Clear formatting").click();
+      await expect(editor(page).locator("strong")).toHaveCount(0);
+    });
+
+    test("toolbar block-type: Code and Quote via dropdown", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("becomes code");
+      await ui(page).locator(".richtext-tb-select").selectOption("code_block");
+      await expect(editor(page).locator("pre code")).toContainText("becomes code");
+      await ui(page).locator(".richtext-tb-select").selectOption("blockquote");
+      await expect(editor(page).locator("blockquote")).toHaveCount(1);
+    });
+
     test("find & replace: Mod-F finds and Replace all rewrites", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("cat dog cat dog cat");
       await page.keyboard.press("ControlOrMeta+f");
-      const panel = ui(page).locator(".wysiwyg-find-panel");
+      const panel = ui(page).locator(".richtext-find-panel");
       await expect(panel).toBeVisible();
-      await panel.locator(".wysiwyg-find-input").first().fill("cat");
+      await panel.locator(".richtext-find-input").first().fill("cat");
       // Match highlights appear.
-      await expect(ui(page).locator(".wysiwyg-find-match")).toHaveCount(3);
+      await expect(ui(page).locator(".richtext-find-match")).toHaveCount(3);
       // Replace all cat → tiger.
-      await panel.locator(".wysiwyg-find-input").nth(1).fill("tiger");
+      await panel.locator(".richtext-find-input").nth(1).fill("tiger");
       await panel.getByText("Replace all", { exact: false }).click();
       await expect(editor(page)).toContainText("tiger dog tiger dog tiger");
     });
@@ -368,7 +510,7 @@ for (const surface of SURFACES) {
         if (sel === "second") break;
         await page.keyboard.press("Shift+ArrowRight");
       }
-      const bold = ui(page).locator('.wysiwyg-bubble [title="Bold"]');
+      const bold = ui(page).locator('.richtext-bubble [title="Bold"]');
       await expect(bold).toBeVisible();
       await bold.focus();
       await page.keyboard.press("Enter");
@@ -378,7 +520,7 @@ for (const surface of SURFACES) {
     test("table: Tab at the last cell appends a row", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/table");
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "Table" }).click();
+      await ui(page).locator(".richtext-slash-item", { hasText: "Table" }).click();
       const rows = editor(page).locator("table tr");
       const before = await rows.count();
       // Tab from the first cell all the way past the last → appends a row.
@@ -390,9 +532,9 @@ for (const surface of SURFACES) {
       await editor(page).click();
       await page.keyboard.type("visit here");
       for (let i = 0; i < "here".length; i++) await page.keyboard.press("Shift+ArrowLeft");
-      await ui(page).locator('.wysiwyg-bubble [title="Link"]').click();
+      await ui(page).locator('.richtext-bubble [title="Link"]').click();
 
-      const input = ui(page).locator(".wysiwyg-link-input");
+      const input = ui(page).locator(".richtext-link-input");
       await expect(input).toBeVisible();
       await input.fill("example.com/path");
       await input.press("Enter");
@@ -402,18 +544,18 @@ for (const surface of SURFACES) {
       // A dangerous scheme is rejected with an inline error, not silently.
       await editor(page).locator("a").click();
       for (let i = 0; i < "here".length; i++) await page.keyboard.press("Shift+ArrowLeft");
-      await ui(page).locator('.wysiwyg-bubble [title="Link"]').click();
-      await ui(page).locator(".wysiwyg-link-input").fill("javascript:alert(1)");
-      await ui(page).locator(".wysiwyg-link-input").press("Enter");
-      await expect(ui(page).locator(".wysiwyg-link-error")).toBeVisible();
+      await ui(page).locator('.richtext-bubble [title="Link"]').click();
+      await ui(page).locator(".richtext-link-input").fill("javascript:alert(1)");
+      await ui(page).locator(".richtext-link-input").press("Enter");
+      await expect(ui(page).locator(".richtext-link-error")).toBeVisible();
     });
 
     test("Escape closes the slash menu and the '/' stays as typed text", async ({ page }) => {
       await editor(page).click();
       await page.keyboard.type("/");
-      await expect(ui(page).locator(".wysiwyg-slash-menu")).toBeVisible();
+      await expect(ui(page).locator(".richtext-slash-menu")).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(ui(page).locator(".wysiwyg-slash-menu")).toBeHidden();
+      await expect(ui(page).locator(".richtext-slash-menu")).toBeHidden();
       await expect(editor(page)).toContainText("/");
     });
   });
@@ -427,11 +569,11 @@ test.describe("sandboxed iframe (frame-specific)", () => {
   const editor = (page: Page) => frame(page).locator(".ProseMirror");
 
   test.beforeEach(async ({ page, request, baseURL }) => {
-    await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, { data: EMPTY_DOC });
+    await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
     await page.goto("/");
     await page.waitForFunction(() => {
-      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __wysiwygReady?: boolean }) | null;
-      return !!f && f.__wysiwygReady === true;
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
+      return !!f && f.__richtextReady === true;
     });
   });
 
@@ -446,7 +588,7 @@ test.describe("sandboxed iframe (frame-specific)", () => {
 
     await page.keyboard.press("Enter");
     await page.keyboard.type("/");
-    const menu = frame(page).locator(".wysiwyg-slash-menu");
+    const menu = frame(page).locator(".richtext-slash-menu");
     await expect(menu).toBeVisible();
     await expect
       .poll(async () => (await page.locator("iframe").boundingBox())!.height, {
@@ -479,7 +621,7 @@ test.describe("sandboxed iframe (frame-specific)", () => {
     const h0 = (await page.locator("iframe").boundingBox())!.height;
     await page.keyboard.type("/");
 
-    const menu = frame(page).locator(".wysiwyg-slash-menu");
+    const menu = frame(page).locator(".richtext-slash-menu");
     await expect(menu).toBeVisible();
     await page.waitForTimeout(400); // let the overlay-aware resize RPC round-trip
 
@@ -512,7 +654,7 @@ test.describe("sandboxed iframe (frame-specific)", () => {
     // hero above the editor) and Chromium does not auto-scroll the OUTER page
     // for an element inside the frame — bring the frame's bottom on-screen.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await frame(page).locator(".wysiwyg-slash-item", { hasText: "Table" }).click();
+    await frame(page).locator(".richtext-slash-item", { hasText: "Table" }).click();
     await expect(editor(page).locator("table")).toHaveCount(1);
   });
 });
@@ -521,14 +663,14 @@ test.describe("sandboxed iframe (frame-specific)", () => {
 // Trusted-mount-only journeys (the opt-out's specific promises)
 
 test.describe("trusted in-page mount (mode-specific)", () => {
-  const TRUSTED = "/__gofastr/plugin/wysiwyg/trusted";
+  const TRUSTED = "/__gofastr/plugin/richtext/trusted";
   const editor = (page: Page) => page.locator(".ProseMirror");
 
   test.beforeEach(async ({ page, request, baseURL }) => {
-    await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, { data: EMPTY_DOC });
+    await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
     await page.goto(TRUSTED);
     await page.waitForFunction(
-      () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+      () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
     );
   });
 
@@ -537,7 +679,7 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     await expect(editor(page)).toBeVisible();
     // The overlays live inside the scoped wrapper, not on document.body.
     const scoped = await page
-      .locator(".gofastr-wysiwyg-trusted .wysiwyg-slash-menu")
+      .locator(".gofastr-richtext-trusted .richtext-slash-menu")
       .count();
     expect(scoped).toBe(1);
   });
@@ -550,7 +692,7 @@ test.describe("trusted in-page mount (mode-specific)", () => {
 
     await page.reload();
     await page.waitForFunction(
-      () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+      () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
     );
     await expect(editor(page)).toContainText("persist me across reloads");
   });
@@ -570,14 +712,14 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     const firstP = editor(page).locator("p").first();
     const fb = (await firstP.boundingBox())!;
     await page.mouse.move(fb.x + 40, fb.y + fb.height / 2);
-    const handle = page.locator(".wysiwyg-draghandle");
+    const handle = page.locator(".richtext-draghandle");
     await expect(handle).toBeVisible();
     await page.mouse.wheel(0, 120);
     await expect(handle).toBeHidden();
 
     // Slash menu: opens at the caret and FOLLOWS it when the page scrolls.
     await page.keyboard.type("/");
-    const menu = page.locator(".wysiwyg-slash-menu");
+    const menu = page.locator(".richtext-slash-menu");
     await expect(menu).toBeVisible();
     const before = (await menu.boundingBox())!;
     await page.mouse.wheel(0, -100); // scroll back up 100px
@@ -592,7 +734,7 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     // .ProseMirror itself is transparent.
     const bgOf = () =>
       page
-        .locator(".gofastr-wysiwyg-trusted")
+        .locator(".gofastr-richtext-trusted")
         .evaluate((el: HTMLElement) => getComputedStyle(el).backgroundColor);
     await editor(page).click();
     await page.keyboard.type("theme me");

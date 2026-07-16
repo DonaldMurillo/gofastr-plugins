@@ -3,7 +3,7 @@
 The `pluginhost` package is the reusable, plugin-agnostic host glue that lets a
 GoFastr app mount a **heavy-JavaScript plugin** as a genuinely third-party,
 isolated client module. It was distilled out of the first such plugin (the
-[`wysiwyg`](wysiwyg-editor.md) editor) so a second plugin ([`mermaid`](mermaid.md))
+[`richtext`](richtext-editor.md) editor) so a second plugin ([`mermaid`](mermaid.md))
 could reuse it instead of reimplementing the iframe / broker / manifest /
 capability / framing-header plumbing.
 
@@ -349,7 +349,7 @@ window.__gofastrPluginHost.register("myplugin", {
 });
 ```
 
-The two shipped plugins — [`wysiwyg`](wysiwyg-editor.md) and
+The two shipped plugins — [`richtext`](richtext-editor.md) and
 [`mermaid`](mermaid.md) — are working references for this shape.
 
 ## Registry
@@ -359,3 +359,76 @@ The curated index is [`plugins.json`](../plugins.json) at the repo root. It is a
 runtime discovery server — apps import a plugin package directly by its
 `modulePath` and mount it with `framework.RegisterPlugin`. Each row mirrors the
 plugin's own identity/route constants and its `pluginhost.Manifest`.
+
+### Consuming it
+
+The index is consumed **by copy, not by import**. Tagging `vX.Y.Z` here
+publishes a release with `plugins.json` attached; a host — GoFastr's docs site
+first — fetches that asset as it deploys, vendors it, and generates a page per
+plugin from the rows:
+
+```
+plugins.json (this repo, source of truth)
+        │  tag vX.Y.Z -> release.yml validates, stamps provenance, attaches it
+        ▼
+GitHub release asset
+        │  fetch + vendor at deploy
+        ▼
+gofastr (parses its own copy, generates a page per plugin)
+```
+
+```sh
+# Pinned to a known release — what a reproducible deploy should use.
+curl -fsSL -O https://github.com/DonaldMurillo/gofastr-plugins/releases/download/v0.1.0/plugins.json
+
+# Or always the newest release.
+curl -fsSL -O https://github.com/DonaldMurillo/gofastr-plugins/releases/latest/download/plugins.json
+```
+
+The published artifact is the JSON file, so this repo deliberately exposes **no
+Go API** for it. That is the point rather than an omission: GoFastr consuming a
+Go package here would mean the framework importing a repo that imports the
+framework — a module cycle — and it would pull chromedp and every embedded JS
+bundle into the core's `go.mod`, the outcome this whole repo split exists to
+avoid. A file copy has neither problem.
+
+### Provenance
+
+A copy's weakness is that it forgets where it came from: once vendored, a
+year-old `plugins.json` looks exactly like a fresh one. So the release workflow
+stamps the **published** copy — never the one in git — with the release it came
+from:
+
+```json
+"release": {
+  "tag": "v0.1.0",
+  "commit": "78800e3e...",
+  "published": "2026-07-16T23:14:42Z",
+  "source": "https://github.com/DonaldMurillo/gofastr-plugins"
+}
+```
+
+A host can render or log that, and a stale vendored copy becomes visible instead
+of silent. The file in git carries no stamp, and a test enforces that — a
+hand-written one would be a lie the moment it was committed.
+
+Note the version axes, which move independently: `registryVersion` versions the
+file's SHAPE (bump it on a breaking field change — vendored copies are then
+stale), `release.tag` says which release a copy came from, and each row's
+`version` reports that plugin's own release.
+
+### Changing it
+
+`plugins.json` is hand-maintained — update a plugin's row in the same change
+that bumps its `Version` or capabilities. Because a stale row is invisible to
+every other test, [`internal/registry`](../internal/registry) guards it: rows
+must cover exactly the plugin packages in the repo, each row's `routePrefix`
+must equal the package's own const, no row may request `allow-same-origin`, and
+the parser **rejects unknown fields** — so a new JSON key must be added to the
+structs there in the same change, rather than being silently dropped from every
+generated page. Those structs document the schema; treat a change to them as a
+change to a published contract.
+
+Those same guards run inside the release workflow before the asset is attached,
+so a broken index fails the release rather than reaching a host — where it would
+be invisible until a page rendered wrong.

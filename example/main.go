@@ -7,8 +7,8 @@
 //
 //	go run ./example
 //
-// Then open http://localhost:8090/ for the WYSIWYG editor demo (served by the
-// wysiwyg plugin's self-contained themed demo page).
+// Then open http://localhost:8090/ for the Rich Text editor demo (served by the
+// richtext plugin's self-contained themed demo page).
 package main
 
 import (
@@ -18,7 +18,7 @@ import (
 	"os"
 
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
-	"github.com/DonaldMurillo/gofastr-plugins/wysiwyg"
+	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr/framework"
 )
 
@@ -29,16 +29,16 @@ func newApp() (*framework.App, error) {
 		framework.WithConfig(framework.AppConfig{Name: "gofastr-plugins-example"}),
 	)
 
-	// The WYSIWYG editor plugin. WithDevGrantAll lets the unauthenticated demo
+	// The Rich Text editor plugin. WithDevGrantAll lets the unauthenticated demo
 	// satisfy the document:write / upload:images capability gate (Phase 0 has no
 	// login); WithDemoPage serves the self-contained themed editor page at "/".
 	// WithTrustedMount is the EXPLICIT opt-out of the sandbox (DECISIONS.md
 	// "secure by default, opt out"): it additionally serves the frameless
-	// in-page demo at /__gofastr/plugin/wysiwyg/trusted for comparison and e2e.
-	app.RegisterPlugin(wysiwyg.New(
-		wysiwyg.WithDevGrantAll(),
-		wysiwyg.WithDemoPage(),
-		wysiwyg.WithTrustedMount(),
+	// in-page demo at /__gofastr/plugin/richtext/trusted for comparison and e2e.
+	app.RegisterPlugin(richtext.New(
+		richtext.WithDevGrantAll(),
+		richtext.WithDemoPage(),
+		richtext.WithTrustedMount(),
 	))
 
 	// The second heavy-JS plugin — an isolated Mermaid diagram renderer — mounted
@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("newApp: %v", err)
 	}
-	log.Printf("plugins available: %s@%s", wysiwyg.Name, wysiwyg.Version)
+	log.Printf("plugins available: %s@%s", richtext.Name, richtext.Version)
 
 	addr := ":8090"
 	if p := os.Getenv("PORT"); p != "" {

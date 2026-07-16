@@ -1,0 +1,84 @@
+name: Release
+
+# Cuts a GitHub release and publishes plugins.json as an asset, which is how a
+# host (GoFastr's docs site) gets the plugin index: it fetches the file at
+# deploy time and vendors it. See docs/plugin-platform.md § Registry.
+#
+# The stable fetch URL, always pointing at the newest release:
+#
+#   https://github.com/DonaldMurillo/gofastr-plugins/releases/latest/download/plugins.json
+#
+# Or pinned to a known release, which is what a reproducible deploy wants:
+#
+#   https://github.com/DonaldMurillo/gofastr-plugins/releases/download/v0.1.0/plugins.json
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: publish ${{ github.event.inputs.tag || github.ref_name }}
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: off
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # A release is what hosts copy from, so a broken index must not get that
+      # far. These are the guards that catch a row drifting from the plugin it
+      # claims to describe — cheap here, invisible once vendored downstream.
+      - name: validate the index
+        run: go test ./internal/registry/ -count=1
+
+      # A copy carries no provenance: once vendored, a stale plugins.json looks
+      # exactly like a fresh one. Stamping the release identity into the
+      # PUBLISHED copy (never the one in git) means the file downstream says
+      # what it is, without the host having to remember where it got it.
+      - name: stamp provenance into the published copy
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          jq \
+            --arg tag "$TAG" \
+            --arg commit "$GITHUB_SHA" \
+            --arg published "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg source "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            '. + {release: {tag: $tag, commit: $commit, published: $published, source: $source}}' \
+            plugins.json > dist/plugins.json
+
+          # jq emitting invalid JSON would be news, but this file is the entire
+          # point of the release — confirm rather than assume.
+          jq -e '.release.tag and (.plugins | length > 0)' dist/plugins.json > /dev/null
+          echo "--- published index ---"
+          jq '.release' dist/plugins.json
+
+      - name: publish
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists — replacing the asset."
+            gh release upload "$TAG" dist/plugins.json --clobber
+          else
+            gh release create "$TAG" dist/plugins.json \
+              --title "$TAG" \
+              --generate-notes
+          fi

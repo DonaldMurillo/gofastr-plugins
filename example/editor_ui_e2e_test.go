@@ -43,7 +43,7 @@ func TestEditorUIGestures(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/")); err != nil {
 		t.Fatalf("navigate: %v", err)
 	}
-	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__wysiwygReady === true)`, 10*time.Second) {
+	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`, 10*time.Second) {
 		t.Fatal("editor never ready")
 	}
 	var xy []float64

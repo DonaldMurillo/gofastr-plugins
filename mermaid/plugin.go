@@ -12,7 +12,7 @@ import (
 )
 
 // Identity and route constants. Both this plugin and host/adapter.js hard-code
-// these exactly. The demo lives at /mermaid (not "/", which wysiwyg owns) so
+// these exactly. The demo lives at /mermaid (not "/", which richtext owns) so
 // both plugins co-mount.
 const (
 	Name             = "mermaid"

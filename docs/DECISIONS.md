@@ -8,7 +8,7 @@ understand *why*, not just *what*.
 
 Started from GoFastr issue **#38** — "ui: Markdown editor component (render-only
 today)". The issue as written asks for a textarea + live-preview pane. That
-reading was wrong: the real target is a **full WYSIWYG rich-text editor**
+reading was wrong: the real target is a **full Rich Text rich-text editor**
 (Notion/Confluence-class) where markdown is the storage/interchange format, not
 the editing UX.
 
@@ -20,7 +20,7 @@ the editing UX.
    coexist on one form** (runtime hijacks submit on any `data-fui-rpc` form —
    `runtime.js:429`; input-trigger requires such a form — `runtime.js:528`; HTML
    forbids nested forms). Verified. All three plans made obsolete by the reframe.
-2. **Reframe → full WYSIWYG.** A real WYSIWYG is inherently a fat client, which
+2. **Reframe → full Rich Text.** A real Rich Text is inherently a fat client, which
    collides head-on with GoFastr's SSR-thin / ≤12 KB core / no-client-logic model.
 3. **Resolution → an official registry for heavy-JS plugins** that live OUTSIDE
    the core, keeping the core pure. The editor is plugin #1. ("Keep it Go-ing.")
@@ -109,12 +109,12 @@ mounted — why the cage?"). Resolution, from the app owner:
   compromised dependency cannot reach host cookies/sessions/DOM.
 - **Opt-out is allowed but must be explicit** — the "trusted mount" mode
   (same plugin API, in-page, no frame) for plugins the app owner compiles in
-  and vouches for. BUILT the same day for the wysiwyg plugin:
-  `wysiwyg.WithTrustedMount()` (host-side, never a default, never
-  plugin-selectable) serves `editor-inline.js` (window.__gofastrWysiwyg.mountTrusted),
-  `editor-scoped.css` (frame stylesheet rescoped under `.gofastr-wysiwyg-trusted`;
+  and vouches for. BUILT the same day for the richtext plugin:
+  `richtext.WithTrustedMount()` (host-side, never a default, never
+  plugin-selectable) serves `editor-inline.js` (window.__gofastrRichText.mountTrusted),
+  `editor-scoped.css` (frame stylesheet rescoped under `.gofastr-richtext-trusted`;
   the `:root` fallback-token block is dropped so page tokens inherit), and a
-  frameless demo at `/__gofastr/plugin/wysiwyg/trusted`. Same protocol
+  frameless demo at `/__gofastr/plugin/richtext/trusted`. Same protocol
   envelopes, transport swapped from postMessage to direct calls
   (`protocol.setTransport` + `routeEnvelope`); overlays attach inside the
   scoped wrapper (`ui.setOverlayParent`). The full e2e journey suite runs

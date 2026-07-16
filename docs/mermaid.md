@@ -12,7 +12,7 @@ than being shaped around it.
 ## What it is
 
 A Mermaid source editor that renders diagrams inside the same opaque-origin
-sandboxed iframe as the WYSIWYG editor (`sandbox="allow-scripts"` without
+sandboxed iframe as the Rich Text editor (`sandbox="allow-scripts"` without
 `allow-same-origin`), reusing every platform piece: `pluginhost.AssetServer`,
 `pluginhost.Allow`, `pluginhost.MountMarker`, `pluginhost.RegisterBrokerRoute`,
 and the generic broker. The only plugin-specific code is the Go wiring
@@ -69,7 +69,7 @@ uihost.New(..., mermaid.UIHostOption())
 
 ## Co-mounting with the editor
 
-The mermaid demo lives at `/mermaid` (not `/`, which the wysiwyg demo owns), so
+The mermaid demo lives at `/mermaid` (not `/`, which the richtext demo owns), so
 both plugins co-mount in the same app — which is exactly what the
 [`example`](../example/main.go) app does. That an unrelated second plugin mounts
 cleanly on the shared platform is the canary: a plugin that cannot mount here is

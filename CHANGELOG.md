@@ -6,6 +6,68 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Changed — the repo now stands on its own (2026-07-16)
+
+- **Builds from a published GoFastr.** Dropped the `replace` directive pointing
+  at a local `/Users/.../gofastr` checkout and pinned
+  `github.com/DonaldMurillo/gofastr v0.28.0`. A fresh clone now builds with
+  `go build ./...` and nothing else; previously it built only on a machine with
+  a sibling checkout at exactly the right path. For the local two-repo edit
+  loop, use a gitignored `go.work` (see README) — never a committed `replace`.
+  Check a change the way a consumer sees it with `GOWORK=off go build ./...`.
+
+- **`frameworkCompat`** raised to `>=0.28.0` on both plugins, and the
+  `plugins.json` note corrected: it claimed development against "the v0.20.0
+  local checkout via a replace directive", which is no longer how this builds.
+
+### Added
+
+- **`internal/registry`** — the schema of `plugins.json` plus the tests that
+  keep it honest. The index is consumed by **copy, not import**: a host fetches
+  the file from a release and vendors it, so the published artifact is the JSON
+  and this repo exposes no Go API for it — nothing to import means no module
+  cycle (GoFastr would otherwise import a repo that imports GoFastr) and no path
+  by which chromedp or an embedded bundle reaches the core's `go.mod`.
+
+  Because the index is hand-maintained, a stale row is invisible to every other
+  test. The guards: rows must cover exactly the plugin packages present, each
+  `routePrefix` must equal that package's own const, no row may request
+  `allow-same-origin`, required fields must be non-empty, and the parser rejects
+  unknown fields (a new JSON key must reach the structs in the same change
+  rather than vanishing from every generated page). Each was mutation-tested to
+  bite. The anchor is the `Name`/`RoutePrefix` consts, not a
+  `pluginhost.Manifest` literal — richtext predates the extraction and declares
+  none.
+
+  Bump `registryVersion` on a breaking field change — vendored copies are then
+  stale.
+
+- **Releases** (`.github/workflows/release.yml`) — tagging `vX.Y.Z` now
+  publishes a GitHub release with `plugins.json` attached, which is how hosts
+  get the index:
+
+  ```sh
+  curl -fsSL -O https://github.com/DonaldMurillo/gofastr-plugins/releases/download/v0.1.0/plugins.json
+  curl -fsSL -O https://github.com/DonaldMurillo/gofastr-plugins/releases/latest/download/plugins.json
+  ```
+
+  The workflow re-runs the index guards first, so a broken index fails the
+  release instead of reaching a host, where it would stay invisible until a page
+  rendered wrong.
+
+  It also **stamps provenance into the published copy** — `release.tag`,
+  `.commit`, `.published`, `.source` — closing the gap that makes copying risky:
+  a vendored `plugins.json` otherwise cannot say how old it is, and a year-old
+  one looks exactly like a fresh one. The file in git carries no stamp, and a
+  test enforces that (a committed stamp would be false immediately).
+
+- **LICENSE** — MIT, matching GoFastr. The repo is public and previously shipped
+  without one, which left its terms undefined.
+- **CI** (`.github/workflows/ci.yml`) — builds, vets, and tests the module, and
+  runs the Playwright journeys in WebKit + Chromium. Also gates bundle
+  freshness: `richtext/assets` is committed prebuilt and served by `go:embed`,
+  so a source edit without a rebuild ships stale JS that no Go test would catch.
+
 ### Added — full editor feature set (2026-07-14)
 
 - **Persistent formatting toolbar** — sticky bar with undo/redo, a block-type
@@ -25,15 +87,26 @@ All notable changes to gofastr-plugins. Follows
 - **Table controls** — floating add/remove row+column, header-row toggle, and
   delete-table on cell focus; Tab at the last cell appends a row.
 - **Code block language selector** — a dropdown on the focused code block.
+- **Code syntax highlighting (2026-07-15)** — once a language is set, code
+  blocks tokenize into `comment`/`string`/`number`/`keyword`/`function` spans in
+  BOTH the live editor (ProseMirror inline decorations, `js/src/highlight.ts` +
+  `js/src/codehighlight.ts`) and the no-JS read view (`ssr/highlight.go` +
+  `renderCodeBlock`). No new JS/CSS dependency — a small config-driven lexer is
+  hand-mirrored across the two languages and pinned by a shared parity fixture
+  (`richtext/highlight-cases.json`) that both test suites assert against, so the
+  editor and read view can't drift. Theme via overridable `--richtext-hl-*`
+  tokens (GitHub-primer light defaults), defined identically in
+  `frame/editor.css` and `ssr/style.go`. Supported: js/ts, go, python, rust,
+  json, css, sql, bash, html (+ aliases); unknown languages render plain.
 
 ### Added — Phases 1–3 complete (2026-07-13)
 
-- **Trusted in-page mount (the sandbox opt-out)** — `wysiwyg.WithTrustedMount()`
-  serves `editor-inline.js` (`window.__gofastrWysiwyg.mountTrusted`), a
+- **Trusted in-page mount (the sandbox opt-out)** — `richtext.WithTrustedMount()`
+  serves `editor-inline.js` (`window.__gofastrRichText.mountTrusted`), a
   page-scoped stylesheet (`editor-scoped.css`, rescoped under
-  `.gofastr-wysiwyg-trusted`; framework-token fallbacks dropped so host tokens
-  inherit, plugin-local `--wysiwyg-*` slot tokens kept), and a frameless demo
-  at `/__gofastr/plugin/wysiwyg/trusted`. Same protocol envelopes over a
+  `.gofastr-richtext-trusted`; framework-token fallbacks dropped so host tokens
+  inherit, plugin-local `--richtext-*` slot tokens kept), and a frameless demo
+  at `/__gofastr/plugin/richtext/trusted`. Same protocol envelopes over a
   swapped transport (`protocol.setTransport` + `routeEnvelope`). Host-side
   opt-in only — never a default, never plugin-selectable (docs/DECISIONS.md
   "secure by default, opt out").
@@ -47,7 +120,7 @@ All notable changes to gofastr-plugins. Follows
   a11y gate (zero serious/critical across framed/trusted/SSR + open menus).
   Any console/page error fails a test. Dogfood shots: `npm run shots`
   (light/dark × desktop/mobile × framed/trusted/SSR).
-- **TypeScript strict everywhere Node runs** — `wysiwyg/js`, `mermaid/js`,
+- **TypeScript strict everywhere Node runs** — `richtext/js`, `mermaid/js`,
   `e2e/` all migrated; `tsc --noEmit` gates every build.
 
 ### Fixed
@@ -85,12 +158,12 @@ platform machinery that proved it is now extracted into a reusable package.
     host broker (`host/pluginhost.js`), idempotent across plugins.
   - See [`docs/plugin-platform.md`](docs/plugin-platform.md).
 
-- **`wysiwyg` — the WYSIWYG editor** (`wysiwyg/`). ProseMirror block editor,
-  block-JSON canonical, markdown export + the pure-Go SSR read view (`wysiwyg/ssr`).
+- **`richtext` — the Rich Text editor** (`richtext/`). ProseMirror block editor,
+  block-JSON canonical, markdown export + the pure-Go SSR read view (`richtext/ssr`).
   Plugin #1 and the forcing function that proved the third-party contract.
-  See [`docs/wysiwyg-editor.md`](docs/wysiwyg-editor.md).
+  See [`docs/richtext-editor.md`](docs/richtext-editor.md).
 
-- **`wysiwyg/ssr` — the SSR read renderer** (`wysiwyg/ssr/`). Pure, deterministic
+- **`richtext/ssr` — the SSR read renderer** (`richtext/ssr/`). Pure, deterministic
   Go `Render(doc map[string]any) → render.HTML` / `RenderJSON(docJSON)`, the
   server-side dual of the in-frame editor. Both implement the single schema in
   [`docs/design/schema-v1.md`](docs/design/schema-v1.md). Token-only HTML; unknown
@@ -104,13 +177,14 @@ platform machinery that proved it is now extracted into a reusable package.
   and mounts every plugin, serving both demos. The visual/e2e test surface and
   the completeness canary. Run with `go run ./example`.
 
-- **Registry** — [`plugins.json`](plugins.json), the curated index (a convention,
-  not a service): module path, version, isolation, capabilities, route prefix,
-  schema, per plugin.
+- **Registry** — [`plugins.json`](plugins.json), the curated index (a
+  convention, not a service): module path, version, isolation, capabilities,
+  route prefix, schema, per plugin. Hosts fetch and vendor the file to generate
+  a page per plugin.
 
 - **Docs** — [`docs/plugin-platform.md`](docs/plugin-platform.md) (isolation +
   capability protocol + trust tiers + header/CSP contract + #37 relation +
-  quickstart), [`docs/wysiwyg-editor.md`](docs/wysiwyg-editor.md),
+  quickstart), [`docs/richtext-editor.md`](docs/richtext-editor.md),
   [`docs/mermaid.md`](docs/mermaid.md).
 
 ### Isolation / latency gate — CLEARED (2026-07-12)

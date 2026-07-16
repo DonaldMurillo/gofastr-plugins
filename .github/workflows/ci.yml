@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Never let a stray local go.work leak into a CI resolve: every job must see
+  # the same modules a fresh clone does.
+  GOWORK: off
+
+jobs:
+  # The root module, built the way a consumer gets it: GoFastr resolved from the
+  # proxy at the version go.mod pins, not from a sibling checkout.
+  go:
+    name: go (root module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      # A committed `replace` would make the repo build only on the machine it
+      # points at. This is the guard that keeps a fresh clone buildable.
+      - name: no replace directives
+        run: |
+          if grep -qE '^\s*replace\s' go.mod; then
+            echo "::error file=go.mod::go.mod contains a replace directive; use a gitignored go.work for local dev instead"
+            grep -nE '^\s*replace\s' go.mod
+            exit 1
+          fi
+
+      # The example suite drives a real headless Chrome via chromedp, which
+      # finds the system install (preinstalled on this runner image). This also
+      # covers internal/registry, which validates plugins.json against the
+      # plugin packages it claims to describe.
+      - name: go test
+        run: go test ./... -count=1
+
+  js:
+    name: richtext bundle
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: richtext/js
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: richtext/js/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      # The bundle in richtext/assets/ is committed prebuilt and served by
+      # go:embed, so a source edit without a rebuild ships stale JS/CSS that no
+      # Go test would notice. Rebuilding must be a no-op on a clean tree.
+      - name: bundle is up to date with its sources
+        run: |
+          npm run build
+          cd "$GITHUB_WORKSPACE"
+          if ! git diff --quiet -- richtext/assets; then
+            echo "::error::richtext/assets is stale — run 'npm run build' in richtext/js and commit the result"
+            git diff --stat -- richtext/assets
+            exit 1
+          fi
+
+  # Journeys run in WebKit as well as Chromium on purpose: several shipped bugs
+  # were Safari-only and invisible to Chrome-based tests.
+  e2e:
+    name: e2e (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [webkit, chromium]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: install
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: typecheck
+        working-directory: e2e
+        run: npm run typecheck
+
+      - name: test
+        working-directory: e2e
+        run: npx playwright test --project=${{ matrix.browser }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: e2e/playwright-report/
+          retention-days: 7

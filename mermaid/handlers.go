@@ -19,7 +19,7 @@ func (p *Plugin) handleSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A mermaid source is small text; cap the body so an oversized POST can't
-	// be buffered wholesale (DoS guard — same rationale as the wysiwyg plugin).
+	// be buffered wholesale (DoS guard — same rationale as the richtext plugin).
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	var body struct {
 		DocID         string          `json:"docId"`

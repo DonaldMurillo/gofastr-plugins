@@ -7,7 +7,7 @@
 // reset()} for tests reading directly inside the frame. diagram.ts posts a
 // `metric` event every ~10 renders and on requestSave.
 //
-// Unlike the WYSIWYG keystroke rig this is NOT a hard go/no-go gate (diagram
+// Unlike the Rich Text keystroke rig this is NOT a hard go/no-go gate (diagram
 // rendering is inherently bursty and async); it is reported for observability.
 
 const MAX_SAMPLES = 1000;

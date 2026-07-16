@@ -9,7 +9,7 @@ const EMPTY_DOC = {
   docId: "demo",
   doc: { type: "doc", content: [{ type: "paragraph" }] },
   markdown: "",
-  schemaVersion: "wysiwyg-v1",
+  schemaVersion: "richtext-v1",
 };
 
 interface Surface {
@@ -26,17 +26,17 @@ const SURFACES: Surface[] = [
     ui: (page) => page.frameLocator("iframe"),
     ready: (page) =>
       page.waitForFunction(() => {
-        const f = document.querySelector("iframe") as (HTMLIFrameElement & { __wysiwygReady?: boolean }) | null;
-        return !!f && f.__wysiwygReady === true;
+        const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
+        return !!f && f.__richtextReady === true;
       }),
   },
   {
     name: "trusted in-page mount",
-    path: "/__gofastr/plugin/wysiwyg/trusted",
+    path: "/__gofastr/plugin/richtext/trusted",
     ui: (page) => page,
     ready: (page) =>
       page.waitForFunction(
-        () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+        () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
       ),
   },
 ];
@@ -49,7 +49,7 @@ for (const surface of SURFACES) {
     const editor = (page: Page) => ui(page).locator(".ProseMirror");
 
     test.beforeEach(async ({ page, request, baseURL }) => {
-      await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, { data: EMPTY_DOC });
+      await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
       consoleErrors = [];
       page.on("console", (msg) => {
         if (msg.type() === "error") consoleErrors.push(msg.text());
@@ -74,7 +74,7 @@ for (const surface of SURFACES) {
       await editor(page).tap();
       await page.keyboard.type("/");
 
-      const menu = ui(page).locator(".wysiwyg-slash-menu");
+      const menu = ui(page).locator(".richtext-slash-menu");
       await expect(menu).toBeVisible();
 
       // The menu must be fully INSIDE the phone viewport horizontally, and (in
@@ -93,7 +93,7 @@ for (const surface of SURFACES) {
       }
 
       // Touch selection: tap "Heading 1" (no mouse hover exists on a phone).
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "Heading 1" }).tap();
+      await ui(page).locator(".richtext-slash-item", { hasText: "Heading 1" }).tap();
       await expect(menu).toBeHidden();
       await expect(editor(page).locator("h1")).toHaveCount(1);
     });
@@ -101,7 +101,7 @@ for (const surface of SURFACES) {
     test("tapping outside dismisses the slash menu (phones have no Escape key)", async ({ page }) => {
       await editor(page).tap();
       await page.keyboard.type("/");
-      const menu = ui(page).locator(".wysiwyg-slash-menu");
+      const menu = ui(page).locator(".richtext-slash-menu");
       await expect(menu).toBeVisible();
 
       await page.locator("header h1").tap();
@@ -111,12 +111,12 @@ for (const surface of SURFACES) {
     test("to-do checkbox toggles with a tap", async ({ page }) => {
       await editor(page).tap();
       await page.keyboard.type("/to-do");
-      await ui(page).locator(".wysiwyg-slash-item", { hasText: "To-do list" }).tap();
+      await ui(page).locator(".richtext-slash-item", { hasText: "To-do list" }).tap();
       await page.keyboard.type("phone task");
 
-      const item = editor(page).locator("li.wysiwyg-task-item").first();
+      const item = editor(page).locator("li.richtext-task-item").first();
       await expect(item).toHaveAttribute("data-checked", "false");
-      await item.locator(".wysiwyg-task-checkbox").tap();
+      await item.locator(".richtext-task-checkbox").tap();
       await expect(item).toHaveAttribute("data-checked", "true");
     });
 

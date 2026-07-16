@@ -11,7 +11,7 @@ const EMPTY_DOC = {
   docId: "demo",
   doc: { type: "doc", content: [{ type: "paragraph" }] },
   markdown: "",
-  schemaVersion: "wysiwyg-v1",
+  schemaVersion: "richtext-v1",
 };
 
 async function audit(page: Page, label: string) {
@@ -28,47 +28,47 @@ async function audit(page: Page, label: string) {
 }
 
 test.beforeEach(async ({ request, baseURL }) => {
-  await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, { data: EMPTY_DOC });
+  await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
 });
 
 test("a11y: framed demo page (host chrome)", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => {
-    const f = document.querySelector("iframe") as (HTMLIFrameElement & { __wysiwygReady?: boolean }) | null;
-    return !!f && f.__wysiwygReady === true;
+    const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
+    return !!f && f.__richtextReady === true;
   });
   await audit(page, "framed demo");
 });
 
 test("a11y: trusted page with the full editor DOM, slash menu open", async ({ page }) => {
-  await page.goto("/__gofastr/plugin/wysiwyg/trusted");
+  await page.goto("/__gofastr/plugin/richtext/trusted");
   await page.waitForFunction(
-    () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+    () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
   );
   await audit(page, "trusted editor (idle)");
 
   // Open the slash menu and audit the open-menu state (listbox/option roles).
   await page.locator(".ProseMirror").click();
   await page.keyboard.type("/");
-  await expect(page.locator(".wysiwyg-slash-menu")).toBeVisible();
+  await expect(page.locator(".richtext-slash-menu")).toBeVisible();
   await audit(page, "trusted editor (slash menu open)");
 });
 
 test("a11y: trusted page with a selection + bubble toolbar open", async ({ page }) => {
-  await page.goto("/__gofastr/plugin/wysiwyg/trusted");
+  await page.goto("/__gofastr/plugin/richtext/trusted");
   await page.waitForFunction(
-    () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+    () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
   );
   await page.locator(".ProseMirror").click();
   await page.keyboard.type("select this text");
   for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+ArrowLeft");
-  await expect(page.locator(".wysiwyg-bubble")).toBeVisible();
+  await expect(page.locator(".richtext-bubble")).toBeVisible();
   await audit(page, "trusted editor (bubble toolbar open)");
 });
 
 test("a11y: SSR read view", async ({ page, request, baseURL }) => {
   // Give the read view real content first.
-  await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, {
+  await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, {
     data: {
       docId: "demo",
       doc: {
@@ -79,9 +79,9 @@ test("a11y: SSR read view", async ({ page, request, baseURL }) => {
         ],
       },
       markdown: "",
-      schemaVersion: "wysiwyg-v1",
+      schemaVersion: "richtext-v1",
     },
   });
-  await page.goto("/__gofastr/plugin/wysiwyg/read?doc=demo");
+  await page.goto("/__gofastr/plugin/richtext/read?doc=demo");
   await audit(page, "SSR read view");
 });

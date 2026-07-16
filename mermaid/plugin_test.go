@@ -15,7 +15,7 @@ import (
 )
 
 // newTestApp stands up a fresh framework.App with the plugin registered and
-// initialized (mirrors wysiwyg's test harness; the in-memory store needs no DB).
+// initialized (mirrors richtext's test harness; the in-memory store needs no DB).
 func newTestApp(t *testing.T, opts ...Option) (*framework.App, *Plugin) {
 	t.Helper()
 	p := New(opts...)

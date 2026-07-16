@@ -1,4 +1,4 @@
-# WYSIWYG plugin — Phase-0 contract (protocol v1)
+# Rich Text plugin — Phase-0 contract (protocol v1)
 
 This is the **authoritative, minimal** contract for the Phase-0 isolation spike.
 It converges the two crux memos ([`isolation-crux-claude.md`](isolation-crux-claude.md),
@@ -20,10 +20,10 @@ The editor runs in:
 
 ```html
 <iframe
-  src="/__gofastr/plugin/wysiwyg/editor.html?v=<bundle-hash>"
+  src="/__gofastr/plugin/richtext/editor.html?v=<bundle-hash>"
   sandbox="allow-scripts"        <!-- NO allow-same-origin. Ever. -->
   referrerpolicy="no-referrer"
-  title="WYSIWYG editor"
+  title="Rich Text editor"
 ></iframe>
 ```
 
@@ -44,9 +44,9 @@ The Go plugin `go:embed`s its prebuilt client assets and serves them same-origin
 
 | URL | Serves | Content-Type |
 |---|---|---|
-| `/__gofastr/plugin/wysiwyg/editor.html` | the frame document | `text/html; charset=utf-8` |
-| `/__gofastr/plugin/wysiwyg/editor.js`   | the ProseMirror bundle (IIFE) | `text/javascript; charset=utf-8` |
-| `/__gofastr/plugin/wysiwyg/editor.css`  | the editor stylesheet (token-only) | `text/css; charset=utf-8` |
+| `/__gofastr/plugin/richtext/editor.html` | the frame document | `text/html; charset=utf-8` |
+| `/__gofastr/plugin/richtext/editor.js`   | the ProseMirror bundle (IIFE) | `text/javascript; charset=utf-8` |
+| `/__gofastr/plugin/richtext/editor.css`  | the editor stylesheet (token-only) | `text/css; charset=utf-8` |
 
 - `editor.html` loads `editor.js` and `editor.css` by **relative** path
   (`./editor.js?v=…`, `./editor.css?v=…`) so it works under the route prefix.
@@ -131,7 +131,7 @@ CANNOT know when frame JS finished loading, so **the plugin speaks first.**
 - `requestUpload.bytes` crosses as a transferable `ArrayBuffer` (structured
   clone). The frame never fetches; the host does the authenticated upload.
 - `metric` is Phase-0-only: the editor's latency rig posts it so the host/tests
-  can read the measured p99. Also mirrored to `window.__wysiwygMetrics` inside the
+  can read the measured p99. Also mirrored to `window.__richtextMetrics` inside the
   frame (see §8).
 
 ---
@@ -155,9 +155,9 @@ deferred to Phase 1.)
 
 ## 6. Host broker (same-origin, injected via WithExtraScripts)
 
-`wysiwyg/host/broker.js` runs in the **host page** (full privileges). It:
+`richtext/host/broker.js` runs in the **host page** (full privileges). It:
 
-1. Finds each mount marker `<div data-fui-wysiwyg data-fui-wysiwyg-for="<jsonField>,<mdField>">`.
+1. Finds each mount marker `<div data-fui-richtext data-fui-richtext-for="<jsonField>,<mdField>">`.
 2. Creates the sandboxed iframe (§1) inside the marker, min-height from manifest.
 3. Runs the handshake: waits for `ready`, resolves the host token map (§7), sends
    `init`.
@@ -209,7 +209,7 @@ Inside the frame, instrument input→paint latency:
 - In the **next** `requestAnimationFrame` after the view updates, record
   `t1 = performance.now()`; sample = `t1 - t0` (input-to-next-paint).
 - Keep a ring buffer of samples. Expose:
-  - `window.__wysiwygMetrics = { samplesMs, p50(), p99(), count }` for chromedp to
+  - `window.__richtextMetrics = { samplesMs, p50(), p99(), count }` for chromedp to
     read directly inside the frame.
   - a `metric` event (§4) posted to the host every ~50 samples and on request.
 - The **gate**: with ≥100 synthetic keystrokes, **p99 ≤ 16 ms**. Tests assert
@@ -223,15 +223,15 @@ chromedp cannot read *inside* an opaque-origin frame. So the frame reports a few
 facts back over `postMessage`, and the broker stashes them on the **iframe
 element** where the parent (and chromedp) can read them:
 
-- `iframe.__wysiwygReady` — `true` once the `init` handshake completed.
-- `iframe.__wysiwygProbes` — `{ cookieEmpty, parentBlocked, storageBlocked }`, the
+- `iframe.__richtextReady` — `true` once the `init` handshake completed.
+- `iframe.__richtextProbes` — `{ cookieEmpty, parentBlocked, storageBlocked }`, the
   frame's self-isolation checks (computed inside the frame at boot, sent on
   `ready`): `document.cookie === ""`, `window.parent.document` access throws,
   `localStorage` access throws. All three must be `true`.
-- `iframe.__wysiwygTheme` — `{ scheme, sample:{ "--name": "value", … } }`, a few
+- `iframe.__richtextTheme` — `{ scheme, sample:{ "--name": "value", … } }`, a few
   token values the frame resolved from its own `:root` **after** applying
   `init`/`themeChanged`. Lets a test assert the crossed token equals the host's.
-- `iframe.__wysiwygLastMetric` — the latest `metric` payload `{ p50, p99, count }`.
+- `iframe.__richtextLastMetric` — the latest `metric` payload `{ p50, p99, count }`.
 
 These are Phase-0 instrumentation only. The frame sends them via `ready` (probes),
 a `themeApplied` event (theme sample), and `metric` events; the broker copies them
@@ -245,7 +245,7 @@ data; the parent still cannot reach in.
   (lossy for non-representable blocks — none exist in Phase 0; paragraph/heading/
   bold are fully representable). Stored in a sibling field for portability + the
   no-JS SSR read view.
-- `schemaVersion = "wysiwyg-v1"`.
+- `schemaVersion = "richtext-v1"`.
 - Form integration: two hidden inputs (`…_json`, `…_md`) synced on `docChanged`.
 
 ---
@@ -279,18 +279,18 @@ Framework facts (core at `/Users/dom/programming/gofastr`, imported via the
 ### Public surface (Worker B builds exactly this)
 
 ```go
-package wysiwyg
+package richtext
 
 const (
-    Name            = "wysiwyg"
+    Name            = "richtext"
     Version         = "0.1.0-phase0"
-    RoutePrefix     = "/__gofastr/plugin/wysiwyg"
+    RoutePrefix     = "/__gofastr/plugin/richtext"
     EditorHTMLURL   = RoutePrefix + "/editor.html"
     BrokerScriptURL = RoutePrefix + "/broker.js"
     SaveURL         = RoutePrefix + "/save"
     UploadURL       = RoutePrefix + "/upload"
     DemoURL         = "/"                 // self-contained themed demo page
-    SchemaVersion   = "wysiwyg-v1"
+    SchemaVersion   = "richtext-v1"
 )
 
 // New constructs the plugin. Implements framework.Plugin (Name/Init).
@@ -355,11 +355,11 @@ func (p *Plugin) allow(r *http.Request, cap string) bool {
 The mount marker shape the broker looks for (§6):
 
 ```html
-<div data-fui-wysiwyg
-     data-fui-wysiwyg-docid="demo"
-     data-fui-wysiwyg-for="body_json,body_md"
-     data-fui-wysiwyg-minheight="240px"
-     data-fui-wysiwyg-doc='<initial doc JSON or empty>'></div>
+<div data-fui-richtext
+     data-fui-richtext-docid="demo"
+     data-fui-richtext-for="body_json,body_md"
+     data-fui-richtext-minheight="240px"
+     data-fui-richtext-doc='<initial doc JSON or empty>'></div>
 <input type="hidden" name="body_json">
 <input type="hidden" name="body_md">
 ```

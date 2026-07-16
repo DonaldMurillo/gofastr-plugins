@@ -1,0 +1,948 @@
+/*
+ * GoFastr Rich Text editor stylesheet — TOKEN-ONLY (protocol v1 §7, schema §3).
+ *
+ * Every color/spacing/radius/font comes from a CSS custom property the HOST
+ * bridges in via init/themeChanged (theme.js writes a :root{} block from
+ * params.tokens). Every var() carries an inline fallback so the editor is still
+ * legible BEFORE `init` arrives. ZERO bespoke hex in rules — only in the
+ * fallback position of var(). Light/dark is entirely token-driven; there is
+ * deliberately NO prefers-color-scheme gating (the repo rule: theme is
+ * host-driven).
+ *
+ * The --richtext-fg-<slot> / --richtext-bg-<slot> color tokens (schema §3) are
+ * PLUGIN-LOCAL: the host MAY provide them; if it doesn't, the defaults below
+ * apply and that is logged as a missing-token finding. Slots (named palette, not
+ * raw hex): default gray brown orange yellow green blue purple pink red.
+ */
+/* ---- defaults applied only if the host has not bridged tokens yet ---- */
+.gofastr-richtext-trusted {
+  --richtext-fg-default: var(--color-text);
+  --richtext-fg-gray: #6a737d;
+  --richtext-fg-brown: #95602c;
+  --richtext-fg-orange: #bc4c00;
+  --richtext-fg-yellow: #b08800;
+  --richtext-fg-green: #1a7f37;
+  --richtext-fg-blue: #2f6feb;
+  --richtext-fg-purple: #8250df;
+  --richtext-fg-pink: #bf3989;
+  --richtext-fg-red: #d1242f;
+  --richtext-bg-default: transparent;
+  --richtext-bg-gray: #eaeef2;
+  --richtext-bg-brown: #f5dcc0;
+  --richtext-bg-orange: #ffd8b5;
+  --richtext-bg-yellow: #fff1a8;
+  --richtext-bg-green: #d4f4dd;
+  --richtext-bg-blue: #cfe3ff;
+  --richtext-bg-purple: #eadcff;
+  --richtext-bg-pink: #ffd9ec;
+  --richtext-bg-red: #ffd3d3;
+  --richtext-hl-comment: #6e7781;
+  --richtext-hl-keyword: #cf222e;
+  --richtext-hl-string: #0a3069;
+  --richtext-hl-number: #0550ae;
+  --richtext-hl-function: #8250df;
+}
+.gofastr-richtext-trusted {
+
+  height: 100%;
+}
+/* Flex column so the editable FILLS the frame when the doc is short (whole
+   surface clickable) AND grows past it when the doc is long (frame auto-sizes).
+   Using 100vh instead caused the frame to stay stuck at its initial height for
+   long docs; flex handles both directions cleanly. */
+.gofastr-richtext-trusted {
+
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background, #ffffff);
+  color: var(--color-text, #1b1f24);
+  font-family: var(--font-sans, sans-serif);
+  font-size: var(--text-base, 16px);
+  line-height: var(--leading, 1.6);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.gofastr-richtext-trusted .richtext-root {
+
+  /* The frame grows to content; ResizeObserver reports its height to the host. */
+  box-sizing: border-box;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+/* ---- ProseMirror contenteditable ---- */
+.gofastr-richtext-trusted .ProseMirror {
+
+  /* flex:1 0 auto — fills the frame when the doc is short (so clicking ANYWHERE
+     focuses it, not just the first line) and grows with content when long. */
+  box-sizing: border-box;
+  flex: 1 0 auto;
+  padding: var(--spacing-md, 12px) var(--spacing-lg, 20px);
+  outline: none;
+  caret-color: var(--color-primary, #2f6feb);
+  color: var(--color-text, #1b1f24);
+  font-family: var(--font-sans, sans-serif);
+  font-size: var(--text-base, 16px);
+  line-height: var(--leading, 1.6);
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.gofastr-richtext-trusted .ProseMirror ::selection {
+
+  /* Alpha tint of the primary so the selection is legible in BOTH schemes:
+     a solid light-blue background left white dark-mode text at ~1.4:1 (the
+     bubble-toolbar workflow starts with a selection, so this must be readable).
+     Alpha keeps the underlying text color, which is already theme-correct. */
+  background: var(--color-selection, color-mix(in srgb, var(--color-primary, #2f6feb) 38%, transparent));
+}
+.gofastr-richtext-trusted .ProseMirror-focused {
+
+  outline: none;
+}
+.gofastr-richtext-trusted .ProseMirror-selectednode {
+
+  outline: 2px solid var(--color-primary, #2f6feb);
+  border-radius: var(--radii-sm, 4px);
+}
+/* ---- text blocks ---- */
+.gofastr-richtext-trusted .ProseMirror p {
+
+  margin: 0 0 var(--spacing-sm, 8px) 0;
+}
+.gofastr-richtext-trusted .ProseMirror h1,
+.gofastr-richtext-trusted .ProseMirror h2,
+.gofastr-richtext-trusted .ProseMirror h3,
+.gofastr-richtext-trusted .ProseMirror h4,
+.gofastr-richtext-trusted .ProseMirror h5,
+.gofastr-richtext-trusted .ProseMirror h6 {
+
+  margin: var(--spacing-lg, 20px) 0 var(--spacing-sm, 8px) 0;
+  font-weight: var(--font-weight-bold, 700);
+  line-height: 1.3;
+}
+.gofastr-richtext-trusted .ProseMirror h1 {
+ font-size: var(--text-3xl, 32px);
+}
+.gofastr-richtext-trusted .ProseMirror h2 {
+ font-size: var(--text-2xl, 28px);
+}
+.gofastr-richtext-trusted .ProseMirror h3 {
+ font-size: var(--text-xl, 24px);
+}
+.gofastr-richtext-trusted .ProseMirror h4 {
+ font-size: var(--text-lg, 18px);
+}
+.gofastr-richtext-trusted .ProseMirror h5 {
+ font-size: var(--text-base, 16px);
+}
+.gofastr-richtext-trusted .ProseMirror h6 {
+ font-size: var(--text-sm, 14px); color: var(--color-text-muted, #5b6470);
+}
+.gofastr-richtext-trusted .ProseMirror strong {
+ font-weight: var(--font-weight-bold, 700);
+}
+.gofastr-richtext-trusted .ProseMirror em {
+ font-style: italic;
+}
+.gofastr-richtext-trusted .ProseMirror s {
+ text-decoration: line-through;
+}
+.gofastr-richtext-trusted .ProseMirror u {
+ text-decoration: underline;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-code,
+.gofastr-richtext-trusted .ProseMirror code {
+
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  background: var(--color-surface-soft, #f6f8fa);
+  padding: 0.15em 0.35em;
+  border-radius: var(--radii-sm, 4px);
+}
+.gofastr-richtext-trusted .ProseMirror a {
+
+  color: var(--color-primary, #2f6feb);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* placeholder shown on an empty document */
+.gofastr-richtext-trusted .ProseMirror .richtext-placeholder::before {
+
+  content: attr(data-placeholder);
+  color: var(--color-text-muted, #5b6470);
+  pointer-events: none;
+  position: absolute;
+  opacity: 0.7;
+}
+/* ---- blockquote ---- */
+.gofastr-richtext-trusted .ProseMirror blockquote {
+
+  margin: var(--spacing-sm, 8px) 0;
+  padding: var(--spacing-xs, 4px) var(--spacing-md, 12px);
+  border-left: 3px solid var(--color-border, #d7dde3);
+  color: var(--color-text-muted, #5b6470);
+}
+/* ---- code block ---- */
+.gofastr-richtext-trusted .ProseMirror pre {
+
+  margin: var(--spacing-sm, 8px) 0;
+  padding: var(--spacing-md, 12px) var(--spacing-lg, 20px);
+  background: var(--color-surface-soft, #f6f8fa);
+  border-radius: var(--radii-md, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm, 14px);
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+.gofastr-richtext-trusted .ProseMirror pre code {
+
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+/* ---- syntax highlighting (shared class contract with ssr/highlight.go; the
+   no-JS read view mirrors these rules in ssr/style.go) ---- */
+.gofastr-richtext-trusted .ProseMirror pre code .hl-comment {
+
+  color: var(--richtext-hl-comment, #6e7781);
+  font-style: italic;
+}
+.gofastr-richtext-trusted .ProseMirror pre code .hl-keyword {
+
+  color: var(--richtext-hl-keyword, #cf222e);
+}
+.gofastr-richtext-trusted .ProseMirror pre code .hl-string {
+
+  color: var(--richtext-hl-string, #0a3069);
+}
+.gofastr-richtext-trusted .ProseMirror pre code .hl-number {
+
+  color: var(--richtext-hl-number, #0550ae);
+}
+.gofastr-richtext-trusted .ProseMirror pre code .hl-function {
+
+  color: var(--richtext-hl-function, #8250df);
+}
+/* ---- divider ---- */
+.gofastr-richtext-trusted .ProseMirror hr.richtext-divider {
+
+  border: none;
+  border-top: 2px solid var(--color-border, #d7dde3);
+  margin: var(--spacing-lg, 20px) 0;
+}
+/* ---- lists ---- */
+.gofastr-richtext-trusted .ProseMirror ul,
+.gofastr-richtext-trusted .ProseMirror ol {
+
+  margin: 0 0 var(--spacing-sm, 8px) 0;
+  padding-left: var(--spacing-lg, 20px);
+}
+.gofastr-richtext-trusted .ProseMirror li {
+ margin: 2px 0;
+}
+.gofastr-richtext-trusted .ProseMirror li > p {
+ margin: 0;
+}
+/* ---- task list ---- */
+.gofastr-richtext-trusted .ProseMirror ul.richtext-task-list {
+ list-style: none; padding-left: var(--spacing-xs, 4px);
+}
+.gofastr-richtext-trusted .ProseMirror li.richtext-task-item {
+
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm, 8px);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-task-checkbox {
+
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 5px;
+  border: 2px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #ffffff);
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+}
+.gofastr-richtext-trusted .ProseMirror li.richtext-task-item.is-checked .richtext-task-checkbox {
+
+  background: var(--color-primary, #2f6feb);
+  border-color: var(--color-primary, #2f6feb);
+}
+.gofastr-richtext-trusted .ProseMirror li.richtext-task-item.is-checked .richtext-task-checkbox::after {
+
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--color-primary-contrast, #ffffff);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.gofastr-richtext-trusted .ProseMirror li.richtext-task-item.is-checked .richtext-task-content {
+
+  text-decoration: line-through;
+  color: var(--color-text-muted, #5b6470);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-task-content {
+ flex: 1 1 auto; min-width: 0;
+}
+/* ---- callout ---- */
+.gofastr-richtext-trusted .ProseMirror .richtext-callout {
+
+  margin: var(--spacing-sm, 8px) 0;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  border-radius: var(--radii-md, 8px);
+  border-left: 3px solid var(--color-primary, #2f6feb);
+  background: var(--color-surface-soft, #f6f8fa);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-body > :last-child {
+ margin-bottom: 0;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-info {
+ border-left-color: var(--color-primary, #2f6feb);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-warn {
+ border-left-color: var(--richtext-fg-yellow, #b08800);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-success {
+ border-left-color: var(--color-success, #1a7f37);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-danger {
+ border-left-color: var(--color-danger, #d1242f);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-callout-note {
+ border-left-color: var(--richtext-fg-purple, #8250df);
+}
+/* ---- toggle (collapsible) ---- */
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle {
+
+  margin: var(--spacing-sm, 8px) 0;
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  background: var(--color-surface, #ffffff);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle-summary {
+
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  cursor: pointer;
+  font-weight: var(--font-weight-bold, 700);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle-icon {
+
+  width: 1em;
+  text-align: center;
+  transition: transform 0.12s ease;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle-icon::before {
+ content: "▸";
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle.is-open .richtext-toggle-icon {
+ transform: rotate(90deg);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle-content {
+ padding: 0 var(--spacing-sm, 8px) var(--spacing-sm, 8px);
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-toggle:not(.is-open) .richtext-toggle-content {
+ display: none;
+}
+/* ---- columns ---- */
+.gofastr-richtext-trusted .ProseMirror .richtext-columns {
+
+  display: grid;
+  gap: var(--spacing-md, 12px);
+  margin: var(--spacing-sm, 8px) 0;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-columns-2 {
+ grid-template-columns: 1fr 1fr;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-columns-3 {
+ grid-template-columns: 1fr 1fr 1fr;
+}
+.gofastr-richtext-trusted .ProseMirror .richtext-column {
+ min-width: 0;
+}
+@media (max-width: 640px) {
+  .gofastr-richtext-trusted .ProseMirror .richtext-columns,
+.gofastr-richtext-trusted .ProseMirror .richtext-columns-2,
+.gofastr-richtext-trusted .ProseMirror .richtext-columns-3 {
+ grid-template-columns: 1fr;
+  }
+}
+/* ---- image ---- */
+.gofastr-richtext-trusted .ProseMirror img {
+
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radii-md, 8px);
+  display: block;
+}
+.gofastr-richtext-trusted .ProseMirror img.ProseMirror-selectednode {
+
+  outline: 2px solid var(--color-primary, #2f6feb);
+}
+/* ---- tables (prosemirror-tables) ---- */
+.gofastr-richtext-trusted .ProseMirror table {
+
+  border-collapse: collapse;
+  margin: var(--spacing-sm, 8px) 0;
+  table-layout: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+.gofastr-richtext-trusted .ProseMirror th,
+.gofastr-richtext-trusted .ProseMirror td {
+
+  border: 1px solid var(--color-border, #d7dde3);
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  vertical-align: top;
+  text-align: left;
+}
+.gofastr-richtext-trusted .ProseMirror th {
+
+  background: var(--color-surface-soft, #f6f8fa);
+  font-weight: var(--font-weight-bold, 700);
+}
+.gofastr-richtext-trusted .ProseMirror th > p,
+.gofastr-richtext-trusted .ProseMirror td > p {
+ margin: 0;
+}
+/* prosemirror-tables selection + resize chrome */
+.gofastr-richtext-trusted .ProseMirror .selectedCell::after {
+
+  content: "";
+  position: absolute;
+  background: var(--color-selection, #b9d3ff);
+  opacity: 0.35;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.gofastr-richtext-trusted .ProseMirror .column-resize-handle {
+
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: var(--color-primary, #2f6feb);
+  pointer-events: none;
+}
+.gofastr-richtext-trusted .ProseMirror.resize-cursor {
+ cursor: ew-resize;
+}
+.gofastr-richtext-trusted .ProseMirror table .tableWrapper {
+ overflow-x: auto;
+}
+/* ---- read-only mode (no document:write capability) ---- */
+.gofastr-richtext-trusted .richtext-root[data-readonly="true"] .ProseMirror {
+
+  caret-color: transparent;
+}
+/* ============================================================= */
+/* UI overlays (floating chrome, appended to the frame <body>)   */
+/* ============================================================= */
+/* ---- slash menu ---- */
+.gofastr-richtext-trusted .richtext-slash-menu {
+
+  position: fixed;
+  z-index: 50;
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+  padding: var(--spacing-xs, 4px);
+}
+.gofastr-richtext-trusted .richtext-slash-item {
+
+  display: block;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  border-radius: var(--radii-sm, 4px);
+  cursor: pointer;
+}
+.gofastr-richtext-trusted .richtext-slash-item.is-active,
+.gofastr-richtext-trusted .richtext-slash-item:hover {
+
+  background: var(--color-surface-soft, #f6f8fa);
+}
+.gofastr-richtext-trusted .richtext-slash-title {
+ font-size: var(--text-sm, 14px); color: var(--color-text, #1b1f24);
+}
+.gofastr-richtext-trusted .richtext-slash-sub {
+ font-size: var(--text-xs, 12px); color: var(--color-text-muted, #5b6470);
+}
+.gofastr-richtext-trusted .richtext-sr-only {
+
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+.gofastr-richtext-trusted .richtext-slash-empty {
+ padding: var(--spacing-sm, 8px); color: var(--color-text-muted, #5b6470); font-size: var(--text-sm, 14px);
+}
+/* ---- bubble toolbar ---- */
+.gofastr-richtext-trusted .richtext-blockctl {
+
+  position: fixed;
+  z-index: 45;
+  display: none;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0,0,0,.12));
+}
+.gofastr-richtext-trusted .richtext-blockctl-group {
+ display: inline-flex; align-items: center; gap: 2px;
+}
+.gofastr-richtext-trusted .richtext-blockctl-btn {
+
+  font: inherit;
+  font-size: var(--text-xs, 12px);
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radii-sm, 4px);
+  background: transparent;
+  color: var(--color-text, #1b1f24);
+  cursor: pointer;
+}
+.gofastr-richtext-trusted .richtext-blockctl-btn:hover {
+ background: var(--color-surface-soft, #f6f8fa);
+}
+.gofastr-richtext-trusted .richtext-blockctl-select {
+
+  font: inherit; font-size: var(--text-xs, 12px);
+  padding: 2px 4px;
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1b1f24);
+}
+.gofastr-richtext-trusted .richtext-statusbar {
+
+  flex: 0 0 auto;
+  padding: 4px var(--spacing-lg, 20px);
+  border-top: 1px solid var(--color-border, #d7dde3);
+  font-size: var(--text-xs, 12px);
+  color: var(--color-text-muted, #5b6470);
+  text-align: right;
+  user-select: none;
+}
+.gofastr-richtext-trusted .richtext-toolbar-wrap {
+
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex: 0 0 auto;
+}
+/* Edge fade cues: shown only when there is hidden content on that side, so a
+   narrow toolbar visibly reads as "scroll sideways for more". */
+.gofastr-richtext-trusted .richtext-toolbar-wrap::before,
+.gofastr-richtext-trusted .richtext-toolbar-wrap::after {
+
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 1;
+}
+.gofastr-richtext-trusted .richtext-toolbar-wrap::before {
+ left: 0; background: linear-gradient(to right, var(--color-background, #fff), transparent);
+}
+.gofastr-richtext-trusted .richtext-toolbar-wrap::after {
+ right: 0; background: linear-gradient(to left, var(--color-background, #fff), transparent);
+}
+.gofastr-richtext-trusted .richtext-toolbar-wrap.can-scroll-left::before {
+ opacity: 1;
+}
+.gofastr-richtext-trusted .richtext-toolbar-wrap.can-scroll-right::after {
+ opacity: 1;
+}
+/* A thin, always-present scrollbar is the second cue on platforms that show it. */
+.gofastr-richtext-trusted .richtext-toolbar::-webkit-scrollbar {
+ height: 4px;
+}
+.gofastr-richtext-trusted .richtext-toolbar::-webkit-scrollbar-thumb {
+ background: var(--color-border, #d7dde3); border-radius: 2px;
+}
+.gofastr-richtext-trusted .richtext-toolbar {
+
+  position: relative;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: nowrap;      /* single deterministic row; scroll if it overflows */
+  overflow-x: auto;
+  scrollbar-width: thin;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  padding: 4px var(--spacing-sm, 8px);
+  background: color-mix(in srgb, var(--color-background, #fff) 92%, transparent);
+  border-bottom: 1px solid var(--color-border, #d7dde3);
+  backdrop-filter: blur(6px);
+}
+.gofastr-richtext-trusted .richtext-tb-group {
+ display: inline-flex; align-items: center; gap: 1px; flex: 0 0 auto;
+}
+.gofastr-richtext-trusted .richtext-toolbar .richtext-tbtn-sep {
+ flex: 0 0 auto;
+}
+.gofastr-richtext-trusted .richtext-tb-select {
+
+  font: inherit;
+  font-size: var(--text-sm, 14px);
+  height: 28px;
+  max-width: 140px;
+  padding: 0 var(--spacing-xs, 4px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1b1f24);
+  cursor: pointer;
+}
+/* The toolbar's color grid floats over the page (positioned by place()) so it
+   isn't clipped by the toolbar's horizontal-scroll overflow. The doubled class
+   raises specificity so it overrides the inline (bubble) variant's
+   width:100%/border-top regardless of source order. */
+.gofastr-richtext-trusted .richtext-colorgrid.richtext-colorgrid-float {
+
+  position: fixed;
+  z-index: 51;
+  width: max-content;
+  margin-top: 0;
+  border-top: none;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+}
+.gofastr-richtext-trusted .richtext-bubble {
+
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+  max-width: 440px;
+}
+.gofastr-richtext-trusted .richtext-tbtn {
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radii-sm, 4px);
+  color: var(--color-text, #1b1f24);
+  cursor: pointer;
+}
+.gofastr-richtext-trusted .richtext-tbtn:hover {
+ background: var(--color-surface-soft, #f6f8fa);
+}
+.gofastr-richtext-trusted .richtext-tbtn.is-active {
+ background: var(--color-primary, #2f6feb); color: var(--color-primary-contrast, #ffffff);
+}
+.gofastr-richtext-trusted .richtext-tbtn .richtext-ico svg {
+ width: 16px; height: 16px; fill: currentColor;
+}
+.gofastr-richtext-trusted .richtext-tbtn-sep {
+ width: 1px; height: 20px; background: var(--color-border, #d7dde3); margin: 0 2px;
+}
+.gofastr-richtext-trusted .richtext-color-bar {
+
+  display: block;
+  width: 14px;
+  height: 3px;
+  margin-top: 1px;
+  background: var(--color-primary, #2f6feb);
+  border-radius: 2px;
+}
+/* ---- color picker ---- */
+.gofastr-richtext-trusted .richtext-colorgrid {
+
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: var(--spacing-xs, 4px);
+  width: 100%;
+  border-top: 1px solid var(--color-border, #d7dde3);
+  margin-top: 2px;
+}
+.gofastr-richtext-trusted .richtext-swatch {
+
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radii-sm, 4px);
+  border: 1px solid var(--color-border, #d7dde3);
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--text-sm, 14px);
+  line-height: 1;
+}
+.gofastr-richtext-trusted .richtext-swatch:hover {
+ transform: scale(1.08);
+}
+.gofastr-richtext-trusted .richtext-swatch-clear {
+ color: var(--color-text-muted, #5b6470); background: transparent;
+}
+/* ---- link editor popover ---- */
+.gofastr-richtext-trusted .richtext-linkpop {
+
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  width: 100%;
+  padding: var(--spacing-xs, 4px);
+  border-top: 1px solid var(--color-border, #d7dde3);
+  margin-top: 2px;
+}
+/* The toolbar's link popover is a FLOATING variant positioned by place() —
+   it needs fixed positioning (otherwise place()'s left/top are ignored and it
+   drops to the bottom of the frame, clipped in the sandboxed iframe). Overrides
+   the inline variant's full-width/border-top and adds float chrome, matching
+   the slash menu. */
+.gofastr-richtext-trusted .richtext-linkpop-float {
+
+  position: fixed;
+  z-index: 50;
+  width: auto;
+  max-width: min(360px, calc(100vw - 16px));
+  margin-top: 0;
+  border-top: none;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+  padding: var(--spacing-sm, 8px);
+}
+.gofastr-richtext-trusted .richtext-link-input {
+
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px var(--spacing-sm, 8px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  font-size: var(--text-sm, 14px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1b1f24);
+}
+.gofastr-richtext-trusted .richtext-link-apply,
+.gofastr-richtext-trusted .richtext-link-remove {
+
+  padding: 4px var(--spacing-sm, 8px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1b1f24);
+  font-size: var(--text-sm, 14px);
+  cursor: pointer;
+}
+.gofastr-richtext-trusted .richtext-link-apply {
+ background: var(--color-primary, #2f6feb); color: var(--color-primary-contrast, #ffffff); border-color: var(--color-primary, #2f6feb);
+}
+.gofastr-richtext-trusted .richtext-link-remove {
+ color: var(--color-danger, #d1242f);
+}
+.gofastr-richtext-trusted .richtext-link-open {
+
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 4px var(--spacing-sm, 8px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1b1f24);
+  font-size: var(--text-sm, 14px);
+  text-decoration: none;
+}
+.gofastr-richtext-trusted .richtext-link-error {
+
+  flex-basis: 100%;
+  order: 99; /* wraps to its own line under the input row */
+  padding: 2px var(--spacing-xs, 4px);
+  color: var(--color-danger, #d1242f);
+  font-size: var(--text-xs, 12px);
+}
+/* ---- find & replace panel ---- */
+.gofastr-richtext-trusted .richtext-find-panel {
+
+  position: fixed;
+  top: var(--spacing-sm, 8px);
+  right: var(--spacing-sm, 8px);
+  z-index: 52;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+  min-width: 320px;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: var(--spacing-sm, 8px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+}
+.gofastr-richtext-trusted .richtext-find-row {
+
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+}
+.gofastr-richtext-trusted .richtext-find-input {
+
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px var(--spacing-sm, 8px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  font-size: var(--text-sm, 14px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1b1f24);
+}
+.gofastr-richtext-trusted .richtext-find-counter {
+
+  flex: 0 0 auto;
+  min-width: 40px;
+  text-align: center;
+  font-size: var(--text-xs, 12px);
+  color: var(--color-text-muted, #5b6470);
+  font-variant-numeric: tabular-nums;
+}
+.gofastr-richtext-trusted .richtext-find-btn {
+
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 var(--spacing-xs, 4px);
+  border: 1px solid var(--color-border, #d7dde3);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #1b1f24);
+  font-size: var(--text-sm, 14px);
+  line-height: 1;
+  cursor: pointer;
+}
+.gofastr-richtext-trusted .richtext-find-btn:hover {
+ background: var(--color-surface-soft, #f6f8fa);
+}
+.gofastr-richtext-trusted .richtext-find-btn.is-active {
+
+  background: var(--color-primary, #2f6feb);
+  color: var(--color-primary-contrast, #ffffff);
+  border-color: var(--color-primary, #2f6feb);
+}
+.gofastr-richtext-trusted .richtext-find-text-btn {
+ padding: 0 var(--spacing-sm, 8px);
+}
+.gofastr-richtext-trusted .richtext-find-close {
+ font-size: var(--text-md, 16px); color: var(--color-text-muted, #5b6470);
+}
+/* Highlighted matches (inline decorations) */
+.gofastr-richtext-trusted .richtext-find-match {
+
+  background: var(--richtext-bg-yellow, #fff1a8);
+  border-radius: 2px;
+}
+.gofastr-richtext-trusted .richtext-find-current {
+
+  outline: 2px solid var(--color-primary, #2f6feb);
+  outline-offset: 0;
+  border-radius: 2px;
+}
+/* ---- drag handle ---- */
+.gofastr-richtext-trusted .richtext-draghandle {
+
+  position: fixed;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  touch-action: none; /* let pointer-drag work instead of scrolling on touch */
+  border-radius: var(--radii-sm, 4px);
+  color: var(--color-text-muted, #5b6470);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d7dde3);
+  cursor: grab;
+  user-select: none;
+}
+.gofastr-richtext-trusted .richtext-draghandle:hover {
+ background: var(--color-surface-soft, #f6f8fa); color: var(--color-text, #1b1f24);
+}
+.gofastr-richtext-trusted .richtext-draghandle:active {
+ cursor: grabbing;
+}
+.gofastr-richtext-trusted .richtext-draghandle-grip::before {
+ content: "⋮⋮"; font-size: var(--text-xs, 12px); letter-spacing: 1px;
+}
+.gofastr-richtext-trusted .richtext-drop-indicator {
+
+  position: fixed;
+  z-index: 41;
+  display: none;
+  height: 3px;              /* a full-width insertion LINE between blocks */
+  border-radius: 2px;
+  background: var(--color-primary, #2f6feb);
+  pointer-events: none;
+}
+/* ---- touch: enlarge hit targets to the 44px guideline without inflating the
+   visual icons (extra hit area via padding/min-size on coarse pointers) ---- */
+@media (pointer: coarse) {
+  .gofastr-richtext-trusted .richtext-tbtn {
+ width: 40px; height: 40px;
+  }
+  .gofastr-richtext-trusted .richtext-swatch {
+ min-width: 32px; min-height: 32px;
+  }
+  .gofastr-richtext-trusted .ProseMirror .richtext-task-checkbox {
+
+    width: 22px; height: 22px; margin-top: 3px;
+  }
+  .gofastr-richtext-trusted .richtext-draghandle {
+ width: 32px; height: 32px;
+  }
+  .gofastr-richtext-trusted .richtext-slash-item {
+ padding-top: 10px; padding-bottom: 10px;
+  }
+}

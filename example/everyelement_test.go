@@ -94,8 +94,8 @@ func TestEveryElement(t *testing.T) {
 	// editor and the read view renders it too. The raw doc is valid JSON already
 	// (newlines are just inter-token whitespace); do NOT strip whitespace, or
 	// spaces inside text values ("H1 Heading") would collapse.
-	payload := `{"docId":"demo","doc":` + everyElementDoc + `,"markdown":"","schemaVersion":"wysiwyg-v1"}`
-	resp, err := http.Post(srv.URL+"/__gofastr/plugin/wysiwyg/save", "application/json", strings.NewReader(payload))
+	payload := `{"docId":"demo","doc":` + everyElementDoc + `,"markdown":"","schemaVersion":"richtext-v1"}`
+	resp, err := http.Post(srv.URL+"/__gofastr/plugin/richtext/save", "application/json", strings.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestEveryElement(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/")); err != nil {
 		t.Fatal(err)
 	}
-	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__wysiwygReady === true)`, 10*time.Second) {
+	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`, 10*time.Second) {
 		t.Fatal("editor never ready")
 	}
 	_ = chromedp.Run(ctx, chromedp.Sleep(1200*time.Millisecond))
@@ -166,7 +166,7 @@ func TestEveryElement(t *testing.T) {
 
 	var buf2 []byte
 	if err := chromedp.Run(ctx,
-		chromedp.Navigate(srv.URL+"/__gofastr/plugin/wysiwyg/read?doc=demo"),
+		chromedp.Navigate(srv.URL+"/__gofastr/plugin/richtext/read?doc=demo"),
 		chromedp.Sleep(800*time.Millisecond),
 		chromedp.FullScreenshot(&buf2, 92),
 	); err != nil {

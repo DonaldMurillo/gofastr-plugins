@@ -102,11 +102,11 @@ func TestPhase0SmokeGate(t *testing.T) {
 		t.Fatalf("navigate: %v", err)
 	}
 
-	// Wait for the handshake (broker sets iframe.__wysiwygReady after init).
+	// Wait for the handshake (broker sets iframe.__richtextReady after init).
 	if !pollTrue(ctx,
-		`!!(document.querySelector('iframe') && document.querySelector('iframe').__wysiwygReady === true)`,
+		`!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`,
 		10*time.Second) {
-		t.Fatal("editor iframe never signalled __wysiwygReady (handshake failed)")
+		t.Fatal("editor iframe never signalled __richtextReady (handshake failed)")
 	}
 
 	// --- T1: sandbox attributes (the load-bearing isolation assertion) ---
@@ -138,7 +138,7 @@ func TestPhase0SmokeGate(t *testing.T) {
 		ParentBlocked  bool `json:"parentBlocked"`
 		StorageBlocked bool `json:"storageBlocked"`
 	}
-	if err := evalJSON(ctx, `document.querySelector('iframe').__wysiwygProbes`, &probes); err != nil {
+	if err := evalJSON(ctx, `document.querySelector('iframe').__richtextProbes`, &probes); err != nil {
 		t.Fatalf("T3: read probes: %v", err)
 	}
 	if !probes.CookieEmpty || !probes.ParentBlocked || !probes.StorageBlocked {
@@ -173,11 +173,11 @@ func TestPhase0SmokeGate(t *testing.T) {
 		Count int     `json:"count"`
 	}
 	if !pollTrue(ctx,
-		`!!(document.querySelector('iframe').__wysiwygLastMetric && document.querySelector('iframe').__wysiwygLastMetric.count >= 100)`,
+		`!!(document.querySelector('iframe').__richtextLastMetric && document.querySelector('iframe').__richtextLastMetric.count >= 100)`,
 		8*time.Second) {
 		t.Fatal("T8: never received a keystroke metric with count>=100 from the frame")
 	}
-	if err := evalJSON(ctx, `document.querySelector('iframe').__wysiwygLastMetric`, &metric); err != nil {
+	if err := evalJSON(ctx, `document.querySelector('iframe').__richtextLastMetric`, &metric); err != nil {
 		t.Fatalf("T8: read metric: %v", err)
 	}
 	verdict := "PASS (≤16ms)"
@@ -250,8 +250,8 @@ func testThemeSync(t *testing.T, ctx context.Context) {
 		Scheme string            `json:"scheme"`
 		Sample map[string]string `json:"sample"`
 	}
-	if err := evalJSON(ctx, `document.querySelector('iframe').__wysiwygTheme`, &theme); err != nil {
-		t.Logf("T6: no __wysiwygTheme yet: %v (skipping)", err)
+	if err := evalJSON(ctx, `document.querySelector('iframe').__richtextTheme`, &theme); err != nil {
+		t.Logf("T6: no __richtextTheme yet: %v (skipping)", err)
 		return
 	}
 	if fv, ok := theme.Sample[name]; ok && fv != hostLight {
@@ -273,8 +273,8 @@ func testThemeSync(t *testing.T, ctx context.Context) {
 		Scheme string            `json:"scheme"`
 		Sample map[string]string `json:"sample"`
 	}
-	if err := evalJSON(ctx, `document.querySelector('iframe').__wysiwygTheme`, &theme2); err != nil {
-		t.Logf("T6: no __wysiwygTheme after toggle: %v", err)
+	if err := evalJSON(ctx, `document.querySelector('iframe').__richtextTheme`, &theme2); err != nil {
+		t.Logf("T6: no __richtextTheme after toggle: %v", err)
 		return
 	}
 	if fv, ok := theme2.Sample[name]; ok && fv != hostDark {

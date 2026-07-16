@@ -1,4 +1,4 @@
-# Block schema v1 — the anti-drift contract (`schemaVersion = "wysiwyg-v1"`)
+# Block schema v1 — the anti-drift contract (`schemaVersion = "richtext-v1"`)
 
 Canonical document = **ProseMirror doc JSON**. This file is the SINGLE schema both
 renderers implement:
@@ -73,11 +73,11 @@ SSR renderer stays token-only:
 
 `default, gray, brown, orange, yellow, green, blue, purple, pink, red`
 
-- Editor renders them as `var(--wysiwyg-fg-<name>)` / `var(--wysiwyg-bg-<name>)`.
+- Editor renders them as `var(--richtext-fg-<name>)` / `var(--richtext-bg-<name>)`.
 - The host token bridge (§7 of protocol) must supply these; if the host theme
-  lacks them, the editor CSS provides `var(--wysiwyg-fg-blue, <fallback>)`
+  lacks them, the editor CSS provides `var(--richtext-fg-blue, <fallback>)`
   fallbacks AND this is logged as a missing-token finding (add upstream later).
-- The SSR renderer emits the same `var(--wysiwyg-fg-<name>)` via its registered
+- The SSR renderer emits the same `var(--richtext-fg-<name>)` via its registered
   stylesheet. Storing the *slot name* (not hex) is what keeps JSON portable and
   theme-correct.
 
@@ -111,7 +111,7 @@ representable core when JSON is absent.
 `func Render(doc map[string]any) render.HTML` — pure, deterministic, token-only:
 
 - Walks the JSON; emits semantic, design-token HTML (`var(--*)` only, zero bespoke
-  hex). Registers its stylesheet via `registry.RegisterStyle("wysiwyg-read", …)`
+  hex). Registers its stylesheet via `registry.RegisterStyle("richtext-read", …)`
   (see core-ui). No inline styles except token variable assignment for colors.
 - Escapes all text; sanitizes `link.href` (allow `http/https/mailto/relative`,
   drop `javascript:`); `image.src` likewise.
@@ -124,6 +124,6 @@ representable core when JSON is absent.
 
 - Build a ProseMirror `Schema` with exactly the nodes/marks above (compose
   `prosemirror-schema-list` + `prosemirror-tables` where useful).
-- `toDOM`/`parseDOM` token-only; colors via `var(--wysiwyg-*)`.
+- `toDOM`/`parseDOM` token-only; colors via `var(--richtext-*)`.
 - Serialize to this JSON on `docChanged`/`save`; also emit markdown per §4.
 - Slash menu, bubble toolbar, drag handles, table controls operate on these nodes.

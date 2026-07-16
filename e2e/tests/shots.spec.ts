@@ -86,8 +86,8 @@ test.describe("dogfood shots", () => {
   test.beforeAll(() => mkdirSync(DIR, { recursive: true }));
 
   test.beforeEach(async ({ request, baseURL }) => {
-    await request.post(`${baseURL}/__gofastr/plugin/wysiwyg/save`, {
-      data: { docId: "demo", doc: EVERY_DOC, markdown: "", schemaVersion: "wysiwyg-v1" },
+    await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, {
+      data: { docId: "demo", doc: EVERY_DOC, markdown: "", schemaVersion: "richtext-v1" },
     });
   });
 
@@ -117,8 +117,8 @@ test.describe("dogfood shots", () => {
         "/",
         () =>
           page.waitForFunction(() => {
-            const f = document.querySelector("iframe") as (HTMLIFrameElement & { __wysiwygReady?: boolean }) | null;
-            return !!f && f.__wysiwygReady === true;
+            const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
+            return !!f && f.__richtextReady === true;
           }),
         `framed-${vp.label}`
       );
@@ -128,10 +128,10 @@ test.describe("dogfood shots", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await shoot(
         page,
-        "/__gofastr/plugin/wysiwyg/trusted",
+        "/__gofastr/plugin/richtext/trusted",
         () =>
           page.waitForFunction(
-            () => (window as unknown as { __wysiwygTrustedReady?: boolean }).__wysiwygTrustedReady === true
+            () => (window as unknown as { __richtextTrustedReady?: boolean }).__richtextTrustedReady === true
           ),
         `trusted-${vp.label}`
       );
@@ -139,7 +139,7 @@ test.describe("dogfood shots", () => {
 
     test(`ssr read view · ${vp.label}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await shoot(page, "/__gofastr/plugin/wysiwyg/read?doc=demo", () => Promise.resolve(), `ssr-${vp.label}`);
+      await shoot(page, "/__gofastr/plugin/richtext/read?doc=demo", () => Promise.resolve(), `ssr-${vp.label}`);
     });
   }
 });

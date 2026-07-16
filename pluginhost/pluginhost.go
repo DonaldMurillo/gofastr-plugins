@@ -1,6 +1,6 @@
 // Package pluginhost re-exports the GoFastr heavy-JS plugin platform.
 //
-// The platform was built HERE first (Phase 0/1 — the wysiwyg editor forced its
+// The platform was built HERE first (Phase 0/1 — the richtext editor forced its
 // shape) and extracted into gofastr core in Phase 2, exactly as the master
 // plan prescribed ("build the editor concrete first; extract the platform
 // from what it actually needs"). The implementation now lives at
