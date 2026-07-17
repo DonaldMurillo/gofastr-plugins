@@ -1,0 +1,19 @@
+{
+  "name": "@gofastr/mermaid-diagram-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame Mermaid diagram editor bundle for the GoFastr mermaid plugin. Builds a single IIFE that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "mermaid": "11.4.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,6 +1,6 @@
-# Master plan — Third-Party Heavy-JS Plugin Platform + WYSIWYG Editor (plugin #1)
+# Master plan — Third-Party Heavy-JS Plugin Platform + Rich Text Editor (plugin #1)
 
-Full WYSIWYG block editor (Notion/Confluence-class), built on **ProseMirror**,
+Full Rich Text block editor (Notion/Confluence-class), built on **ProseMirror**,
 running as a **genuinely third-party** plugin (isolated + capability-scoped,
 even though we maintain it), on top of a heavy-JS plugin platform that lives
 outside the SSR-thin, Go-pure core.
@@ -35,7 +35,7 @@ capability protocol*, so Phase 0 must spike THAT, not just the editor.
 
 ## 1. The three concerns (was two)
 
-- **A — the editor** (`gofastr-plugins/wysiwyg`): ProseMirror schema + plugins +
+- **A — the editor** (`gofastr-plugins/richtext`): ProseMirror schema + plugins +
   UI, built to run as untrusted code using ONLY granted capabilities.
 - **B — the plugin platform / host** (extracted into `framework/`): loads a
   third-party bundle into an isolation boundary, grants capabilities, brokers
@@ -186,7 +186,7 @@ Built on existing spine, plus the isolation host:
 ## 7. Docs (same commit as code)
 
 `framework/docs/content/plugin-platform.md` (isolation + capability protocol +
-trust tiers + #37 relation), `wysiwyg-editor.md`, `framework/ARCHITECTURE.md`,
+trust tiers + #37 relation), `richtext-editor.md`, `framework/ARCHITECTURE.md`,
 `core-ui/ARCHITECTURE.md`, the `gofastr-plugins` registry page, CHANGELOG.
 
 ---

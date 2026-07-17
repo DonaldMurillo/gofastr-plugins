@@ -1,0 +1,23 @@
+{
+  "name": "gofastr-plugins-e2e",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "tsc --noEmit && playwright test",
+    "test:webkit": "playwright test --project=webkit",
+    "test:chromium": "playwright test --project=chromium",
+    "test:headed": "playwright test --project=webkit --headed",
+    "typecheck": "tsc --noEmit",
+    "shots": "SHOTS=1 playwright test tests/shots.spec.ts --project=chromium"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}

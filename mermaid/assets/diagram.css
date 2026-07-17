@@ -1,0 +1,105 @@
+/*
+ * GoFastr Mermaid diagram editor stylesheet — TOKEN-ONLY (protocol v1 §7).
+ *
+ * All colors, spacing, radii, and fonts come from CSS custom properties that the
+ * HOST bridges in via init/themeChanged (theme.js writes a :root{} block from
+ * params.tokens). Every var() carries an inline fallback so the editor is still
+ * legible before `init` arrives. ZERO bespoke hex in rules — only in the
+ * fallback position of var(). Light/dark is entirely token-driven; there is
+ * deliberately NO prefers-color-scheme gating (the repo rule: theme is
+ * host-driven).
+ */
+
+/* ---- defaults applied only if the host has not bridged tokens yet ---- */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-primary: #6366f1;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: system-ui, -apple-system, Segoe UI, sans-serif;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --radii-sm: 6px;
+  --radii-md: 10px;
+  --font-size-sm: 0.85rem;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-background);
+}
+
+body {
+  font-family: var(--font-body, system-ui, sans-serif);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#mermaid-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 12px);
+  padding: var(--spacing-sm, 8px);
+}
+
+#mermaid-source {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-sm, 0.85rem);
+  line-height: 1.5;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm, 6px);
+  outline: none;
+}
+#mermaid-source:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+#mermaid-preview {
+  min-height: 64px;
+  padding: var(--spacing-md, 12px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-md, 10px);
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#mermaid-preview:empty {
+  display: none;
+}
+
+#mermaid-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-error {
+  margin: 0;
+  width: 100%;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-muted);
+  background: var(--color-surface-soft);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  border-radius: var(--radii-sm, 6px);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

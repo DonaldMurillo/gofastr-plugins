@@ -1,0 +1,16 @@
+import { chromium } from "@playwright/test";
+const b = await chromium.launch();
+const p = await b.newPage();
+await p.goto("http://localhost:8090/");
+await p.waitForFunction(() => { const f=document.querySelector("iframe"); return f && f.__richtextReady===true; });
+await p.waitForTimeout(700);
+await p.frameLocator("iframe").locator(".ProseMirror").click();
+await p.keyboard.type("/table");
+await p.frameLocator("iframe").locator(".richtext-slash-item", { hasText: "Table" }).click();
+await p.waitForTimeout(300);
+await p.frameLocator("iframe").locator("table td").first().click();
+await p.waitForTimeout(400);
+await p.screenshot({ path: "shots/features.png" });
+const wc = await p.frameLocator("iframe").locator(".richtext-statusbar").textContent();
+console.log("STATUSBAR:", wc);
+await b.close();

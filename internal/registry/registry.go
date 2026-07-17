@@ -1,0 +1,118 @@
+// Package registry defines the schema of the curated plugin index and keeps it
+// honest.
+//
+// The index itself is plugins.json at the repo root. It is consumed by COPY,
+// not by import: a host — GoFastr's docs site first — fetches the file from a
+// release (or raw URL) and vendors it, then parses it on its own terms. That is
+// why nothing here is exported for outside use and why this package lives under
+// internal/: the published artifact is the JSON file, not a Go API.
+//
+// What this package IS for is the drift the JSON cannot catch by itself. The
+// index is hand-maintained, so a row can silently fall out of step with the
+// plugin it claims to describe. The tests here fail loudly instead:
+//
+//   - every plugin package in the repo has exactly one row, and vice versa
+//   - each row's routePrefix equals that package's own RoutePrefix const
+//   - no row requests allow-same-origin (which would collapse the opaque origin)
+//   - the parse rejects unknown fields, so a new JSON key must be added to the
+//     structs below in the same change rather than being quietly ignored
+//
+// Consumers parse the JSON themselves, so the structs here are a description of
+// the contract, not the thing enforcing it on their end. Treat a change to them
+// as a change to the published schema: bump registryVersion on a breaking one,
+// since a vendored copy elsewhere is now out of date.
+package registry
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+)
+
+// Index is the whole curated registry: the framework it targets, plus every
+// plugin in it.
+type Index struct {
+	// RegistryVersion is the schema version of the file's SHAPE, bumped only on
+	// a breaking change to the field layout. It is not a release version.
+	RegistryVersion string `json:"registryVersion"`
+	// Comment is the "$comment" preamble — editorial context for humans reading
+	// the raw JSON.
+	Comment     string    `json:"$comment,omitempty"`
+	Description string    `json:"description"`
+	Framework   Framework `json:"framework"`
+	Plugins     []Plugin  `json:"plugins"`
+	// Release identifies the release a copy came from. It is ABSENT from the
+	// file in git and stamped in by .github/workflows/release.yml as the asset
+	// is published — so a vendored copy says what it is, rather than depending
+	// on whoever fetched it to write that down.
+	Release *Release `json:"release,omitempty"`
+}
+
+// Release is the provenance stamp on a published copy of the index.
+type Release struct {
+	Tag       string `json:"tag"`
+	Commit    string `json:"commit"`
+	Published string `json:"published"`
+	Source    string `json:"source"`
+}
+
+// Framework identifies the host framework this plugin set targets.
+type Framework struct {
+	Name       string `json:"name"`
+	ModulePath string `json:"modulePath"`
+	Note       string `json:"note,omitempty"`
+}
+
+// Plugin describes one curated plugin. Every field mirrors a constant the
+// plugin itself declares (see <pkg>/plugin.go) — this is a description of a
+// plugin, never a live handle to one.
+type Plugin struct {
+	Name       string `json:"name"`
+	ModulePath string `json:"modulePath"`
+	// Version is the PLUGIN's own release.
+	Version     string `json:"version"`
+	Description string `json:"description"`
+
+	// Isolation is the mount posture, e.g. "sandbox-iframe-opaque".
+	Isolation string `json:"isolation"`
+	// Sandbox lists the iframe sandbox tokens granted. Note the absence of
+	// "allow-same-origin" across the set: that omission is what keeps the frame
+	// on an opaque origin, walled off from host cookies and the DB.
+	Sandbox []string `json:"sandbox"`
+	// Capabilities are the postMessage bridge scopes the plugin may request.
+	Capabilities []string `json:"capabilities"`
+
+	// FrameworkCompat is a best-effort floor (a semver range), not a tested
+	// support matrix.
+	FrameworkCompat string `json:"frameworkCompat"`
+
+	RoutePrefix string `json:"routePrefix"`
+	Entry       string `json:"entry"`
+	Schema      string `json:"schema"`
+	MinHeight   string `json:"minHeight"`
+	Docs        string `json:"docs"`
+}
+
+// load reads and parses the index at path. It is read from disk rather than
+// go:embed because the only consumer is the test binary next door — embedding
+// would force the JSON to live in this directory, away from the repo root where
+// hosts fetch it from.
+func load(path string) (Index, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return Index{}, fmt.Errorf("registry: reading index: %w", err)
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(src))
+	// The guard that keeps these structs honest: a key added to plugins.json
+	// without a matching field here fails the tests rather than being silently
+	// dropped.
+	dec.DisallowUnknownFields()
+
+	var idx Index
+	if err := dec.Decode(&idx); err != nil {
+		return Index{}, fmt.Errorf("registry: parsing %s: %w", path, err)
+	}
+	return idx, nil
+}

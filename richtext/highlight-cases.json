@@ -1,0 +1,33 @@
+{
+  "_comment": "SHARED parity fixture for the code-block syntax highlighter. The TS tokenizer (js/src/highlight.ts) and the Go tokenizer (ssr/highlight.go) are hand-mirrored; this is the single source of truth that pins them together. js/test/highlight.test.ts and ssr/highlight_test.go both load this file and assert their scanner reproduces every `tokens` row exactly. Add a case here (not to one side's test) so any editor↔read-view divergence fails CI on whichever side drifted. Keep `code` ASCII: byte offsets (Go) and UTF-16 offsets (TS) differ for multibyte runes, but the highlighted substrings are identical for ASCII, which is what these rows assert. Each token is [substring-of-code, type]; type is one of comment|string|number|keyword|function. `languages` is the canonical supported-language set: BOTH tokenizers assert their key-set equals it (so a Go-only or TS-only language fails CI), and every entry must have at least one `cases` row.",
+  "languages": ["javascript", "typescript", "go", "python", "rust", "json", "css", "sql", "bash", "html", "markdown"],
+  "cases": [
+    { "code": "const x = 1", "lang": "javascript", "tokens": [["const", "keyword"], ["1", "number"]] },
+    { "code": "func main() { return \"x\" }", "lang": "go", "tokens": [["func", "keyword"], ["main", "function"], ["return", "keyword"], ["\"x\"", "string"]] },
+    { "code": "def f(): # c", "lang": "python", "tokens": [["def", "keyword"], ["f", "function"], ["# c", "comment"]] },
+    { "code": "x = 1 # note", "lang": "python", "tokens": [["1", "number"], ["# note", "comment"]] },
+    { "code": "x = 1 # note 2", "lang": "javascript", "tokens": [["1", "number"], ["2", "number"]] },
+    { "code": "constant", "lang": "javascript", "tokens": [] },
+    { "code": "foo(bar)", "lang": "javascript", "tokens": [["foo", "function"]] },
+    { "code": "a /* one\ntwo */ b", "lang": "javascript", "tokens": [["/* one\ntwo */", "comment"]] },
+    { "code": "0xFF 3.14 42 1_000", "lang": "javascript", "tokens": [["0xFF", "number"], ["3.14", "number"], ["42", "number"], ["1_000", "number"]] },
+    { "code": ".5 + 0.5", "lang": "javascript", "tokens": [[".5", "number"], ["0.5", "number"]] },
+    { "code": "1e10 1.5e-3 1E+5", "lang": "javascript", "tokens": [["1e10", "number"], ["1.5e-3", "number"], ["1E+5", "number"]] },
+    { "code": "0x", "lang": "javascript", "tokens": [["0", "number"]] },
+    { "code": "0xZ", "lang": "javascript", "tokens": [["0", "number"]] },
+    { "code": "5.", "lang": "javascript", "tokens": [["5", "number"]] },
+    { "code": "1..2", "lang": "javascript", "tokens": [["1", "number"], [".2", "number"]] },
+    { "code": "foo(1.)", "lang": "javascript", "tokens": [["foo", "function"], ["1", "number"]] },
+    { "code": "`a\\", "lang": "javascript", "tokens": [["`a\\", "string"]] },
+    { "code": "{\"k\": true, \"n\": null, \"x\": 3}", "lang": "json", "tokens": [["\"k\"", "string"], ["true", "keyword"], ["\"n\"", "string"], ["null", "keyword"], ["\"x\"", "string"], ["3", "number"]] },
+    { "code": "SELECT * FROM t -- c", "lang": "sql", "tokens": [["SELECT", "keyword"], ["FROM", "keyword"], ["-- c", "comment"]] },
+    { "code": "echo \"hi\"", "lang": "bash", "tokens": [["echo", "keyword"], ["\"hi\"", "string"]] },
+    { "code": "const x: string = \"hi\" // c", "lang": "typescript", "tokens": [["const", "keyword"], ["string", "keyword"], ["\"hi\"", "string"], ["// c", "comment"]] },
+    { "code": "fn main() { let x = 1 } // c", "lang": "rust", "tokens": [["fn", "keyword"], ["main", "function"], ["let", "keyword"], ["1", "number"], ["// c", "comment"]] },
+    { "code": "content: \"x\" !important /* c */", "lang": "css", "tokens": [["\"x\"", "string"], ["important", "keyword"], ["/* c */", "comment"]] },
+    { "code": "<!-- c --><div class=\"x\">", "lang": "html", "tokens": [["<!-- c -->", "comment"], ["\"x\"", "string"]] },
+    { "code": "see item 3", "lang": "markdown", "tokens": [["3", "number"]] },
+    { "code": "x = \"a\\\"b\" + 'c\\\\d'", "lang": "javascript", "tokens": [["\"a\\\"b\"", "string"], ["'c\\\\d'", "string"]] },
+    { "code": "/* doc */ x = 1 // end", "lang": "go", "tokens": [["/* doc */", "comment"], ["1", "number"], ["// end", "comment"]] }
+  ]
+}

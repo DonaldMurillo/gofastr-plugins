@@ -8,7 +8,7 @@ understand *why*, not just *what*.
 
 Started from GoFastr issue **#38** — "ui: Markdown editor component (render-only
 today)". The issue as written asks for a textarea + live-preview pane. That
-reading was wrong: the real target is a **full WYSIWYG rich-text editor**
+reading was wrong: the real target is a **full Rich Text rich-text editor**
 (Notion/Confluence-class) where markdown is the storage/interchange format, not
 the editing UX.
 
@@ -20,7 +20,7 @@ the editing UX.
    coexist on one form** (runtime hijacks submit on any `data-fui-rpc` form —
    `runtime.js:429`; input-trigger requires such a form — `runtime.js:528`; HTML
    forbids nested forms). Verified. All three plans made obsolete by the reframe.
-2. **Reframe → full WYSIWYG.** A real WYSIWYG is inherently a fat client, which
+2. **Reframe → full Rich Text.** A real Rich Text is inherently a fat client, which
    collides head-on with GoFastr's SSR-thin / ≤12 KB core / no-client-logic model.
 3. **Resolution → an official registry for heavy-JS plugins** that live OUTSIDE
    the core, keeping the core pure. The editor is plugin #1. ("Keep it Go-ing.")
@@ -64,11 +64,79 @@ Full memos: [`design/isolation-crux-claude.md`](design/isolation-crux-claude.md)
 Two independent models agreeing on the hardest call is a strong signal — with one
 caveat: no *dissent* was heard.
 
+## Phase 0 — DONE, gate CLEARED (2026-07-12)
+
+The isolation spike is built and verified end to end (headless-Chrome e2e in
+`example/smoke_test.go`). The opaque-origin sandboxed iframe + versioned
+`postMessage` RPC works and is a usable editing surface:
+
+- **Go/no-go latency gate: p50 = 3.5 ms, p99 = 8.6 ms** (target ≤ 16 ms) —
+  **PASS.** All editing stays in-frame; the boundary carries only coarse events.
+- Isolation proven from both sides: `sandbox="allow-scripts"` (no
+  `allow-same-origin`), `iframe.contentDocument === null` from the parent, and
+  in-frame probes confirm `document.cookie`/`localStorage`/`parent.document` are
+  all unreachable.
+- Round-trip (type → `docChanged` → host hidden fields), theme-token bridge
+  (light/dark re-sync), and autosize all verified.
+
+**Load-bearing gotchas discovered (feed these to every later phase):**
+1. GoFastr's global security middleware sends `X-Frame-Options: DENY`, CSP
+   `frame-ancestors 'none'`, and `Cross-Origin-Resource-Policy: same-origin` on
+   EVERY response — which blocks the host from framing the editor AND blocks the
+   opaque frame from fetching its own JS/CSS. The plugin's frame-asset handler
+   overrides these (CSP `frame-ancestors 'self'` — which supersedes XFO — plus
+   `Cross-Origin-Resource-Policy: cross-origin`). This is the client-side
+   "missing hook"; it becomes a first-class `pluginhost` responsibility.
+2. The frame CSP must allow `style-src 'self' 'unsafe-inline'` (ProseMirror sets
+   inline style attributes; the theme bridge injects a `<style>:root{…}` block).
+   `script-src` stays `'self'` — editor JS is external, so script isolation holds.
+3. `EditorState.create` needs an explicit `schema` when there's no initial doc.
+4. Driving input into an opaque OOPIF via chromedp requires disabling site
+   isolation in the test browser (a harness concern only — the frame's opaque
+   origin is unaffected); results are read via broker-stashed hooks on the
+   iframe element (protocol §8a).
+
+## Decision: secure by default, opt out (2026-07-13)
+
+Re-examined the iframe question directly ("we control which plugins get
+mounted — why the cage?"). Resolution, from the app owner:
+
+- **Sandboxed opaque-origin iframe stays the DEFAULT** for every plugin. The
+  threat it addresses is not "who installs the plugin" but what's *inside* it:
+  heavy-JS plugins ship megabytes of unaudited npm transitive dependencies
+  (mermaid alone is 2.6 MB), and deliberate installation is exactly how
+  supply-chain compromises land. The browser-enforced boundary means a
+  compromised dependency cannot reach host cookies/sessions/DOM.
+- **Opt-out is allowed but must be explicit** — the "trusted mount" mode
+  (same plugin API, in-page, no frame) for plugins the app owner compiles in
+  and vouches for. BUILT the same day for the richtext plugin:
+  `richtext.WithTrustedMount()` (host-side, never a default, never
+  plugin-selectable) serves `editor-inline.js` (window.__gofastrRichText.mountTrusted),
+  `editor-scoped.css` (frame stylesheet rescoped under `.gofastr-richtext-trusted`;
+  the `:root` fallback-token block is dropped so page tokens inherit), and a
+  frameless demo at `/__gofastr/plugin/richtext/trusted`. Same protocol
+  envelopes, transport swapped from postMessage to direct calls
+  (`protocol.setTransport` + `routeEnvelope`); overlays attach inside the
+  scoped wrapper (`ui.setOverlayParent`). The full e2e journey suite runs
+  against BOTH mounts in WebKit + Chromium.
+
 ## Open threads
 
 - **GPT-5.6-sol's crux take is PENDING** — its provider was rate-capped during
   the session (openai-codex 5h window). Add it when the window reopens; a genuine
   *alternative* isolation model would be more valuable than a third agreement.
 - **GitHub remote** not yet created (repo is local-only).
-- **Phase 0 — the isolation spike** is the next build step (sandboxed
-  ProseMirror + the ≤16 ms measurement rig, in `example/`).
+- **Phases 1–3 COMPLETE (2026-07-13):**
+  - Phase 1 — full editor + SSR read view + a11y gate (axe, zero
+    serious/critical across framed/trusted/SSR + open menus) + mobile gate
+    (iPhone/Pixel touch journeys) + the WebKit+Chromium user-journey e2e suite.
+  - Phase 2 — platform extracted into gofastr core as
+    `framework/pluginhost` (package + host broker + data-fui-plugin* attr
+    registration + ARCHITECTURE/runtime-contract/CHANGELOG same-tree);
+    this repo's `pluginhost` is now a thin alias.
+  - Phase 3 — `plugins.json` registry manifest; core docs page
+    `framework/docs/content/plugin-platform.md` (capability model reconciled
+    with #37: grants reuse the battery/auth resource:verb scope grammar via
+    auth.HasScope — no parallel registry); dogfood screenshots
+    (light/dark × desktop/mobile × framed/trusted/SSR).
+  - Phase 4 (collaboration/CRDT, presence) remains future work by design.

@@ -1,0 +1,55 @@
+{
+  "registryVersion": "1",
+  "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities. This file is EMBEDDED by the sibling ./registry Go module (package registry), which is how gofastr reads the plugin set to generate its docs pages -- keep it valid JSON, and add new keys to the Go structs in registry.go at the same time (the parser rejects unknown fields).",
+  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Each runs isolated in an opaque-origin sandboxed iframe and talks to the host only over a versioned postMessage capability bridge. See docs/plugin-platform.md for the platform contract.",
+  "framework": {
+    "name": "gofastr",
+    "modulePath": "github.com/DonaldMurillo/gofastr",
+    "note": "gofastr uses calendar-ish semver (YYYY-MM-DD releases until the API stabilises). These plugins are built and tested against the published gofastr v0.28.0; frameworkCompat is a best-effort floor, not a tested matrix. No published module version of the gofastr-plugins ROOT module exists yet -- the ./registry submodule is versioned separately via registry/vX.Y.Z tags."
+  },
+  "plugins": [
+    {
+      "name": "richtext",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/richtext",
+      "version": "0.1.0-phase0",
+      "description": "Full Rich Text block editor built on ProseMirror. Block-JSON canonical, markdown export + a pure-Go SSR read view (richtext/ssr). The first heavy-JS plugin and the forcing function that proved the third-party isolation contract.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "upload:images",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/richtext",
+      "entry": "/__gofastr/plugin/richtext/editor.html",
+      "schema": "richtext-v1",
+      "minHeight": "240px",
+      "docs": "docs/richtext-editor.md"
+    },
+    {
+      "name": "mermaid",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/mermaid",
+      "version": "0.1.0-phase0",
+      "description": "Isolated Mermaid diagram editor/renderer. The second heavy-JS plugin — the completeness canary proving the extracted pluginhost platform generalizes beyond the editor. Canonical doc is {source:\"...\"}; no upload path.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/mermaid",
+      "entry": "/__gofastr/plugin/mermaid/diagram.html",
+      "schema": "mermaid-v1",
+      "minHeight": "320px",
+      "docs": "docs/mermaid.md"
+    }
+  ]
+}

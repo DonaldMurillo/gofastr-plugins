@@ -17,3 +17,12 @@ coverage.*
 *.swp
 .idea/
 .vscode/
+
+# Test runner artifacts (Playwright)
+test-results/
+playwright-report/
+/e2e/shots/
+
+# Go workspace — local-only dev wiring to a sibling gofastr checkout
+go.work
+go.work.sum
