@@ -77,6 +77,52 @@ func evalJSON(ctx context.Context, expr string, out any) error {
 	return json.Unmarshal(raw, out)
 }
 
+// editorClickXY returns a viewport point that lands inside the editor's
+// editable area, for chromedp's coordinate-based clicks (which, unlike
+// Playwright's frameLocator, cannot address an element inside the opaque OOPIF
+// and so must aim at raw pixels).
+//
+// Two things get in the way, and both have bitten this suite:
+//
+//  1. The OOPIF only receives clicks after the iframe is scrolled into view —
+//     without scrollIntoView the click simply does not route in.
+//  2. Whatever the DEMO PAGE puts on top. The shell has a `position: sticky`
+//     header (z-index 60), so scrolling the iframe to block:'start' parks its
+//     top edge UNDERNEATH that header — a click at a small fixed offset then
+//     hits the header and the editor never focuses. That is exactly how this
+//     broke: the offset was tuned to clear the editor's in-frame toolbar, and
+//     silently stopped clearing the page's own chrome when the demo was
+//     restyled.
+//
+// So do not trust a hardcoded offset: probe with elementFromPoint until the
+// iframe is genuinely the topmost element, and fail loudly if it never is.
+// topPad clears the editor's in-frame toolbar once inside.
+func editorClickXY(ctx context.Context, t *testing.T, topPad float64) []float64 {
+	t.Helper()
+	var xy []float64
+	err := evalJSON(ctx, fmt.Sprintf(`(()=>{
+		const f = document.querySelector('iframe');
+		if (!f) return null;
+		f.scrollIntoView({block:'start'});
+		const r = f.getBoundingClientRect();
+		const x = r.x + r.width / 2;
+		let y = Math.max(r.y, 0) + %[1]f;
+		if (document.elementFromPoint(x, y) !== f) {
+			// Occluded by page chrome — walk down to the first row the iframe
+			// actually owns, then step just inside it.
+			for (let p = Math.max(r.y, 0); p < r.bottom - 24; p += 8) {
+				if (document.elementFromPoint(x, p) === f) { y = p + 8; break; }
+			}
+		}
+		if (document.elementFromPoint(x, y) !== f) return null;
+		return [x, y];
+	})()`, topPad), &xy)
+	if err != nil || len(xy) != 2 {
+		t.Fatalf("could not find an unoccluded point inside the editor iframe (page chrome covering it?): %v", err)
+	}
+	return xy
+}
+
 // pollTrue polls a boolean JS expr in the parent until true or timeout.
 func pollTrue(ctx context.Context, expr string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)

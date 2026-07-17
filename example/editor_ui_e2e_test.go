@@ -46,10 +46,7 @@ func TestEditorUIGestures(t *testing.T) {
 	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`, 10*time.Second) {
 		t.Fatal("editor never ready")
 	}
-	var xy []float64
-	if err := evalJSON(ctx, `(()=>{const f=document.querySelector('iframe');f.scrollIntoView({block:'start'});const r=f.getBoundingClientRect();return [r.x+r.width/2, Math.max(r.y,0) + 64];})()`, &xy); err != nil {
-		t.Fatalf("rect: %v", err)
-	}
+	xy := editorClickXY(ctx, t, 64)
 	if err := chromedp.Run(ctx, chromedp.MouseClickXY(xy[0], xy[1]), chromedp.Sleep(200*time.Millisecond)); err != nil {
 		t.Fatalf("focus: %v", err)
 	}

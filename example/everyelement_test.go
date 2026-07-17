@@ -119,12 +119,9 @@ func TestEveryElement(t *testing.T) {
 	// body_json only populates on an edit (docChanged), so nudge the doc: click
 	// into it and type a space, then the editor re-serializes the WHOLE doc — if
 	// it had rejected any block, that block would be absent from the JSON.
-	var xy []float64
-	_ = evalJSON(ctx, `(()=>{const f=document.querySelector('iframe');f.scrollIntoView({block:'start'});const r=f.getBoundingClientRect();return [r.x+r.width/2, Math.max(r.y,0) + 62];})()`, &xy)
-	if len(xy) == 2 {
-		_ = chromedp.Run(ctx, chromedp.MouseClickXY(xy[0], xy[1]), chromedp.Sleep(120*time.Millisecond),
-			chromedp.KeyEvent(" "), chromedp.Sleep(600*time.Millisecond))
-	}
+	xy := editorClickXY(ctx, t, 62)
+	_ = chromedp.Run(ctx, chromedp.MouseClickXY(xy[0], xy[1]), chromedp.Sleep(120*time.Millisecond),
+		chromedp.KeyEvent(" "), chromedp.Sleep(600*time.Millisecond))
 	var js string
 	_ = chromedp.Run(ctx, chromedp.Evaluate(`(document.querySelector('input[name=body_json]')||{}).value||''`, &js))
 	nodeTypes := []string{"heading", "blockquote", "code_block", "divider", "bullet_list", "ordered_list",
