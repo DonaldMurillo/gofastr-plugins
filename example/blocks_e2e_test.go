@@ -33,10 +33,9 @@ func TestFullEditorBlocks(t *testing.T) {
 	}
 
 	// Focus the editor and drive input rules: "# " → heading, "- " → bullet list.
-	var xy []float64
-	if err := evalJSON(ctx, `(()=>{const f=document.querySelector('iframe');f.scrollIntoView({block:'center'});const r=f.getBoundingClientRect();return [r.x+r.width/2, r.y + Math.min(r.height - 16, r.height*0.7)];})()`, &xy); err != nil {
-		t.Fatalf("iframe rect: %v", err)
-	}
+	// Aim low: the rules only fire at the start of a line, so land on the
+	// trailing empty paragraph rather than inside existing text.
+	xy := editorClickXYFrac(ctx, t, 0.7)
 	if err := chromedp.Run(ctx,
 		chromedp.MouseClickXY(xy[0], xy[1]),
 		chromedp.Sleep(150*time.Millisecond),

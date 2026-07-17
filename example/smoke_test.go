@@ -77,6 +77,40 @@ func evalJSON(ctx context.Context, expr string, out any) error {
 	return json.Unmarshal(raw, out)
 }
 
+// waitEditorSettled blocks until the iframe stops resizing.
+//
+// __richtextReady only says the editor mounted; the frame then AUTO-SIZES to
+// its content, so a rect read straight after ready describes a box that is
+// about to move. Any click computed from it lands somewhere else — or arrives
+// before ProseMirror is interactive and is simply dropped. A fast machine hides
+// this (the resize beats the next CDP round-trip); a loaded CI runner does not,
+// which is precisely the kind of "passes locally, fails in CI" this suite keeps
+// producing. Wait for two consecutive equal heights instead of sleeping a
+// guessed constant.
+func waitEditorSettled(ctx context.Context, t *testing.T, timeout time.Duration) {
+	t.Helper()
+	const expr = `(()=>{const f=document.querySelector('iframe');return f?f.getBoundingClientRect().height:-1;})()`
+	deadline := time.Now().Add(timeout)
+	var last float64 = -1
+	stable := 0
+	for time.Now().Before(deadline) {
+		var h float64
+		if err := chromedp.Run(ctx, chromedp.Evaluate(expr, &h)); err != nil {
+			t.Fatalf("measuring the editor iframe: %v", err)
+		}
+		if h > 0 && h == last {
+			if stable++; stable >= 2 {
+				return
+			}
+		} else {
+			stable = 0
+		}
+		last = h
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("editor iframe never stopped resizing within %s (last height %.0f)", timeout, last)
+}
+
 // editorClickXY returns a viewport point that lands inside the editor's
 // editable area, for chromedp's coordinate-based clicks (which, unlike
 // Playwright's frameLocator, cannot address an element inside the opaque OOPIF
@@ -99,26 +133,56 @@ func evalJSON(ctx context.Context, expr string, out any) error {
 // topPad clears the editor's in-frame toolbar once inside.
 func editorClickXY(ctx context.Context, t *testing.T, topPad float64) []float64 {
 	t.Helper()
+	return editorPoint(ctx, t, "start", fmt.Sprintf("Math.max(r.y,0) + %f", topPad))
+}
+
+// editorClickXYFrac aims at a fraction of the editor's height — use it when a
+// test needs to land near the END of the document (e.g. to drive input rules,
+// which only fire at the start of a line, so clicking into the middle of
+// existing text would not trigger them).
+func editorClickXYFrac(ctx context.Context, t *testing.T, frac float64) []float64 {
+	t.Helper()
+	return editorPoint(ctx, t, "center", fmt.Sprintf("r.y + Math.min(r.height - 16, r.height * %f)", frac))
+}
+
+// editorPoint scrolls the iframe into view, evaluates wantY against its rect,
+// and returns that point only once elementFromPoint agrees the iframe owns it —
+// walking the point into the frame if page chrome is on top, and clamping it
+// into the viewport, since a coordinate outside the viewport is not clickable
+// at all (an iframe taller than the window centers to a negative y).
+func editorPoint(ctx context.Context, t *testing.T, block, wantY string) []float64 {
+	t.Helper()
+	waitEditorSettled(ctx, t, 15*time.Second)
+
 	var xy []float64
 	err := evalJSON(ctx, fmt.Sprintf(`(()=>{
 		const f = document.querySelector('iframe');
 		if (!f) return null;
-		f.scrollIntoView({block:'start'});
+		f.scrollIntoView({block:'%[1]s'});
 		const r = f.getBoundingClientRect();
 		const x = r.x + r.width / 2;
-		let y = Math.max(r.y, 0) + %[1]f;
+		let y = %[2]s;
+
+		// Keep the point on screen and inside the frame.
+		const lo = Math.max(r.y, 0) + 4, hi = Math.min(r.bottom, innerHeight) - 8;
+		if (!(hi > lo)) return null;
+		y = Math.min(Math.max(y, lo), hi);
+
 		if (document.elementFromPoint(x, y) !== f) {
-			// Occluded by page chrome — walk down to the first row the iframe
-			// actually owns, then step just inside it.
-			for (let p = Math.max(r.y, 0); p < r.bottom - 24; p += 8) {
-				if (document.elementFromPoint(x, p) === f) { y = p + 8; break; }
+			// Something is on top (the shell's sticky header, a footer). Find a
+			// row the iframe actually owns, preferring one near the target.
+			let best = null;
+			for (let p = lo; p < hi; p += 8) {
+				if (document.elementFromPoint(x, p) === f &&
+					(best === null || Math.abs(p - y) < Math.abs(best - y))) best = p;
 			}
+			if (best === null) return null;
+			y = best;
 		}
-		if (document.elementFromPoint(x, y) !== f) return null;
 		return [x, y];
-	})()`, topPad), &xy)
+	})()`, block, wantY), &xy)
 	if err != nil || len(xy) != 2 {
-		t.Fatalf("could not find an unoccluded point inside the editor iframe (page chrome covering it?): %v", err)
+		t.Fatalf("no unoccluded, on-screen point inside the editor iframe (page chrome covering it?): %v", err)
 	}
 	return xy
 }
