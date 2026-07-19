@@ -3,7 +3,7 @@ module github.com/DonaldMurillo/gofastr-plugins
 go 1.26.5
 
 require (
-	github.com/DonaldMurillo/gofastr v0.28.0
+	github.com/DonaldMurillo/gofastr v0.36.0
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 )
