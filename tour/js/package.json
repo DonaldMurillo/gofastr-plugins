@@ -1,0 +1,15 @@
+{
+  "name": "@gofastr/tour-runtime",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "Trusted host-page guided-tour runtime for the GoFastr tour plugin. Builds a single IIFE that attaches window.gofastrTour on the host page (spotlight + tooltip overlay, fetches tour definitions, persists seen state).",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}

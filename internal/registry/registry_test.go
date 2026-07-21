@@ -43,6 +43,7 @@ func TestIndexParses(t *testing.T) {
 func TestPluginRowsAreComplete(t *testing.T) {
 	for _, p := range mustLoad(t).Plugins {
 		t.Run(p.Name, func(t *testing.T) {
+			// Fields every row needs regardless of isolation.
 			for _, f := range []struct{ name, val string }{
 				{"name", p.Name},
 				{"modulePath", p.ModulePath},
@@ -51,38 +52,75 @@ func TestPluginRowsAreComplete(t *testing.T) {
 				{"isolation", p.Isolation},
 				{"frameworkCompat", p.FrameworkCompat},
 				{"routePrefix", p.RoutePrefix},
-				{"entry", p.Entry},
-				{"schema", p.Schema},
 				{"docs", p.Docs},
 			} {
 				if strings.TrimSpace(f.val) == "" {
 					t.Errorf("%s is empty", f.name)
 				}
 			}
-			if len(p.Sandbox) == 0 {
-				t.Error("sandbox is empty")
-			}
 			if len(p.Capabilities) == 0 {
 				t.Error("capabilities is empty")
 			}
-			if !strings.HasPrefix(p.Entry, p.RoutePrefix) {
-				t.Errorf("entry %q is not under routePrefix %q", p.Entry, p.RoutePrefix)
+			// Fields only a sandboxed (framed) plugin has: the entry document, its
+			// interchange schema, and the sandbox tokens. A trusted host-page
+			// plugin has none of these — it is not framed — so requiring them
+			// would wrongly reject it.
+			if p.Isolation == isolationSandboxOpaque {
+				for _, f := range []struct{ name, val string }{
+					{"entry", p.Entry},
+					{"schema", p.Schema},
+				} {
+					if strings.TrimSpace(f.val) == "" {
+						t.Errorf("%s is empty (required for a sandboxed plugin)", f.name)
+					}
+				}
+				if len(p.Sandbox) == 0 {
+					t.Error("sandbox is empty (required for a sandboxed plugin)")
+				}
+				if !strings.HasPrefix(p.Entry, p.RoutePrefix) {
+					t.Errorf("entry %q is not under routePrefix %q", p.Entry, p.RoutePrefix)
+				}
 			}
 		})
 	}
 }
 
-// The isolation invariant, mechanically enforced. "allow-same-origin" alongside
-// "allow-scripts" would collapse the opaque origin and hand the frame the host's
-// cookies and DOM — the one thing the whole platform exists to prevent. A row
-// asking for it is a security regression, not a config change.
-func TestNoPluginEscapesTheOpaqueOrigin(t *testing.T) {
+const (
+	isolationSandboxOpaque = "sandbox-iframe-opaque"
+	isolationTrustedHost   = "trusted-host-page"
+)
+
+// The isolation invariant, mechanically enforced PER CATEGORY. The whole
+// platform's security rests on this switch:
+//   - a sandboxed plugin must stay opaque-origin: no "allow-same-origin" (which
+//     alongside "allow-scripts" would collapse the opaque origin and hand the
+//     frame the host's cookies + DOM), and it must NOT be marked trusted.
+//   - a trusted-host-page plugin runs with full host access by design (the tour
+//     plugin must reach host DOM), so it must be an EXPLICIT vouch (trusted=true)
+//     and must declare NO sandbox — it is not framed, and a stray sandbox token
+//     would misdescribe it.
+//
+// An unknown isolation value is rejected outright, so a typo can never slip a
+// plugin past both arms of the switch into an unchecked state.
+func TestIsolationInvariantsPerCategory(t *testing.T) {
 	for _, p := range mustLoad(t).Plugins {
-		if slices.Contains(p.Sandbox, "allow-same-origin") {
-			t.Errorf("plugin %q requests allow-same-origin; that defeats the opaque-origin sandbox", p.Name)
-		}
-		if p.Isolation != "sandbox-iframe-opaque" {
-			t.Errorf("plugin %q isolation = %q, want sandbox-iframe-opaque", p.Name, p.Isolation)
+		switch p.Isolation {
+		case isolationSandboxOpaque:
+			if slices.Contains(p.Sandbox, "allow-same-origin") {
+				t.Errorf("plugin %q requests allow-same-origin; that defeats the opaque-origin sandbox", p.Name)
+			}
+			if p.Trusted {
+				t.Errorf("plugin %q is sandboxed but marked trusted; a sandboxed plugin is never trusted", p.Name)
+			}
+		case isolationTrustedHost:
+			if !p.Trusted {
+				t.Errorf("plugin %q is trusted-host-page but trusted!=true; a trusted plugin must be an explicit vouch", p.Name)
+			}
+			if len(p.Sandbox) != 0 {
+				t.Errorf("plugin %q is trusted-host-page but declares sandbox %v; a trusted host-page plugin is not framed", p.Name, p.Sandbox)
+			}
+		default:
+			t.Errorf("plugin %q has unknown isolation %q", p.Name, p.Isolation)
 		}
 	}
 }

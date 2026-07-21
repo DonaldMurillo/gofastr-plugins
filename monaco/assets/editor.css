@@ -1,0 +1,71 @@
+/*
+ * GoFastr Monaco code editor stylesheet — TOKEN-ONLY (protocol v1 §7).
+ *
+ * All colors, spacing, radii, and fonts come from CSS custom properties that the
+ * HOST bridges in via init/themeChanged (theme.ts writes a :root{} block from
+ * params.tokens). Every var() carries an inline fallback so the editor is still
+ * legible before `init` arrives. ZERO bespoke hex in rules — only in the
+ * fallback position of var(). Light/dark is entirely token-driven; there is
+ * deliberately NO prefers-color-scheme gating (the repo rule: theme is
+ * host-driven). Monaco's own theme (gofastr-light / gofastr-dark) is registered
+ * from the same tokens at runtime, so the editor surface matches by
+ * construction.
+ */
+
+/* ---- defaults applied only if the host has not bridged tokens yet ---- */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-primary: #6366f1;
+  --color-danger: #dc2626;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: system-ui, -apple-system, Segoe UI, sans-serif;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --radii-sm: 6px;
+  --radii-md: 10px;
+  --font-size-sm: 0.85rem;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-background);
+}
+
+body {
+  font-family: var(--font-body, system-ui, sans-serif);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#monaco-container {
+  width: 100%;
+  /* Height is set at runtime by updateHeight() (Monaco content height, capped).
+     A sane initial fallback keeps the frame non-empty before the first layout. */
+  height: 240px;
+  background: var(--color-surface);
+}
+
+.monaco-status:empty {
+  display: none;
+}
+
+.monaco-status {
+  margin: 0;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-muted);
+  background: var(--color-surface-soft);
+  border-top: 1px solid var(--color-border);
+  white-space: normal;
+  word-break: break-word;
+}

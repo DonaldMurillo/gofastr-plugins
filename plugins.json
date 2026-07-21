@@ -1,7 +1,7 @@
 {
   "registryVersion": "1",
   "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities. This file is EMBEDDED by the sibling ./registry Go module (package registry), which is how gofastr reads the plugin set to generate its docs pages -- keep it valid JSON, and add new keys to the Go structs in registry.go at the same time (the parser rejects unknown fields).",
-  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Each runs isolated in an opaque-origin sandboxed iframe and talks to the host only over a versioned postMessage capability bridge. See docs/plugin-platform.md for the platform contract.",
+  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Most run isolated in an opaque-origin sandboxed iframe and talk to the host only over a versioned postMessage capability bridge (isolation \"sandbox-iframe-opaque\"). A plugin that must reach the host DOM (the guided-tour plugin) instead runs as a vouched-for trusted host-page script (isolation \"trusted-host-page\", trusted:true) — never sandboxed and never same-origin-in-a-frame. See docs/plugin-platform.md for the platform contract.",
   "framework": {
     "name": "gofastr",
     "modulePath": "github.com/DonaldMurillo/gofastr",
@@ -50,6 +50,42 @@
       "schema": "mermaid-v1",
       "minHeight": "320px",
       "docs": "docs/mermaid.md"
+    },
+    {
+      "name": "monaco",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/monaco",
+      "version": "0.1.0-phase0",
+      "description": "Configurable Monaco (VS Code) code editor. The third sandboxed heavy-JS plugin. Canonical doc is {code, language}; syntax highlighting runs worker-free on the main thread (opaque-origin safe), with an opt-in real-worker path. Supports a diff-editor mode and per-instance language/theme/read-only/minimap/word-wrap config.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/monaco",
+      "entry": "/__gofastr/plugin/monaco/editor.html",
+      "schema": "monaco-v1",
+      "minHeight": "320px",
+      "docs": "docs/monaco.md"
+    },
+    {
+      "name": "tour",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/tour",
+      "version": "0.1.0",
+      "description": "Guided product-tour (\"app cues\") plugin: spotlights host-page elements with stepped tooltip bubbles, progress, and don't-show-again persistence. The FIRST trusted host-page plugin — it runs in the host page with full DOM access (it must, to highlight real elements), so it is NOT sandboxed. Runtime is a same-origin script + stylesheet; tours are registered server-side and completion is persisted client-side and via a seen endpoint.",
+      "isolation": "trusted-host-page",
+      "trusted": true,
+      "capabilities": [
+        "tour:read",
+        "tour:write"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/tour",
+      "docs": "docs/tour.md"
     }
   ]
 }

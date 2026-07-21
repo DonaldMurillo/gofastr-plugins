@@ -74,12 +74,26 @@ type Plugin struct {
 	Version     string `json:"version"`
 	Description string `json:"description"`
 
-	// Isolation is the mount posture, e.g. "sandbox-iframe-opaque".
+	// Isolation is the mount posture. Two categories exist:
+	//   - "sandbox-iframe-opaque": the default heavy-JS posture (richtext,
+	//     mermaid, monaco). Runs in an opaque-origin sandboxed iframe, walled off
+	//     from the host DOM/cookies/DB; talks over the postMessage bridge only.
+	//   - "trusted-host-page": a plugin that runs IN the host page with full DOM
+	//     access because it must (the tour plugin spotlights host elements). It
+	//     is NOT sandboxed, so it must set Trusted=true (an explicit vouch) and
+	//     declare no Sandbox tokens. The per-isolation guards in the tests here
+	//     enforce that a trusted plugin can never masquerade as a sandboxed one
+	//     and vice-versa.
 	Isolation string `json:"isolation"`
-	// Sandbox lists the iframe sandbox tokens granted. Note the absence of
-	// "allow-same-origin" across the set: that omission is what keeps the frame
-	// on an opaque origin, walled off from host cookies and the DB.
-	Sandbox []string `json:"sandbox"`
+	// Trusted marks a "trusted-host-page" plugin: it runs with full host access
+	// and is vouched for by the app owner who compiles it in. It MUST be true for
+	// a trusted-host-page row and MUST be absent/false for a sandboxed row.
+	Trusted bool `json:"trusted,omitempty"`
+	// Sandbox lists the iframe sandbox tokens granted (sandboxed rows only). Note
+	// the absence of "allow-same-origin" across the set: that omission is what
+	// keeps the frame on an opaque origin, walled off from host cookies and the
+	// DB. A trusted-host-page row declares no sandbox (it is not framed).
+	Sandbox []string `json:"sandbox,omitempty"`
 	// Capabilities are the postMessage bridge scopes the plugin may request.
 	Capabilities []string `json:"capabilities"`
 
