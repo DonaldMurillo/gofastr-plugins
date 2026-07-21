@@ -32,7 +32,7 @@ test.beforeEach(async ({ request, baseURL }) => {
 });
 
 test("a11y: framed demo page (host chrome)", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/richtext");
   await page.waitForFunction(() => {
     const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
     return !!f && f.__richtextReady === true;

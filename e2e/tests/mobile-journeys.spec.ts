@@ -22,7 +22,7 @@ interface Surface {
 const SURFACES: Surface[] = [
   {
     name: "sandboxed iframe",
-    path: "/",
+    path: "/richtext",
     ui: (page) => page.frameLocator("iframe"),
     ready: (page) =>
       page.waitForFunction(() => {

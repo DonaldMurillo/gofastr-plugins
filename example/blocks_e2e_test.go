@@ -25,7 +25,7 @@ func TestFullEditorBlocks(t *testing.T) {
 	ctx, cancel := newChrome(t)
 	defer cancel()
 
-	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/richtext")); err != nil {
 		t.Fatalf("navigate: %v", err)
 	}
 	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`, 10*time.Second) {

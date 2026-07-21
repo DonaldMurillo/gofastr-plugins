@@ -108,7 +108,7 @@ func TestEveryElement(t *testing.T) {
 	defer cancel()
 
 	// --- Editor render ---
-	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/richtext")); err != nil {
 		t.Fatal(err)
 	}
 	if !pollTrue(ctx, `!!(document.querySelector('iframe') && document.querySelector('iframe').__richtextReady === true)`, 10*time.Second) {

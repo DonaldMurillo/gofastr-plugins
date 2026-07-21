@@ -32,8 +32,8 @@ func TestDogfoodScreenshots(t *testing.T) {
 	shots := []struct {
 		name, url, prep string
 	}{
-		{"editor-light.png", "/", ""},
-		{"editor-dark.png", "/", `document.getElementById('fui-scheme-toggle').click()`},
+		{"editor-light.png", "/richtext", ""},
+		{"editor-dark.png", "/richtext", `document.getElementById('fui-scheme-toggle').click()`},
 		{"mermaid-light.png", "/mermaid", ""},
 	}
 	for _, s := range shots {

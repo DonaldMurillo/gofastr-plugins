@@ -8,7 +8,7 @@
     "test:chromium": "playwright test --project=chromium",
     "test:headed": "playwright test --project=webkit --headed",
     "typecheck": "tsc --noEmit",
-    "shots": "SHOTS=1 playwright test tests/shots.spec.ts --project=chromium"
+    "shots": "SHOTS=1 playwright test --project=shots"
   },
   "keywords": [],
   "author": "",

@@ -30,7 +30,7 @@ interface Surface {
 const SURFACES: Surface[] = [
   {
     name: "sandboxed iframe",
-    path: "/",
+    path: "/richtext",
     ui: (page) => page.frameLocator("iframe"),
     ready: (page) =>
       page.waitForFunction(
@@ -80,8 +80,72 @@ for (const surface of SURFACES) {
     });
 
     test.afterEach(() => {
-      const real = consoleErrors.filter((e: string) => !/favicon/i.test(e));
+      // Drop favicon noise and browser "Failed to load resource … <status>"
+      // network lines: those are HTTP-status notices, not JS errors, and a real
+      // asset/boot failure is already caught functionally (the ready() gate in
+      // beforeEach times out). The save-conflict journey mocks a 409, which
+      // Chromium surfaces as one such benign line.
+      const real = consoleErrors.filter(
+        (e: string) => !/favicon/i.test(e) && !/Failed to load resource/i.test(e)
+      );
       expect(real, `console/page errors during journey:\n${real.join("\n")}`).toEqual([]);
+    });
+
+    // A save that loses an optimistic-concurrency check comes back 409. fetch()
+    // does NOT reject on 409, so the host adapter used to resolve-and-drop it:
+    // the edit was silently lost and dirty was already cleared. Now the outcome
+    // is relayed to the editor as a failed saveResult, which warns the user and
+    // keeps the doc dirty. This journey drives the whole chain in a real browser.
+    test("save conflict (409) warns instead of losing the edit, and clears on the next good save", async ({ page }) => {
+      await editor(page).click();
+      await page.keyboard.type("an edit that will conflict");
+
+      let conflict = true;
+      await page.route("**/__gofastr/plugin/richtext/save", async (route) => {
+        await route.fulfill(
+          conflict
+            ? { status: 409, contentType: "application/json", body: JSON.stringify({ error: "E_CONFLICT" }) }
+            : { status: 200, contentType: "application/json", body: JSON.stringify({ status: "ok", docId: "demo" }) }
+        );
+      });
+
+      const alert = ui(page).locator(".richtext-alert");
+
+      // Explicit save (Mod-S) → 409 → a visible conflict banner (role=alert).
+      await page.keyboard.press("ControlOrMeta+s");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText(/changed/i);
+      // The edit is not lost — it is still in the document, not silently dropped.
+      await expect(editor(page)).toContainText("an edit that will conflict");
+
+      // Recover: the next save lands, and the warning retracts.
+      conflict = false;
+      await page.keyboard.press("ControlOrMeta+s");
+      await expect(alert).toHaveCount(0);
+    });
+
+    // The upload endpoint rejects with 413 (too large) / 415 (not an image) /
+    // 403 (denied). The broker relayed that to the editor as uploadResult.error,
+    // but the editor only console.warn'd it — so a rejected image just vanished.
+    // Now it shows the same banner a failed save does.
+    test("upload failure is shown to the user, not silently dropped", async ({ page }) => {
+      await editor(page).click();
+
+      await page.route("**/__gofastr/plugin/richtext/upload", (route) =>
+        route.fulfill({ status: 415, contentType: "application/json", body: JSON.stringify({ error: "E_NOT_IMAGE" }) })
+      );
+
+      // Slash menu → Image → the frame's hidden <input type=file>. Setting a file
+      // fires the real requestUpload → /upload → 415 → uploadResult chain.
+      await page.keyboard.type("/image");
+      await ui(page).locator(".richtext-slash-item", { hasText: /image/i }).first().click();
+      await ui(page)
+        .locator('input[type="file"]')
+        .setInputFiles({ name: "note.txt", mimeType: "text/plain", buffer: Buffer.from("not an image") });
+
+      const alert = ui(page).locator(".richtext-alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText(/image/i);
     });
 
     test("typing renders text in the editor", async ({ page }) => {
@@ -570,7 +634,7 @@ test.describe("sandboxed iframe (frame-specific)", () => {
 
   test.beforeEach(async ({ page, request, baseURL }) => {
     await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
-    await page.goto("/");
+    await page.goto("/richtext");
     await page.waitForFunction(() => {
       const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;
       return !!f && f.__richtextReady === true;

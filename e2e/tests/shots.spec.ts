@@ -82,7 +82,11 @@ const EVERY_DOC = {
 };
 
 test.describe("dogfood shots", () => {
-  test.skip(!SHOTS, "opt-in: SHOTS=1 npm run shots");
+  // Collection is gated by the dedicated "shots" Playwright project, which only
+  // exists under SHOTS=1 (see playwright.config.ts). The default run never
+  // collects this file, so there is nothing to skip. This assert is a guardrail
+  // in case the file is ever run directly without the flag.
+  test.skip(!SHOTS, "run via: npm run shots (SHOTS=1, --project=shots)");
   test.beforeAll(() => mkdirSync(DIR, { recursive: true }));
 
   test.beforeEach(async ({ request, baseURL }) => {
@@ -114,7 +118,7 @@ test.describe("dogfood shots", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await shoot(
         page,
-        "/",
+        "/richtext",
         () =>
           page.waitForFunction(() => {
             const f = document.querySelector("iframe") as (HTMLIFrameElement & { __richtextReady?: boolean }) | null;

@@ -208,7 +208,7 @@ func TestPhase0SmokeGate(t *testing.T) {
 	defer cancel()
 
 	// Load the self-contained demo page.
-	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/richtext")); err != nil {
 		t.Fatalf("navigate: %v", err)
 	}
 

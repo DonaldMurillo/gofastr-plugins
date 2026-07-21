@@ -55,33 +55,37 @@ jobs:
         run: go test ./... -count=1
 
   js:
-    name: richtext bundle
+    name: ${{ matrix.plugin }} bundle
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [richtext, monaco, tour]
     defaults:
       run:
-        working-directory: richtext/js
+        working-directory: ${{ matrix.plugin }}/js
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: richtext/js/package-lock.json
+          cache-dependency-path: ${{ matrix.plugin }}/js/package-lock.json
 
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npm test --if-present # richtext ships a test suite; monaco/tour don't (no-op)
 
-      # The bundle in richtext/assets/ is committed prebuilt and served by
-      # go:embed, so a source edit without a rebuild ships stale JS/CSS that no
+      # Each plugin's bundle in <plugin>/assets/ is committed prebuilt and served
+      # by go:embed, so a source edit without a rebuild ships stale JS/CSS that no
       # Go test would notice. Rebuilding must be a no-op on a clean tree.
       - name: bundle is up to date with its sources
         run: |
           npm run build
           cd "$GITHUB_WORKSPACE"
-          if ! git diff --quiet -- richtext/assets; then
-            echo "::error::richtext/assets is stale — run 'npm run build' in richtext/js and commit the result"
-            git diff --stat -- richtext/assets
+          if ! git diff --quiet -- ${{ matrix.plugin }}/assets; then
+            echo "::error::${{ matrix.plugin }}/assets is stale — run 'npm run build' in ${{ matrix.plugin }}/js and commit the result"
+            git diff --stat -- ${{ matrix.plugin }}/assets
             exit 1
           fi
 
