@@ -99,7 +99,26 @@
       credentials: "same-origin",
       headers: headers,
       body: JSON.stringify(body)
-    })["catch"](function () { /* save is a fire-and-forget event from the frame */ });
+    }).then(function (resp) {
+      if (resp.ok) {
+        api.sendEvent("saveResult", { ok: true, status: resp.status });
+        return;
+      }
+      // fetch does NOT reject on 4xx/5xx, so a 409 conflict (or 403/500) used to
+      // resolve here and be dropped on the floor — a silent lost save. Read the
+      // {error} code the handler returns and hand the frame a failed saveResult
+      // so it can keep the doc dirty and tell the user (esp. status 409).
+      return resp.json().then(
+        function (data) { return (data && data.error) || "E_SAVE"; },
+        function () { return "E_SAVE"; }
+      ).then(function (code) {
+        api.sendEvent("saveResult", { ok: false, status: resp.status, code: code });
+      });
+    })["catch"](function () {
+      // Network-level failure (offline, aborted, blocked): also a save that did
+      // not land — surface it as status 0 rather than swallowing it.
+      api.sendEvent("saveResult", { ok: false, status: 0, code: "E_NETWORK" });
+    });
   }
 
   function doUpload(api, params) {

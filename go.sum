@@ -6,6 +6,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/DonaldMurillo/gofastr v0.36.0 h1:65etnNaZaf0+mKlzcpR5q9zxTh13W/FwQys1o9V4c/4=
 github.com/DonaldMurillo/gofastr v0.36.0/go.mod h1:qJ8nefsWvRiUZAZ5NLzOwODPwsflAib3A/xj06R80Qc=
+github.com/DonaldMurillo/gofastr v0.38.1 h1:KB9p01hh1LOM86/nqzvj+yJATZmWUi+qa01+PvQvKfw=
+github.com/DonaldMurillo/gofastr v0.38.1/go.mod h1:qJ8nefsWvRiUZAZ5NLzOwODPwsflAib3A/xj06R80Qc=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=

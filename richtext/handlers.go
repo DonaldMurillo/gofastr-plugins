@@ -2,6 +2,7 @@ package richtext
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 )
@@ -48,6 +49,14 @@ func (p *Plugin) handleSave(w http.ResponseWriter, r *http.Request) {
 		SchemaVersion: body.SchemaVersion,
 	}
 	if err := p.saveHandler(r.Context(), req); err != nil {
+		// A conflict is a distinct outcome, not a server fault: the doc changed
+		// under the editor. Surface it as 409 so the broker can relay it to the
+		// frame (which keeps the doc dirty and warns) instead of the frame
+		// treating the save as done. Every other error stays a generic 500.
+		if errors.Is(err, ErrConflict) {
+			writeJSONError(w, http.StatusConflict, "E_CONFLICT", err.Error())
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, "E_SAVE", err.Error())
 		return
 	}

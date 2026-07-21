@@ -57,6 +57,8 @@ let docChangedTimer: ReturnType<typeof setTimeout> | null = null;
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let uploadSeq = 0;
 let trustedMounted = false; // set by mountTrusted, cleared by its destroy()
+let alertEl: HTMLElement | null = null; // shared save/upload failure banner, if shown
+let alertKind: "save" | "upload" | null = null;
 const pendingUploads = new Map<string, { name: string; type: string; pos: number }>(); // reqId -> {name, type}
 
 function hasCap(name: string) {
@@ -448,6 +450,78 @@ function handleRequestSave() {
   return { doc, markdown, schemaVersion: SCHEMA_VERSION };
 }
 
+// saveResult is a host→plugin EVENT answering a prior `save`: the broker relays
+// the persistence outcome. `save` is fire-and-forget, so before this the frame
+// (and the broker's fetch) simply assumed success — a 409 conflict, a 403, a
+// 500, or an unreachable server was dropped on the floor and the user's edit was
+// silently lost. Now a failure re-marks the doc dirty (so teardown/Mod-S retry
+// rather than treat it as saved) and raises a visible banner.
+function handleSaveResult(params: Record<string, unknown>) {
+  const p = params || {};
+  if (p.ok) {
+    clearAlert("save"); // the latest save landed — retract any prior save warning
+    return;
+  }
+  dirty = true;
+  showAlert("save", saveFailMessage(Number(p.status) || 0));
+}
+
+// Every non-2xx the save endpoint can answer with (protocol-v1.md §10):
+// 409 conflict, 403 capability-denied, 413 too-large, 400 bad-json, 500, and a
+// status-0 network failure. The generic tail covers 400/500 — surfaced, never
+// silent — while the common cases get plain-language guidance.
+function saveFailMessage(status: number): string {
+  if (status === 409)
+    return "This document was changed somewhere else. Your latest edits are not saved — copy anything you need, then reload to get the current version.";
+  if (status === 403) return "You don't have permission to save changes to this document.";
+  if (status === 413) return "This document is too large to save. Shorten it and try again.";
+  if (status === 0)
+    return "Couldn't reach the server — your changes aren't saved. Check your connection and they'll be retried.";
+  return `Saving failed (error ${status}). Your changes aren't saved yet.`;
+}
+
+// Upload errors arrive as a CODE (the broker relays uploadResult.error), not an
+// HTTP status: 415 not-an-image, 413 too-large, 403 denied, else generic.
+function uploadFailMessage(code: string): string {
+  if (code === "E_NOT_IMAGE") return "That file isn't an image, so it wasn't inserted.";
+  if (code === "E_TOO_LARGE") return "That image is too large to upload. Try a smaller file.";
+  if (code === "E_CAPABILITY_DENIED") return "You don't have permission to upload images here.";
+  return "That image couldn't be uploaded. Please try again.";
+}
+
+// One banner serves both concerns. A save problem means the document is not
+// persisted, which outranks a transient upload problem — so an image error must
+// not paper over an unresolved save conflict.
+function showAlert(kind: "save" | "upload", message: string) {
+  if (kind === "upload" && alertKind === "save") return;
+  if (!root) return;
+  if (!alertEl) {
+    alertEl = document.createElement("div");
+    alertEl.className = "richtext-alert";
+    alertEl.setAttribute("role", "alert");
+    alertEl.setAttribute("aria-live", "assertive");
+    // Above the editable, in normal flow: it pushes .ProseMirror down, so the
+    // existing content-height measurement grows the frame to fit it — no special
+    // resize handling needed beyond the postResize() below.
+    root.insertBefore(alertEl, root.firstChild);
+  }
+  alertKind = kind;
+  alertEl.textContent = message;
+  postResize();
+}
+
+// Retract the banner only when the concern that raised it resolves: a good
+// upload must not clear an unresolved save-conflict warning (pass no kind to
+// force-clear, e.g. on teardown).
+function clearAlert(kind?: "save" | "upload") {
+  if (!alertEl) return;
+  if (kind && alertKind !== kind) return;
+  alertEl.remove();
+  alertEl = null;
+  alertKind = null;
+  postResize();
+}
+
 // uploadResult is an EVENT answering a prior requestUpload. The image block is
 // inserted at the position recorded at paste/drop/pick time (or the current
 // selection as a fallback). If the target block is an empty paragraph it is
@@ -457,10 +531,14 @@ function handleUploadResult(params: Record<string, unknown>) {
   const pending = pendingUploads.get(p.reqId as string);
   pendingUploads.delete(p.reqId as string);
   if (p.error) {
+    // Was console.warn only — a too-large or non-image upload just vanished from
+    // the user's point of view. Surface it the same way a failed save is.
     console.warn("[richtext] upload failed:", p.reqId, p.error);
+    showAlert("upload", uploadFailMessage(String(p.error)));
     return;
   }
   if (!p.url || !view) return;
+  clearAlert("upload"); // a good upload retracts a prior upload warning
   insertImageBlock(p.url as string, pending ? pending.pos : null);
 }
 
@@ -593,6 +671,7 @@ function teardown() {
     emitDocChanged();
     emitSave();
   }
+  clearAlert(); // sibling of .ProseMirror — view.destroy() won't remove it
   clearTimeout(docChangedTimer!);
   clearTimeout(autosaveTimer!);
   docChangedTimer = null;
@@ -628,6 +707,7 @@ export function bootFrame() {
       init: handleInit,
       themeChanged: handleThemeChanged,
       requestSave: handleRequestSave,
+      saveResult: handleSaveResult,
       uploadResult: handleUploadResult,
       teardown: handleTeardown,
       // Host page saw a pointerdown outside this frame — dismiss open overlays
@@ -721,6 +801,7 @@ export function mountTrusted(el: Element, opts: TrustedMountOptions = {}): Trust
     init: handleInit,
     themeChanged: handleThemeChanged,
     requestSave: handleRequestSave,
+    saveResult: handleSaveResult,
     uploadResult: handleUploadResult,
     teardown: handleTeardown,
   };

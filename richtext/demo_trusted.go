@@ -143,7 +143,15 @@ const trustedDemoPage = `<!doctype html>
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ docId: 'demo', doc: params.doc, markdown: params.markdown, schemaVersion: 'richtext-v1' })
-          })['catch'](function () {});
+          }).then(function (resp) {
+            // Same rule as host/broker.js: fetch does not reject on 4xx/5xx, so
+            // relay the outcome (esp. 409) to the editor instead of dropping it.
+            if (resp.ok) { api.event('saveResult', { ok: true, status: resp.status }); return; }
+            return resp.json().then(function (d) { return (d && d.error) || 'E_SAVE'; }, function () { return 'E_SAVE'; })
+              .then(function (code) { api.event('saveResult', { ok: false, status: resp.status, code: code }); });
+          })['catch'](function () {
+            api.event('saveResult', { ok: false, status: 0, code: 'E_NETWORK' });
+          });
           break;
         case 'requestUpload':
           fetch(UPLOAD_URL, {

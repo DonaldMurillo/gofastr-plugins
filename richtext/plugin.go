@@ -3,6 +3,7 @@ package richtext
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -34,7 +35,7 @@ const (
 	InlineJSURL    = RoutePrefix + "/editor-inline.js"  // window.__gofastrRichText mount API
 	ScopedCSSURL   = RoutePrefix + "/editor-scoped.css" // stylesheet rescoped under .gofastr-richtext-trusted
 	TrustedDemoURL = RoutePrefix + "/trusted"           // frameless demo page
-	SchemaVersion   = "richtext-v1"
+	SchemaVersion  = "richtext-v1"
 
 	defaultDocID     = "demo"
 	defaultJSONField = "body_json"
@@ -58,6 +59,7 @@ type savedDoc struct {
 type Plugin struct {
 	devGrantAll   bool
 	withDemoPage  bool
+	demoRoute     string // where the demo page mounts; defaults to DemoURL ("/")
 	trustedMount  bool
 	capabilities  []string
 	saveHandler   func(ctx context.Context, req SaveRequest) error
@@ -86,6 +88,13 @@ func WithCapabilities(caps ...string) Option {
 // WithDemoPage registers the self-contained themed demo page at [DemoURL].
 func WithDemoPage() Option {
 	return func(p *Plugin) { p.withDemoPage = true }
+}
+
+// WithDemoRoute overrides where [WithDemoPage] mounts the demo (default
+// [DemoURL], "/"). A host that wants "/" for its own landing page — e.g. the
+// example app's plugin gallery — moves the richtext demo aside with this.
+func WithDemoRoute(path string) Option {
+	return func(p *Plugin) { p.demoRoute = path }
 }
 
 // WithTrustedMount OPTS OUT of the sandbox for this plugin: it serves the
@@ -206,7 +215,11 @@ func (p *Plugin) Init(app *framework.App) error {
 	}))
 
 	if p.withDemoPage {
-		rt.Get(DemoURL, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		demoRoute := p.demoRoute
+		if demoRoute == "" {
+			demoRoute = DemoURL
+		}
+		rt.Get(demoRoute, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// The self-contained demo page carries an inline <style> (the bridged
 			// design tokens) and a small inline <script> (the theme toggle), both
 			// refused by the app's default strict CSP. Relax THIS page's CSP to
@@ -334,6 +347,16 @@ func Mount(cfg MountConfig) render.HTML {
 		},
 	})
 }
+
+// ErrConflict is the sentinel a [WithSaveHandler] hook returns to signal that
+// the save lost an optimistic-concurrency check — the stored document changed
+// under the editor since it loaded. handleSave maps it to HTTP 409 (E_CONFLICT)
+// rather than the generic 500 (E_SAVE), which is the one status the host broker
+// relays back to the frame as a distinct saveResult so the editor can keep the
+// doc dirty and warn the user instead of silently dropping their edits. Wrap it
+// (fmt.Errorf("...: %w", richtext.ErrConflict)) to add context; handleSave uses
+// errors.Is.
+var ErrConflict = errors.New("richtext: save conflict")
 
 // SaveRequest is the persistence payload handed to the save handler.
 type SaveRequest struct {

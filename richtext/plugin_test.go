@@ -3,6 +3,7 @@ package richtext
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -136,7 +137,7 @@ func TestDemoPageContainsTokensMarkerAndBroker(t *testing.T) {
 	}
 	for _, want := range []string{
 		"--color-",                                   // bridged theme tokens
-		`data-fui-plugin="richtext"`,                  // generic mount marker (dispatches to richtext adapter)
+		`data-fui-plugin="richtext"`,                 // generic mount marker (dispatches to richtext adapter)
 		`data-fui-plugin-for="body_json,body_md"`,    // richtext-specific hidden-field wiring
 		`<script src="` + pluginhost.BrokerScriptURL, // generic platform broker (loaded first)
 		`<script src="` + BrokerScriptURL,            // richtext adapter (loaded second)
@@ -172,6 +173,51 @@ func TestSaveRoundTripDevGrant(t *testing.T) {
 	if got != doc {
 		t.Errorf("LoadDoc=%q want %q", got, doc)
 	}
+}
+
+// A save handler that returns ErrConflict (bare or wrapped) must surface as a
+// 409/E_CONFLICT, the one status the broker relays to the frame as a distinct
+// failure. Any other error stays a generic 500/E_SAVE. Without the errors.Is
+// branch in handleSave, a conflict would be indistinguishable from a crash and
+// the frame would show "server error" instead of the conflict warning.
+func TestSaveConflictMapsTo409(t *testing.T) {
+	postSave := func(t *testing.T, saveErr error) (int, string) {
+		t.Helper()
+		app, _ := newTestApp(t, WithDevGrantAll(), WithSaveHandler(
+			func(context.Context, SaveRequest) error { return saveErr },
+		))
+		srv := httptest.NewServer(app.Router())
+		defer srv.Close()
+
+		payload := `{"docId":"demo","doc":{"type":"doc"},"markdown":"","schemaVersion":"richtext-v1"}`
+		resp, err := http.Post(srv.URL+SaveURL, "application/json", strings.NewReader(payload))
+		if err != nil {
+			t.Fatalf("POST save: %v", err)
+		}
+		defer resp.Body.Close()
+		var body struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		return resp.StatusCode, body.Error
+	}
+
+	t.Run("bare ErrConflict", func(t *testing.T) {
+		if status, code := postSave(t, ErrConflict); status != http.StatusConflict || code != "E_CONFLICT" {
+			t.Errorf("got status=%d code=%q, want 409/E_CONFLICT", status, code)
+		}
+	})
+	t.Run("wrapped ErrConflict", func(t *testing.T) {
+		wrapped := fmt.Errorf("doc %q changed under the editor: %w", "demo", ErrConflict)
+		if status, code := postSave(t, wrapped); status != http.StatusConflict || code != "E_CONFLICT" {
+			t.Errorf("got status=%d code=%q, want 409/E_CONFLICT", status, code)
+		}
+	})
+	t.Run("other error stays 500", func(t *testing.T) {
+		if status, code := postSave(t, fmt.Errorf("disk full")); status != http.StatusInternalServerError || code != "E_SAVE" {
+			t.Errorf("got status=%d code=%q, want 500/E_SAVE", status, code)
+		}
+	})
 }
 
 func TestUploadReturnsDataUrl(t *testing.T) {

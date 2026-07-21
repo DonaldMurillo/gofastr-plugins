@@ -549,6 +549,20 @@
   text-align: right;
   user-select: none;
 }
+/* Failure banner for save (409/403/413/…) and upload (415/413/…) alike: shown
+   when the host relays a failed saveResult/uploadResult so a lost save or a
+   dropped image is visible instead of silent. In normal flow above the editable
+   so it grows the auto-sized frame. */
+.gofastr-richtext-trusted .richtext-alert {
+
+  flex: 0 0 auto;
+  padding: 8px var(--spacing-lg, 20px);
+  border-bottom: 2px solid var(--color-danger, #d1242f);
+  background: var(--color-surface-soft, #f6f8fa);
+  color: var(--color-danger, #d1242f);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.4;
+}
 .gofastr-richtext-trusted .richtext-toolbar-wrap {
 
   position: sticky;
