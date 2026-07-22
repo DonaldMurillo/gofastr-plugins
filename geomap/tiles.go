@@ -213,6 +213,7 @@ func (p *Plugin) handleTiles(w http.ResponseWriter, r *http.Request) {
 	if data, ct, ok := p.tileCache.get(cacheKey); ok {
 		w.Header().Set("Content-Type", ct)
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		setTileCORP(w)
 		w.Header().Set("X-Geomap-Cache", "HIT")
 		_, _ = w.Write(data)
 		return
@@ -264,11 +265,27 @@ func (p *Plugin) handleTiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
+	setTileCORP(w)
 	w.Header().Set("X-Geomap-Cache", "MISS")
 	// Defend against the frame attempting to embed this response somewhere
 	// unexpected: it is only ever an <img> source same-origin.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(body)
+}
+
+// setTileCORP marks the tile response loadable by the OPAQUE-origin plugin
+// frame. The frame runs sandbox="allow-scripts" without allow-same-origin, so
+// its document is a "null" origin; a tile fetched from this (concrete) host
+// origin is therefore CROSS-origin to the frame. GoFastr's global security
+// middleware defaults Cross-Origin-Resource-Policy to same-origin, which the
+// browser enforces by BLOCKING the null-origin frame's <img> load
+// (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin) — a gray, tile-less map. The framed
+// asset server sets this same header on the frame bundle for exactly this
+// reason; the tile proxy is a separately-registered route, so it must set it
+// itself. cross-origin is safe here: a raster tile is public map data, carries
+// no cookies/authn, and is only ever used as an <img> source.
+func setTileCORP(w http.ResponseWriter) {
+	w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
 }
 
 // tileFetcherFor returns the upstream client. It is the package-level

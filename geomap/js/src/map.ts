@@ -497,9 +497,16 @@ function mount(): void {
   // Add the active base layer first; the layers control lists all three.
   const active = baseLayers[initial] ?? baseLayers[config.provider] ?? baseLayers["osm"];
   if (active) map.addLayer(active);
+  // collapsed:false renders the provider list directly, with no collapsed
+  // "toggle" button. That button's icon is a Leaflet PNG (images/layers.png)
+  // referenced by Leaflet's bundled CSS; under the opaque-origin frame that
+  // request has nowhere valid to resolve (it falls through to the host SPA and
+  // is CORP-blocked anyway), so we skip the toggle entirely rather than ship a
+  // broken image. The list is small (three base layers) and this is a demo, so
+  // showing it expanded is clearer, not noisier.
   layersControl = L.control.layers(baseLayers, undefined, {
     position: "topright",
-    collapsed: true,
+    collapsed: false,
   });
   map.addControl(layersControl);
   // Reflect layers-control switches in config.provider + emit docChanged.

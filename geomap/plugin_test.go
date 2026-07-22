@@ -449,6 +449,14 @@ func TestTileProxyValidatesCoordinatesAreOnlyUpstreamInput(t *testing.T) {
 	if got := resp.Header.Get("Cache-Control"); !strings.Contains(got, "max-age=") {
 		t.Errorf("Cache-Control=%q want max-age", got)
 	}
+	// CORP MUST be cross-origin: the tile is loaded by the OPAQUE-origin plugin
+	// frame (a "null" origin), so the framework's default same-origin CORP would
+	// make the browser BLOCK the <img> with ERR_BLOCKED_BY_RESPONSE.NotSameOrigin
+	// — a gray, tile-less map. This asserts the header survives the full app
+	// router / global middleware on the cache-MISS path.
+	if got := resp.Header.Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Errorf("MISS Cross-Origin-Resource-Policy=%q want cross-origin (opaque frame would be CORP-blocked)", got)
+	}
 	if len(stub.reqs) != 1 {
 		t.Fatalf("upstream requests=%d want 1", len(stub.reqs))
 	}
@@ -471,6 +479,11 @@ func TestTileProxyValidatesCoordinatesAreOnlyUpstreamInput(t *testing.T) {
 	}
 	if got := resp2.Header.Get("X-Geomap-Cache"); got != "HIT" {
 		t.Errorf("X-Geomap-Cache=%q want HIT", got)
+	}
+	// The cache-HIT path must set CORP cross-origin too (same opaque-frame
+	// reason as the MISS path above).
+	if got := resp2.Header.Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Errorf("HIT Cross-Origin-Resource-Policy=%q want cross-origin", got)
 	}
 }
 
