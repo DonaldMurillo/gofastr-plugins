@@ -86,6 +86,27 @@
       "frameworkCompat": ">=0.28.0",
       "routePrefix": "/__gofastr/plugin/tour",
       "docs": "docs/tour.md"
+    },
+    {
+      "name": "map",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/geomap",
+      "version": "0.1.0-phase0",
+      "description": "Interactive Leaflet map. The fourth sandboxed heavy-JS plugin. Canonical doc is {lat, lng, zoom, markers[]}; click-to-add draggable pins, an in-frame layer control, and a fly-to side panel over the postMessage bridge. Because the opaque-origin frame's CSP forbids external network (connect-src 'none', img-src 'self'), raster tiles are served through a same-origin proxy with an allowlisted set of upstream providers (SSRF guard: fixed host templates, integer-only z/x/y).",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/map",
+      "entry": "/__gofastr/plugin/map/map.html",
+      "schema": "map-v1",
+      "minHeight": "360px",
+      "docs": "docs/geomap.md"
     }
   ]
 }

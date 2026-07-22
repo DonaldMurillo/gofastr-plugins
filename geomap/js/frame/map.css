@@ -1,0 +1,158 @@
+/*
+ * GoFastr Leaflet map stylesheet — TOKEN-ONLY (protocol v1 §7).
+ *
+ * All colors, spacing, radii, and fonts come from CSS custom properties that the
+ * HOST bridges in via init/themeChanged (theme.ts writes a :root{} block from
+ * params.tokens). Every var() carries an inline fallback so the map is still
+ * legible before `init` arrives. ZERO bespoke hex in rules — only in the
+ * fallback position of var(). Light/dark is entirely token-driven; there is
+ * deliberately NO prefers-color-scheme gating (the repo rule: theme is
+ * host-driven). Leaflet's own CSS (controls, attribution, scale) is INLINED
+ * into map.js by build.mjs.
+ */
+
+/* ---- defaults applied only if the host has not bridged tokens yet ---- */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-primary: #6366f1;
+  --color-primary-fg: #ffffff;
+  --color-danger: #dc2626;
+  --font-body: system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --radii-sm: 6px;
+  --radii-md: 10px;
+  --font-size-sm: 0.85rem;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-background);
+}
+
+body {
+  font-family: var(--font-body, system-ui, sans-serif);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#map-container {
+  width: 100%;
+  /* Height is set at runtime by updateHeight(); a sane initial fallback keeps
+     the frame non-empty before the first layout. */
+  height: 360px;
+  background: var(--color-surface);
+}
+
+/* The Leaflet container inherits our surface background while tiles stream in. */
+.leaflet-container {
+  background: var(--color-surface);
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+/* Custom pin (L.divIcon) — an inline-SVG pin shape, themed via tokens. The
+   default Leaflet icon PNGs 404 under a bundler and are blocked at runtime
+   under the opaque origin (img-src <origin> data:). The divIcon sidesteps
+   both problems: no image asset to resolve, no fetch. */
+.gofastr-pin {
+  background: transparent;
+  border: none;
+}
+.gofastr-pin svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.gofastr-pin .pin-fill {
+  fill: var(--color-primary, #6366f1);
+}
+.gofastr-pin .pin-stroke {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+.gofastr-pin.is-highlighted .pin-fill {
+  fill: var(--color-danger, #dc2626);
+}
+.gofastr-pin .pin-dot {
+  fill: #ffffff;
+}
+
+/* Leaflet popup theming hooks (its own CSS is bundled; we override the surface
+   to the host palette so popups do not flash default white-on-dark). */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+.leaflet-popup-content {
+  margin: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  font-size: var(--font-size-sm, 0.85rem);
+  line-height: 1.4;
+}
+.leaflet-popup-content .pin-label {
+  font-weight: 600;
+  margin: 0 0 4px;
+  word-break: break-word;
+}
+.leaflet-popup-content button {
+  font: inherit;
+  font-size: var(--font-size-sm, 0.85rem);
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm, 6px);
+  background: var(--color-surface-soft, transparent);
+  color: var(--color-text);
+  cursor: pointer;
+  margin-right: 4px;
+}
+.leaflet-popup-content button.danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* Layer + zoom controls blend with the surface. */
+.leaflet-bar a,
+.leaflet-control-layers {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border) !important;
+}
+.leaflet-bar a:hover {
+  background: var(--color-surface-soft);
+}
+.leaflet-control-attribution {
+  background: var(--color-surface-soft, rgba(255, 255, 255, 0.8));
+  color: var(--color-text-muted);
+}
+.leaflet-control-attribution a {
+  color: var(--color-primary);
+}
+
+.map-status:empty {
+  display: none;
+}
+
+.map-status {
+  margin: 0;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-muted);
+  background: var(--color-surface-soft);
+  border-top: 1px solid var(--color-border);
+  white-space: normal;
+  word-break: break-word;
+}

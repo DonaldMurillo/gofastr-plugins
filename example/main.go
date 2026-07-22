@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
@@ -71,6 +72,15 @@ func newApp() (*framework.App, error) {
 	app.RegisterPlugin(tour.New(
 		tour.WithDevGrantAll(),
 		tour.WithDemoPage(),
+	))
+
+	// The Geomap plugin — a Leaflet map, sandboxed like monaco/mermaid. Because
+	// the opaque-origin frame's CSP forbids all external network (connect-src
+	// 'none', img-src 'self'), the plugin serves map tiles through a same-origin
+	// proxy with an allowlisted set of upstream providers. Demo at /map.
+	app.RegisterPlugin(geomap.New(
+		geomap.WithDevGrantAll(),
+		geomap.WithDemoPage(),
 	))
 
 	if err := app.InitPlugins(); err != nil {
