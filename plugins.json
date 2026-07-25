@@ -1,11 +1,11 @@
 {
   "registryVersion": "1",
-  "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities. This file is EMBEDDED by the sibling ./registry Go module (package registry), which is how gofastr reads the plugin set to generate its docs pages -- keep it valid JSON, and add new keys to the Go structs in registry.go at the same time (the parser rejects unknown fields).",
+  "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities. This file is consumed by COPY, not import: a host fetches it from a release asset and vendors it, so nothing imports a Go API for it. In THIS repo it is parsed by internal/registry (test-only, not importable by consumers) -- keep it valid JSON, and add new keys to the Go structs in internal/registry/registry.go at the same time (the parser rejects unknown fields).",
   "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Most run isolated in an opaque-origin sandboxed iframe and talk to the host only over a versioned postMessage capability bridge (isolation \"sandbox-iframe-opaque\"). A plugin that must reach the host DOM (the guided-tour plugin) instead runs as a vouched-for trusted host-page script (isolation \"trusted-host-page\", trusted:true) — never sandboxed and never same-origin-in-a-frame. See docs/plugin-platform.md for the platform contract.",
   "framework": {
     "name": "gofastr",
     "modulePath": "github.com/DonaldMurillo/gofastr",
-    "note": "gofastr uses calendar-ish semver (YYYY-MM-DD releases until the API stabilises). These plugins are built and tested against the published gofastr v0.28.0; frameworkCompat is a best-effort floor, not a tested matrix. No published module version of the gofastr-plugins ROOT module exists yet -- the ./registry submodule is versioned separately via registry/vX.Y.Z tags."
+    "note": "gofastr uses calendar-ish semver (YYYY-MM-DD releases until the API stabilises). These plugins are built and tested against the published gofastr pinned in go.mod; frameworkCompat is a best-effort floor, not a tested matrix. The gofastr-plugins ROOT module is versioned by this repo's own vX.Y.Z tags; there is no separately-versioned registry submodule."
   },
   "plugins": [
     {
@@ -86,6 +86,27 @@
       "frameworkCompat": ">=0.28.0",
       "routePrefix": "/__gofastr/plugin/tour",
       "docs": "docs/tour.md"
+    },
+    {
+      "name": "map",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/geomap",
+      "version": "0.3.0",
+      "description": "Interactive vector map (MapLibre GL + OpenFreeMap). A TRUSTED host-page plugin (like tour) — it runs in the host page with fetch/worker access so it can render OpenFreeMap vector tiles (free for commercial use, no API key). Canonical doc is {lat,lng,zoom,markers[]}; click-to-add draggable pins whose popup is a live label editor with per-pin delete, a style switcher (layers), geolocate + scale controls, optional marker clustering, an optional place-search box backed by the plugin's own same-origin geocode proxy, and a fly-to side panel. The host page CSP MUST allow connect-src/img-src https://tiles.openfreemap.org and worker-src blob: (see docs/geomap.md); search needs no extra CSP host because it is proxied through the plugin's own origin. Place search is opt-in (geomap.WithSearch): enabling it registers /__gofastr/plugin/map/geocode and adds the optionalCapability geocode:search.",
+      "isolation": "trusted-host-page",
+      "trusted": true,
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "optionalCapabilities": [
+        "geocode:search"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/map",
+      "schema": "map-v1",
+      "minHeight": "360px",
+      "docs": "docs/geomap.md"
     }
   ]
 }

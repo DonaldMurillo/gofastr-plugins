@@ -1,0 +1,336 @@
+/*
+ * Geomap overlay stylesheet (demo / host-page overlay).
+ *
+ * MapLibre's own CSS is NOT here — it is injected by map.js at load. This file
+ * only styles the mount container sizing, the style-switcher control, and the
+ * marker popups, using the demo's bridged --color-* custom properties so the map
+ * chrome tracks light/dark. A host page links this via <link rel="stylesheet">
+ * (see docs/geomap.md); it is optional — the map renders without it.
+ */
+
+[data-fui-geomap] {
+  width: 100%;
+  min-height: var(--geomap-min-height, 360px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e3e6ea);
+}
+
+.maplibregl-map {
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+/* The map canvas fills its container. */
+.maplibregl-canvas {
+  outline: none;
+}
+
+/* Style-switcher control (top-right): a compact column of style buttons.
+ * The buttons sit inside MapLibre's .maplibregl-ctrl-group, whose injected CSS
+ * forces `button { width: 29px }` — that squeezes a full style name ("Liberty")
+ * to an icon box and clips it. We override with a higher-specificity selector
+ * (.maplibregl-ctrl-group button.fui-style-opt) so each button sizes to its
+ * text; without the extra qualifier MapLibre's later-injected rule wins the
+ * cascade at equal specificity. */
+.maplibregl-map .maplibregl-ctrl-group.fui-style-switcher {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e3e6ea);
+}
+
+.maplibregl-ctrl-group button.fui-style-opt {
+  width: auto;
+  height: auto;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text, #1c2024);
+  cursor: pointer;
+  text-align: left;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.maplibregl-ctrl-group button.fui-style-opt:hover {
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.maplibregl-ctrl-group button.fui-style-opt.active {
+  font-weight: 700;
+  color: var(--color-primary, #4f46e5);
+}
+
+/* Search control (top-right, under the style switcher). It talks only to the
+ * plugin's same-origin /geocode proxy — never to a third party from the browser. */
+.fui-search {
+  width: 220px;
+  max-width: 60vw;
+}
+
+.fui-search-form {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.fui-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text, #1c2024);
+}
+
+.fui-search-input:focus {
+  outline: 2px solid var(--color-primary, #4f46e5);
+  outline-offset: -2px;
+}
+
+.fui-search-btn {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 0;
+  border-left: 1px solid var(--color-border, #e3e6ea);
+  background: var(--color-surface-soft, #f6f7f9);
+  color: var(--color-text, #1c2024);
+  cursor: pointer;
+}
+
+.fui-search-btn:hover {
+  background: var(--color-primary, #4f46e5);
+  color: var(--color-primary-fg, #fff);
+}
+
+.fui-search-status {
+  font-size: 11px;
+  color: var(--color-text-muted, #5b6470);
+  padding: 3px 2px;
+  text-shadow: 0 1px 2px var(--color-background, #fff);
+}
+
+.fui-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.fui-search-results[hidden] {
+  display: none;
+}
+
+.fui-search-result {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text, #1c2024);
+  cursor: pointer;
+  /* Geocoder labels are long ("Tokyo, Japan, …"); keep rows one line. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fui-search-result:hover,
+.fui-search-result:focus-visible {
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.05));
+  color: var(--color-primary, #4f46e5);
+}
+
+/* Cluster bubbles. These are DOM markers, not circle layers — see map.ts. That
+ * keeps individual pins draggable DOM markers and needs no style glyphs. */
+.fui-cluster {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary-fg, #fff);
+  background: var(--color-primary, #4f46e5);
+  border: 2px solid var(--color-surface, #fff);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.fui-cluster:hover {
+  transform: scale(1.08);
+}
+
+.fui-cluster[data-count="2"],
+.fui-cluster[data-count="3"],
+.fui-cluster[data-count="4"] {
+  min-width: 30px;
+  height: 30px;
+}
+
+/* Marker popups track the theme tokens.
+ *
+ * Every MapLibre-owned selector below is qualified with `.maplibregl-map` ON
+ * PURPOSE. MapLibre's own stylesheet is injected by map.js as a <style> at load
+ * — i.e. AFTER this file's <link> — so a bare `.maplibregl-popup-content` rule
+ * here LOSES the cascade to MapLibre's identical-specificity `background: #fff`
+ * and the popup silently stays white. In dark mode that renders near-white text
+ * on white. The ancestor qualifier is what makes these overrides apply at all;
+ * it is the same trap already documented for the style-switcher buttons above. */
+.maplibregl-map .maplibregl-popup-content {
+  font-size: 13px;
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1c2024);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+/* The pin popup is a live editor: rename the pin, or delete it. */
+.fui-pin-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.fui-pin-label {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: 6px;
+  background: var(--color-background, #fff);
+  color: var(--color-text, #1c2024);
+}
+
+.fui-pin-label:read-only {
+  background: var(--color-surface-soft, #f6f7f9);
+  color: var(--color-text-muted, #5b6470);
+}
+
+.fui-pin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fui-pin-coord {
+  font-size: 11px;
+  color: var(--color-text-muted, #5b6470);
+  font-variant-numeric: tabular-nums;
+}
+
+.fui-pin-delete {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-danger, #b42318);
+  cursor: pointer;
+}
+
+.fui-pin-delete:hover {
+  background: var(--color-danger, #b42318);
+  color: #fff;
+  border-color: var(--color-danger, #b42318);
+}
+
+.fui-pin-delete[hidden] {
+  display: none;
+}
+
+/* The default danger red is tuned for a light surface; on a near-black one it
+ * falls to ~3.4:1, under the 4.5:1 floor for text. Hosts that define
+ * --color-danger keep control — this only moves the FALLBACK. Both the explicit
+ * host scheme and the OS preference are honoured, matching how the runtime
+ * itself resolves the active scheme. */
+:root[data-color-scheme="dark"] .fui-pin-delete {
+  color: var(--color-danger, #f87171);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme="light"]) .fui-pin-delete {
+    color: var(--color-danger, #f87171);
+  }
+}
+
+/* The tip is the little arrow joining the bubble to the pin. MapLibre colours it
+ * per anchor direction, so recolouring only border-top leaves a white arrow
+ * whenever the popup opens above/left/right of its marker. */
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--color-surface, #fff);
+}
+
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--color-surface, #fff);
+}
+
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--color-surface, #fff);
+}
+
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--color-surface, #fff);
+}
+
+.maplibregl-map .maplibregl-popup-close-button {
+  font-size: 16px;
+  color: var(--color-text-muted, #5b6470);
+  background: transparent;
+}
+
+.maplibregl-map .maplibregl-popup-close-button:hover {
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.05));
+  color: var(--color-text, #1c2024);
+}
+
+/* The attribution control (OpenFreeMap/OSM) must stay visible — never hide it.
+ * Themed for the same cascade reason as the popup: MapLibre paints it white. */
+.maplibregl-map .maplibregl-ctrl-attrib {
+  font-size: 11px;
+  background: var(--color-surface, rgba(255, 255, 255, 0.85));
+  color: var(--color-text-muted, #5b6470);
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  color: var(--color-text-muted, #5b6470);
+}
+
+/* The scale bar is drawn with a border + text; both must survive dark mode. */
+.maplibregl-map .maplibregl-ctrl-scale {
+  background: var(--color-surface, rgba(255, 255, 255, 0.75));
+  border-color: var(--color-border, #333);
+  color: var(--color-text, #1c2024);
+}

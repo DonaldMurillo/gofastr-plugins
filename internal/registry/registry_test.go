@@ -61,6 +61,21 @@ func TestPluginRowsAreComplete(t *testing.T) {
 			if len(p.Capabilities) == 0 {
 				t.Error("capabilities is empty")
 			}
+			// An optional grant that is also always-on is a contradiction: a
+			// reader would take it as "only if you opt in" for something the
+			// plugin holds unconditionally, which understates its authority.
+			always := make(map[string]bool, len(p.Capabilities))
+			for _, c := range p.Capabilities {
+				always[c] = true
+			}
+			for _, c := range p.OptionalCapabilities {
+				if strings.TrimSpace(c) == "" {
+					t.Error("optionalCapabilities contains an empty entry")
+				}
+				if always[c] {
+					t.Errorf("optionalCapabilities repeats %q, which is already always-on", c)
+				}
+			}
 			// Fields only a sandboxed (framed) plugin has: the entry document, its
 			// interchange schema, and the sandbox tokens. A trusted host-page
 			// plugin has none of these — it is not framed — so requiring them

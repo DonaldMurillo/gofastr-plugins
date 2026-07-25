@@ -48,8 +48,28 @@ jobs:
           fi
 
       # The example suite drives a real headless Chrome via chromedp, which
-      # finds the system install (preinstalled on this runner image). This also
-      # covers internal/registry, which validates plugins.json against the
+      # resolves the browser from PATH by a fixed list of well-known names. This
+      # job used to rely on the runner image happening to preinstall one of them;
+      # that assumption broke (every run failing "chrome start (is Chrome
+      # installed?): websocket url timeout reached"), and it fails as a
+      # correctness error rather than an environment one, so it reads like the
+      # code regressed. Install the browser explicitly instead, and assert it is
+      # reachable under a name chromedp actually looks for — better to fail here,
+      # loudly, than 20s into a test that appears to be about the editor.
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: stable
+
+      - name: chrome is on PATH under a name chromedp resolves
+        run: |
+          echo "setup-chrome reported: ${{ steps.setup-chrome.outputs.chrome-path }}"
+          if ! command -v google-chrome >/dev/null; then
+            sudo ln -sf "${{ steps.setup-chrome.outputs.chrome-path }}" /usr/local/bin/google-chrome
+          fi
+          google-chrome --version
+
+      # Also covers internal/registry, which validates plugins.json against the
       # plugin packages it claims to describe.
       - name: go test
         run: go test ./... -count=1
@@ -60,7 +80,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [richtext, monaco, tour]
+        # Every plugin with a js/ directory belongs here: each commits a prebuilt
+        # bundle that go:embed serves, so one left out ships stale JS silently.
+        plugin: [richtext, mermaid, monaco, tour, geomap]
     defaults:
       run:
         working-directory: ${{ matrix.plugin }}/js

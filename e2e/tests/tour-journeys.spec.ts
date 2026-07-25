@@ -133,6 +133,34 @@ test("a step can target a live element reference instead of a selector", async (
   expect(Math.abs(w.el - w.cut)).toBeLessThan(2);
 });
 
+// Regression guard for an ordering bug that only showed up under load: showStep
+// made the overlay visible, then deferred the FIRST position() until after
+// scrollIntoView + two animation frames. Until it ran, the scrim and cutout had
+// no geometry at all. On a fast machine that is a sub-frame flash; on a loaded
+// CI runner it was a visibly misplaced spotlight — and it made the test above
+// fail there while passing locally.
+//
+// This asserts the invariant directly instead of racing it: drain microtasks
+// only, never yielding an animation frame, and require the cutout to already
+// hug its target. Before the fix the cutout spans the whole viewport here.
+test("the cutout is positioned before any animation frame", async ({ page }) => {
+  const res = await page.evaluate(async () => {
+    const el = document.getElementById("demo-card")!;
+    void (window as unknown as { gofastrTour: { run(t: unknown): Promise<void> } }).gofastrTour.run({
+      steps: [{ target: el, title: "By reference", body: "positioned synchronously" }],
+    });
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    const cut = document.querySelector(".gofastr-tour-cutout");
+    return {
+      el: el.getBoundingClientRect().width,
+      cut: cut ? cut.getBoundingClientRect().width : -1,
+    };
+  });
+  expect(res.cut, "the cutout must exist as soon as the tour starts").toBeGreaterThan(0);
+  expect(Math.abs(res.el - res.cut), "the cutout must hug its target from the first frame")
+    .toBeLessThan(2);
+});
+
 test("Esc skips the tour", async ({ page }) => {
   await run(page, "demo");
   await expect(bubble(page)).toBeVisible();
