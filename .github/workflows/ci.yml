@@ -60,7 +60,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [richtext, monaco, tour]
+        # Every plugin with a js/ directory belongs here: each commits a prebuilt
+        # bundle that go:embed serves, so one left out ships stale JS silently.
+        plugin: [richtext, mermaid, monaco, tour, geomap]
     defaults:
       run:
         working-directory: ${{ matrix.plugin }}/js
