@@ -568,11 +568,17 @@ class TourSession {
     // Resolve target (element ref or selector). A missing target means a stale
     // tour definition; we still show a centered bubble so it is not bricked.
     const target = resolveTarget(step);
+    // Position BEFORE yielding. The overlay is already in the document and
+    // visible by this point, so letting the first position() wait on the frames
+    // below leaves the scrim and cutout with NO geometry — zero-size at the
+    // top-left — for at least two frames. On a fast machine that is a sub-frame
+    // flash; under load it is a visibly misplaced spotlight on every step.
+    this.position();
     if (target instanceof HTMLElement) {
       target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }
     // Wait two animation frames so scrollIntoView's smooth scroll has a chance
-    // to settle before we measure the target rect.
+    // to settle, then re-measure: the target's rect moves during the scroll.
     await rafN(2);
     this.position();
     this.bubble.focus();

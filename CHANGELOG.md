@@ -6,6 +6,37 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Fixed — the tour overlay showed before it was positioned (2026-07-25)
+
+- `showStep` made the overlay visible and only then deferred the **first**
+  `position()` until after `scrollIntoView` plus two animation frames. Until it
+  ran, the scrim and cutout carried no geometry — the cutout spanned the whole
+  viewport instead of hugging its target. On a fast machine that is a sub-frame
+  flash; on a loaded CI runner it was a visibly misplaced spotlight on every
+  step, and it is why `e2e (webkit)` had been red on `main` since the tour plugin
+  landed while passing on every developer's machine.
+
+  Positioning now happens synchronously before the frame wait, which still
+  re-runs afterwards to pick up the smooth scroll. The regression guard asserts
+  the invariant instead of racing it: drain microtasks without ever yielding an
+  animation frame, and require the cutout to already hug its target.
+
+### Changed — `optionalCapabilities` in the registry index (2026-07-25)
+
+- `plugins.json` rows can now declare grants a plugin takes on **only when the
+  host opts into the feature that needs them** — geomap's `geocode:search`
+  appears solely under `WithSearch`, along with the route it gates. Someone
+  deciding whether to adopt a plugin needs the difference between "this can reach
+  the network" and "this can reach the network if you switch it on", and folding
+  both into `capabilities` erased it. Modelled in `internal/registry` with a
+  guard (mutation-tested) that an optional grant may not repeat an always-on one.
+
+- Corrected two stale claims in the index's own `$comment`/`note`: it pointed
+  maintainers at a sibling `./registry` Go module versioned via `registry/vX.Y.Z`
+  tags. Neither exists — the parser is `internal/registry` (test-only) and the
+  root module is versioned by this repo's own tags. The comment is instructions
+  to whoever edits the file next, and it was sending them to the wrong place.
+
 ### Added — geomap 0.3.0: pin editing, search, clustering (2026-07-25)
 
 - **The pin popup is a live editor.** A label input that writes through to the

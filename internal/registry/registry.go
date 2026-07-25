@@ -95,7 +95,18 @@ type Plugin struct {
 	// DB. A trusted-host-page row declares no sandbox (it is not framed).
 	Sandbox []string `json:"sandbox,omitempty"`
 	// Capabilities are the postMessage bridge scopes the plugin may request.
+	// For a trusted host-page plugin there is no bridge, but the same names still
+	// gate its server endpoints. These are the ALWAYS-ON grants: a plugin
+	// advertises them whatever options it is constructed with.
 	Capabilities []string `json:"capabilities"`
+	// OptionalCapabilities are grants a plugin adds only when the host opts into
+	// the feature that needs them — geomap's "geocode:search" appears only under
+	// WithSearch, along with the route it gates. They are listed separately
+	// because a reader deciding whether to adopt a plugin needs to know the
+	// difference between "this plugin can reach the network" and "this plugin can
+	// reach the network if you switch it on". Optional grants MUST NOT repeat
+	// anything already in Capabilities.
+	OptionalCapabilities []string `json:"optionalCapabilities,omitempty"`
 
 	// FrameworkCompat is a best-effort floor (a semver range), not a tested
 	// support matrix.
