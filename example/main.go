@@ -12,11 +12,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
@@ -74,13 +76,22 @@ func newApp() (*framework.App, error) {
 		tour.WithDemoPage(),
 	))
 
-	// The Geomap plugin — a Leaflet map, sandboxed like monaco/mermaid. Because
-	// the opaque-origin frame's CSP forbids all external network (connect-src
-	// 'none', img-src 'self'), the plugin serves map tiles through a same-origin
-	// proxy with an allowlisted set of upstream providers. Demo at /map.
+	// The Geomap plugin — an interactive vector map built on MapLibre GL +
+	// OpenFreeMap tiles. It is a TRUSTED host-page plugin (like tour), not a
+	// sandbox: vector tiles need fetch() + a web worker, both impossible under
+	// the opaque frame's connect-src 'none'. The host page CSP allows the
+	// OpenFreeMap host + the blob worker. Demo at /map.
+	//
+	// Place search is wired to a FIXED local dataset rather than the default
+	// Nominatim proxy. Two reasons: the e2e journeys must not depend on a third
+	// party being reachable (or on its rate limit), and a demo app has no business
+	// spending someone else's donated geocoding capacity. A real app calls
+	// geomap.WithSearch() — plus WithGeocodeUserAgent to identify itself — and
+	// gets the Nominatim path. See geomap/geocode.go.
 	app.RegisterPlugin(geomap.New(
 		geomap.WithDevGrantAll(),
 		geomap.WithDemoPage(),
+		geomap.WithGeocoder(demoGeocoder),
 	))
 
 	if err := app.InitPlugins(); err != nil {
@@ -93,6 +104,36 @@ func newApp() (*framework.App, error) {
 	registerShell(app.Router())
 
 	return app, nil
+}
+
+// demoPlaces is the fixed dataset behind the geomap search box in this example.
+// It is deliberately tiny and offline — see the WithGeocoder call above.
+var demoPlaces = []geomap.GeocodeResult{
+	{Label: "New York, United States", Lat: 40.7128, Lng: -74.0060},
+	{Label: "Newark, New Jersey, United States", Lat: 40.7357, Lng: -74.1724},
+	{Label: "London, United Kingdom", Lat: 51.5074, Lng: -0.1278},
+	{Label: "Tokyo, Japan", Lat: 35.6762, Lng: 139.6503},
+	{Label: "Sydney, Australia", Lat: -33.8688, Lng: 151.2093},
+	{Label: "São Paulo, Brazil", Lat: -23.5505, Lng: -46.6333},
+	{Label: "Reykjavík, Iceland", Lat: 64.1466, Lng: -21.9426},
+	{Label: "Nairobi, Kenya", Lat: -1.2921, Lng: 36.8219},
+}
+
+// demoGeocoder is a substring match over demoPlaces. A geocoder returns an empty
+// slice (not an error) when nothing matches — an error means the lookup failed,
+// which the plugin surfaces to the browser as a 502.
+func demoGeocoder(_ context.Context, query string) ([]geomap.GeocodeResult, error) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return nil, nil
+	}
+	var out []geomap.GeocodeResult
+	for _, pl := range demoPlaces {
+		if strings.Contains(strings.ToLower(pl.Label), q) {
+			out = append(out, pl)
+		}
+	}
+	return out, nil
 }
 
 func main() {

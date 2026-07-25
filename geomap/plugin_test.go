@@ -1,6 +1,7 @@
 package geomap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,18 +9,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 
-	"github.com/DonaldMurillo/gofastr-plugins/pluginhost"
 	"github.com/DonaldMurillo/gofastr/battery/auth"
 	"github.com/DonaldMurillo/gofastr/framework"
 )
 
 // newTestApp stands up a fresh framework.App with the plugin registered and
-// initialized (mirrors monaco/mermaid/richtext's harness; the in-memory store
-// needs no DB).
+// initialized (mirrors monaco/mermaid/richtext/tour's harness; the in-memory
+// store needs no DB).
 func newTestApp(t *testing.T, opts ...Option) (*framework.App, *Plugin) {
 	t.Helper()
 	p := New(opts...)
@@ -31,17 +29,20 @@ func newTestApp(t *testing.T, opts ...Option) (*framework.App, *Plugin) {
 	return app, p
 }
 
+// TestInitServesAssetsWithCorrectContentTypes verifies map.js and map.css are
+// served with the right types, NON-framed headers, and that the body is exactly
+// the embedded build bytes.
 func TestInitServesAssetsWithCorrectContentTypes(t *testing.T) {
 	app, _ := newTestApp(t, WithDevGrantAll(), WithDemoPage())
 	srv := httptest.NewServer(app.Router())
 	defer srv.Close()
 
-	cases := []struct{ path, wantCT string }{
-		{MapHTMLURL, "text/html; charset=utf-8"},
-		{MapJSURL, "text/javascript; charset=utf-8"},
-		{MapCSSURL, "text/css; charset=utf-8"},
-		{AdapterScriptURL, "text/javascript; charset=utf-8"},
-		{ConfigScriptURL, "text/javascript; charset=utf-8"},
+	cases := []struct {
+		path, wantCT string
+		want         []byte
+	}{
+		{MapJSURL, "text/javascript; charset=utf-8", mapJSBytes},
+		{MapCSSURL, "text/css; charset=utf-8", mapCSSBytes},
 	}
 	for _, c := range cases {
 		resp, err := http.Get(srv.URL + c.path)
@@ -56,64 +57,71 @@ func TestInitServesAssetsWithCorrectContentTypes(t *testing.T) {
 		if got := resp.Header.Get("Content-Type"); got != c.wantCT {
 			t.Errorf("%s: Content-Type=%q want %q", c.path, got, c.wantCT)
 		}
-		if len(body) == 0 {
-			t.Errorf("%s: empty body", c.path)
+		if !bytes.Equal(body, c.want) {
+			t.Errorf("%s: body does not match the embedded bytes (got %d bytes, want %d)", c.path, len(body), len(c.want))
 		}
 	}
 }
 
-// TestFramedAssetsCarryHeaderRelaxation proves the platform AssetServer carries
-// the framing/CORP/CSP relaxation that lets the host frame its OWN map document
-// and lets the opaque frame fetch its JS/CSS (DECISIONS.md Phase-0 gotcha #1).
-func TestFramedAssetsCarryHeaderRelaxation(t *testing.T) {
+// TestAssetsAreNonFramed asserts map.js and map.css are served as NON-framed
+// host-page assets: they MUST NOT carry the CORP cross-origin relaxation that
+// framed (sandboxed-iframe) assets get (the old geomap build did). This is a
+// trusted host-page plugin now, so its assets are same-origin and CSP-clean —
+// the mirror of tour's TestAssetsAreNonFramed.
+func TestAssetsAreNonFramed(t *testing.T) {
 	app, _ := newTestApp(t, WithDevGrantAll(), WithDemoPage())
 	srv := httptest.NewServer(app.Router())
 	defer srv.Close()
 
-	for _, path := range []string{MapHTMLURL, MapJSURL, MapCSSURL} {
-		resp, err := http.Get(srv.URL + path)
-		if err != nil {
-			t.Fatalf("GET %s: %v", path, err)
-		}
-		resp.Body.Close()
-		csp := resp.Header.Get("Content-Security-Policy")
-		if !strings.Contains(csp, "frame-ancestors http") {
-			t.Errorf("%s: CSP frame-ancestors must permit host origin: %q", path, csp)
-		}
-		if strings.Contains(csp, "frame-ancestors 'none'") {
-			t.Errorf("%s: CSP must NOT carry frame-ancestors 'none': %q", path, csp)
-		}
-		if strings.Contains(csp, "script-src 'self'") {
-			t.Errorf("%s: framed CSP must not use 'self' for scripts (opaque frame): %q", path, csp)
-		}
-		if got := resp.Header.Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
-			t.Errorf("%s: CORP=%q want cross-origin", path, got)
-		}
-	}
-
-	// Host-page scripts are NON-framed: they must NOT carry CORP cross-origin.
-	for _, path := range []string{AdapterScriptURL, ConfigScriptURL} {
+	for _, path := range []string{MapJSURL, MapCSSURL} {
 		resp, err := http.Get(srv.URL + path)
 		if err != nil {
 			t.Fatalf("GET %s: %v", path, err)
 		}
 		resp.Body.Close()
 		if got := resp.Header.Get("Cross-Origin-Resource-Policy"); got == "cross-origin" {
-			t.Errorf("%s: host-page script must NOT be CORP cross-origin", path)
+			t.Errorf("%s: must NOT be CORP cross-origin (host-page asset)", path)
 		}
-	}
-
-	resp, err := http.Get(srv.URL + pluginhost.BrokerScriptURL)
-	if err != nil {
-		t.Fatalf("GET pluginhost broker: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("pluginhost broker status=%d", resp.StatusCode)
+		csp := resp.Header.Get("Content-Security-Policy")
+		if strings.Contains(csp, "sandbox allow-scripts") {
+			t.Errorf("%s: must NOT carry the framed sandbox CSP: %q", path, csp)
+		}
+		if strings.Contains(csp, "frame-ancestors http") {
+			t.Errorf("%s: must NOT carry the framed-ancestor CSP relaxation: %q", path, csp)
+		}
 	}
 }
 
-func TestDemoPageContainsTokensMarkerAndBroker(t *testing.T) {
+// TestDemoPageHostPageCSP proves the demo page responds 200 with the host-page
+// CSP that lets MapLibre fetch OpenFreeMap vector tiles and spawn its blob
+// worker — the whole reason this plugin left the opaque sandbox.
+func TestDemoPageHostPageCSP(t *testing.T) {
+	app, _ := newTestApp(t, WithDevGrantAll(), WithDemoPage())
+	srv := httptest.NewServer(app.Router())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + DemoURL)
+	if err != nil {
+		t.Fatalf("GET demo: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("demo status=%d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Errorf("demo Content-Type=%q", ct)
+	}
+	csp := resp.Header.Get("Content-Security-Policy")
+	for _, want := range []string{"https://tiles.openfreemap.org", "worker-src blob:", "connect-src 'self' https://tiles.openfreemap.org"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("demo CSP missing %q; got %q", want, csp)
+		}
+	}
+}
+
+// TestDemoPageWiresRuntime proves the demo page wires map.js + map.css and
+// renders the inline host-page mount + the Tokyo card the flyTo e2e clicks.
+func TestDemoPageWiresRuntime(t *testing.T) {
 	app, _ := newTestApp(t, WithDevGrantAll(), WithDemoPage())
 	srv := httptest.NewServer(app.Router())
 	defer srv.Close()
@@ -125,22 +133,14 @@ func TestDemoPageContainsTokensMarkerAndBroker(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	page := string(body)
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("demo status=%d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
-		t.Errorf("demo Content-Type=%q", ct)
-	}
 	for _, want := range []string{
-		"--color-",
-		`data-fui-plugin="map"`,
-		`data-fui-plugin-for="map_doc"`,
-		`<script src="` + pluginhost.BrokerScriptURL,
-		`<script src="` + ConfigScriptURL,
-		`<script src="` + AdapterScriptURL,
-		`data-color-scheme="light"`,
-		`data-label="Tokyo"`,
+		"--color-", // bridged theme tokens
+		`<link rel="stylesheet" href="` + MapCSSURL, // overlay stylesheet
+		`<script src="` + MapJSURL,                  // runtime script
+		`data-color-scheme="light"`,                 // deterministic default scheme
+		`data-fui-geomap`,                           // inline host-page mount element
+		`data-label="Tokyo"`,                        // flyTo e2e target card
+		`input[name="map_doc"]`,                     // canonical doc hidden field (e2e reads it)
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("demo page missing %q", want)
@@ -148,39 +148,75 @@ func TestDemoPageContainsTokensMarkerAndBroker(t *testing.T) {
 	}
 }
 
-// TestConfigScriptReflectsOptions proves Go With* options reach the frame: the
-// host-page config.js the plugin serves is marshaled from the instance's
-// MapConfig, so the adapter (and thus init.config) carries the compiled-in
-// defaults.
-func TestConfigScriptReflectsOptions(t *testing.T) {
-	app, _ := newTestApp(t, WithDevGrantAll(), WithCenter(40.7128, -74.006), WithZoom(11), WithProvider("carto-dark"))
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + ConfigScriptURL)
-	if err != nil {
-		t.Fatalf("GET config.js: %v", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	got := string(body)
+// TestMountRendersHostPageMarker proves Mount renders the plain host-page mount
+// (NOT the platform broker iframe marker), the hidden doc field, and that
+// data-config carries the instance's configured style.
+func TestMountRendersHostPageMarker(t *testing.T) {
+	p := New(WithDevGrantAll(), WithStyle("positron"))
+	out := string(p.Mount(MountConfig{}))
 	for _, want := range []string{
-		"window.__gofastrMapConfig = ",
-		`"lat":40.7128`,
-		`"zoom":11`,
-		`"provider":"carto-dark"`,
+		`data-fui-geomap`,
+		`data-config="`,
+		`&quot;style&quot;:&quot;positron&quot;`, // configured style survives into data-config (HTML-escaped)
+		`data-save-url="/__gofastr/plugin/map/save"`,
+		`input type="hidden" name="map_doc"`,
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("config.js missing %q; body=%q", want, got)
+		if !strings.Contains(out, want) {
+			t.Errorf("Mount output missing %q; got %s", want, out)
+		}
+	}
+	// The sandboxed-iframe broker marker must NOT appear — this is a host-page plugin.
+	for _, mustNot := range []string{`data-fui-plugin="map"`, `data-fui-plugin-docid`} {
+		if strings.Contains(out, mustNot) {
+			t.Errorf("Mount output must NOT contain the broker marker %q; got %s", mustNot, out)
+		}
+	}
+}
+
+// TestMountConfigCarriesControlFlags pins the data-config contract for the
+// controls map.js renders from config alone: geolocate + scale default ON,
+// clustering defaults OFF with its tuning values, and the opt-outs actually
+// reach the wire. A silently-dropped flag here shows up as a missing control in
+// the browser with nothing in any log.
+func TestMountConfigCarriesControlFlags(t *testing.T) {
+	defaults := string(New().Mount(MountConfig{}))
+	for _, want := range []string{
+		`&quot;geolocate&quot;:true`,
+		`&quot;scale&quot;:true`,
+		`&quot;cluster&quot;:false`,
+		`&quot;clusterRadius&quot;:50`,
+		`&quot;clusterMaxZoom&quot;:14`,
+		`&quot;searchURL&quot;:&quot;&quot;`, // no search unless opted in
+	} {
+		if !strings.Contains(defaults, want) {
+			t.Errorf("default Mount config missing %q; got %s", want, defaults)
+		}
+	}
+
+	tuned := string(New(
+		WithoutGeolocateControl(),
+		WithoutScaleControl(),
+		WithClustering(),
+		WithClusterRadius(80),
+		WithClusterMaxZoom(9),
+	).Mount(MountConfig{}))
+	for _, want := range []string{
+		`&quot;geolocate&quot;:false`,
+		`&quot;scale&quot;:false`,
+		`&quot;cluster&quot;:true`,
+		`&quot;clusterRadius&quot;:80`,
+		`&quot;clusterMaxZoom&quot;:9`,
+	} {
+		if !strings.Contains(tuned, want) {
+			t.Errorf("tuned Mount config missing %q; got %s", want, tuned)
 		}
 	}
 }
 
 // TestSaveRoundTripDevGrant proves the canonical {lat,lng,zoom,markers} doc
 // round-trips through the in-memory store, AND asserts the wire format uses the
-// lowercase json tags the frame's deriveDoc reads. This is the exact regression
-// that bit the monaco savedDoc: a Go↔Go round-trip passes even with capitalized
-// struct keys, so the lowercase shape must be asserted explicitly.
+// lowercase json tags map.js reads. This is the exact regression that bit the
+// monaco savedDoc: a Go↔Go round-trip passes even with capitalized struct keys.
 func TestSaveRoundTripDevGrant(t *testing.T) {
 	app, p := newTestApp(t, WithDevGrantAll())
 	srv := httptest.NewServer(app.Router())
@@ -220,22 +256,18 @@ func TestSaveRoundTripDevGrant(t *testing.T) {
 	if got.Lat != 40.7128 || got.Lng != -74.006 || got.Zoom != 11 || len(got.Markers) != 1 || got.Markers[0].ID != "m1" {
 		t.Errorf("LoadDoc round-trip mismatch: %+v", got)
 	}
-	// Wire format: lowercase {lat,lng,zoom,markers}. Untagged fields would emit
-	// {Lat,Lng,Zoom,Markers} and the frame would silently mount an EMPTY map.
 	if !strings.Contains(docJSON, `"lat"`) || !strings.Contains(docJSON, `"lng"`) ||
 		!strings.Contains(docJSON, `"zoom"`) || !strings.Contains(docJSON, `"markers"`) {
-		t.Errorf("LoadDoc JSON must use lowercase lat/lng/zoom/markers keys (frame contract); got %q", docJSON)
+		t.Errorf("LoadDoc JSON must use lowercase lat/lng/zoom/markers keys; got %q", docJSON)
 	}
 	if strings.Contains(docJSON, `"Lat"`) || strings.Contains(docJSON, `"Lng"`) ||
 		strings.Contains(docJSON, `"Zoom"`) || strings.Contains(docJSON, `"Markers"`) {
-		t.Errorf("LoadDoc JSON leaks capitalized struct keys; the frame reads lowercase; got %q", docJSON)
+		t.Errorf("LoadDoc JSON leaks capitalized struct keys; got %q", docJSON)
 	}
 }
 
-// TestSaveConflictMapsTo409 mirrors monaco's TestSaveConflictMapsTo409: a save
-// handler returning ErrConflict (bare or wrapped) surfaces as 409/E_CONFLICT,
-// the one status the adapter relays to the frame as a distinct saveResult; any
-// other error stays a generic 500/E_SAVE.
+// TestSaveConflictMapsTo409 mirrors monaco: a save handler returning ErrConflict
+// (bare or wrapped) surfaces as 409/E_CONFLICT; any other error stays 500/E_SAVE.
 func TestSaveConflictMapsTo409(t *testing.T) {
 	postSave := func(t *testing.T, saveErr error) (int, string) {
 		t.Helper()
@@ -319,320 +351,35 @@ func TestSaveDeniedWithoutCapability(t *testing.T) {
 	}
 }
 
-// stubFetcher is a test stand-in for the upstream *http.Client. Recording the
-// requests lets us assert exactly which upstream URL the proxy hit (or that it
-// hit none at all, for the SSRF / validation cases). The mutex guards the
-// recorded-reqs slice so concurrent requests under -race stay clean.
-type stubFetcher struct {
-	mu       sync.Mutex
-	reqs     []*http.Request
-	resp     *http.Response
-	respErr  error
-}
-
-func (s *stubFetcher) Do(req *http.Request) (*http.Response, error) {
-	s.mu.Lock()
-	s.reqs = append(s.reqs, req)
-	s.mu.Unlock()
-	if s.respErr != nil {
-		return nil, s.respErr
-	}
-	if s.resp != nil {
-		return s.resp, nil
-	}
-	// Default: a tiny PNG-shaped body so the proxy can copy it through.
-	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"image/png"}},
-		Body:       io.NopCloser(strings.NewReader(string(png))),
-	}, nil
-}
-
-func newTileTestApp(t *testing.T, fetcher tileFetcher) (*framework.App, *Plugin, *stubFetcher) {
-	t.Helper()
-	stub := &stubFetcher{}
-	if fetcher == nil {
-		fetcher = stub
-	}
-	p := New(WithDevGrantAll())
-	p.tileClient = fetcher
-	app := framework.NewApp(framework.WithConfig(framework.AppConfig{Name: "geomap-tile-test"}))
-	app.RegisterPlugin(p)
-	if err := app.InitPlugins(); err != nil {
-		t.Fatalf("InitPlugins: %v", err)
-	}
-	return app, p, stub
-}
-
-// TestTileProxyRejectsUnknownProvider is the SSRF guard: a request for an
-// unknown provider must 404 and MUST NOT make any upstream request. The
-// allowlist is the entire SSRF defence — the upstream host is never
-// client-controlled.
-func TestTileProxyRejectsUnknownProvider(t *testing.T) {
-	app, _, stub := newTileTestApp(t, nil)
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + RoutePrefix + "/tiles/evil-host/5/10/15")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("unknown provider: status=%d want 404", resp.StatusCode)
-	}
-	if len(stub.reqs) != 0 {
-		t.Errorf("unknown provider made %d upstream requests (SSRF leak); want 0", len(stub.reqs))
-		if u := stub.reqs[0].URL.String(); strings.Contains(u, "evil-host") {
-			t.Errorf("upstream URL leaked client value: %s", u)
-		}
-	}
-}
-
-// TestTileProxyRejectsBadCoords proves non-integer and out-of-range z/x/y are
-// rejected (400) and make no upstream request. The validated integers are the
-// ONLY values interpolated into the upstream template.
-func TestTileProxyRejectsBadCoords(t *testing.T) {
-	app, _, stub := newTileTestApp(t, nil)
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	cases := []struct {
-		name, path string
-	}{
-		{"non-int z", "/tiles/osm/abc/10/15"},
-		{"non-int x", "/tiles/osm/5/xx/15"},
-		{"non-int y", "/tiles/osm/5/10/yy"},
-		{"z too big", "/tiles/osm/99/10/15"},
-		{"x out of range", "/tiles/osm/3/9999/5"},
-		{"y out of range", "/tiles/osm/3/5/9999"},
-	}
-	for _, c := range cases {
-		stub.reqs = nil
-		resp, err := http.Get(srv.URL + RoutePrefix + c.path)
-		if err != nil {
-			t.Fatalf("%s: GET: %v", c.name, err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("%s: status=%d body=%q want 400", c.name, resp.StatusCode, body)
-		}
-		if len(stub.reqs) != 0 {
-			t.Errorf("%s: made %d upstream requests; want 0", c.name, len(stub.reqs))
-		}
-	}
-}
-
-// TestTileProxyValidatesCoordinatesAreOnlyUpstreamInput proves the validated
-// integers are the only thing interpolated into the upstream URL: a request
-// for /tiles/osm/5/10/15 reaches the upstream OSM template at exactly that
-// z/x/y. The second hit is served from the bounded LRU cache (no new upstream).
-func TestTileProxyValidatesCoordinatesAreOnlyUpstreamInput(t *testing.T) {
-	app, _, stub := newTileTestApp(t, nil)
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + RoutePrefix + "/tiles/osm/5/10/15")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status=%d body=%q", resp.StatusCode, body)
-	}
-	if got := resp.Header.Get("Content-Type"); got != "image/png" {
-		t.Errorf("Content-Type=%q want image/png", got)
-	}
-	if got := resp.Header.Get("Cache-Control"); !strings.Contains(got, "max-age=") {
-		t.Errorf("Cache-Control=%q want max-age", got)
-	}
-	// CORP MUST be cross-origin: the tile is loaded by the OPAQUE-origin plugin
-	// frame (a "null" origin), so the framework's default same-origin CORP would
-	// make the browser BLOCK the <img> with ERR_BLOCKED_BY_RESPONSE.NotSameOrigin
-	// — a gray, tile-less map. This asserts the header survives the full app
-	// router / global middleware on the cache-MISS path.
-	if got := resp.Header.Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
-		t.Errorf("MISS Cross-Origin-Resource-Policy=%q want cross-origin (opaque frame would be CORP-blocked)", got)
-	}
-	if len(stub.reqs) != 1 {
-		t.Fatalf("upstream requests=%d want 1", len(stub.reqs))
-	}
-	const wantUpstream = "https://tile.openstreetmap.org/5/10/15.png"
-	if got := stub.reqs[0].URL.String(); got != wantUpstream {
-		t.Errorf("upstream URL=%q want %q", got, wantUpstream)
-	}
-	if ua := stub.reqs[0].Header.Get("User-Agent"); !strings.Contains(ua, "gofastr-plugins-geomap") {
-		t.Errorf("User-Agent=%q must identify the proxy (OSM usage policy)", ua)
-	}
-
-	// A second request for the same tile hits the cache (no new upstream req).
-	resp2, err := http.Get(srv.URL + RoutePrefix + "/tiles/osm/5/10/15")
-	if err != nil {
-		t.Fatalf("GET2: %v", err)
-	}
-	resp2.Body.Close()
-	if len(stub.reqs) != 1 {
-		t.Errorf("cached tile made another upstream request; want 1 total, got %d", len(stub.reqs))
-	}
-	if got := resp2.Header.Get("X-Geomap-Cache"); got != "HIT" {
-		t.Errorf("X-Geomap-Cache=%q want HIT", got)
-	}
-	// The cache-HIT path must set CORP cross-origin too (same opaque-frame
-	// reason as the MISS path above).
-	if got := resp2.Header.Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
-		t.Errorf("HIT Cross-Origin-Resource-Policy=%q want cross-origin", got)
-	}
-}
-
-// TestTileCacheBound proves the LRU cache is bounded: inserting more than cap
-// entries evicts the least-recently-used, so the cache can never grow
-// unbounded under e2e / demo pan-and-zoom load.
-func TestTileCacheBound(t *testing.T) {
-	const cap = 4
-	c := newTileCache(cap)
-	total := cap * 3
-	for i := range total {
-		c.put(fmt.Sprintf("k%d", i), []byte{byte(i)}, "image/png")
-		// put() must never exceed the cap.
-		if c.Len() > cap {
-			t.Fatalf("after put %d: Len=%d exceeds cap=%d", i, c.Len(), cap)
-		}
-	}
-	if c.Len() != cap {
-		t.Errorf("Len=%d want %d", c.Len(), cap)
-	}
-	// The last `cap` keys we inserted must be present; earlier ones evicted.
-	for i := range total {
-		_, _, ok := c.get(fmt.Sprintf("k%d", i))
-		wantOK := i >= total-cap
-		if ok != wantOK {
-			t.Errorf("k%d: present=%v want %v", i, ok, wantOK)
-		}
-	}
-}
-
-// TestTileCacheLRUAccessPromotes proves a get() on an entry moves it to the
-// head so it survives eviction over less-recently-touched entries.
-func TestTileCacheLRUAccessPromotes(t *testing.T) {
-	const cap = 3
-	c := newTileCache(cap)
-	c.put("a", []byte{1}, "image/png")
-	c.put("b", []byte{2}, "image/png")
-	c.put("c", []byte{3}, "image/png")
-	// Touch "a"; then insert one more. "b" should be the one evicted.
-	if _, _, ok := c.get("a"); !ok {
-		t.Fatal("get(a) missing")
-	}
-	c.put("d", []byte{4}, "image/png")
-	for _, k := range []string{"a", "c", "d"} {
-		if _, _, ok := c.get(k); !ok {
-			t.Errorf("%s should be resident after LRU promotion+insertion", k)
-		}
-	}
-	if _, _, ok := c.get("b"); ok {
-		t.Errorf("b should have been evicted (LRU)")
-	}
-}
-
-// TestTileProxyConcurrency proves the cache + handler are safe under concurrent
-// requests (the LRU mutex is the whole guarantee). Run with -race to catch any
-// shared-state slip.
-func TestTileProxyConcurrency(t *testing.T) {
-	app, _, _ := newTileTestApp(t, nil)
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	const workers = 16
-	const per = 25
-	var hits int64
-	var errors int64
-	done := make(chan struct{}, workers)
-	for w := range workers {
-		go func(seed int) {
-			defer func() { done <- struct{}{} }()
-		for i := range per {
-			// z=3 → valid x,y are 0..7; stay in that range so the proxy never
-			// 400s on out-of-range (we are testing concurrency, not validation).
-			const z = 3
-			x := (seed + i) % 8
-			y := (seed*3 + i) % 8
-			resp, err := http.Get(srv.URL + RoutePrefix + fmt.Sprintf("/tiles/osm/%d/%d/%d", z, x, y))
-			if err != nil {
-				atomic.AddInt64(&errors, 1)
-				continue
+// TestNewRejectsBadStyleConfig proves the New() style sanity checks fail loud at
+// construction: an empty Style or an empty style-switcher entry panics rather
+// than shipping a map that can never resolve a style.
+func TestNewRejectsBadStyleConfig(t *testing.T) {
+	t.Run("empty style", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic on empty Style, got none")
 			}
-			if resp.StatusCode == http.StatusOK {
-				atomic.AddInt64(&hits, 1)
-			} else {
-				atomic.AddInt64(&errors, 1)
+		}()
+		New(WithMapConfig(MapConfig{Style: "", Styles: []string{"liberty"}}))
+	})
+	t.Run("empty style-switcher entry", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic on empty Styles entry, got none")
 			}
-			resp.Body.Close()
-		}
-		}(w)
-	}
-	for range workers {
-		<-done
-	}
-	if errors > 0 {
-		t.Errorf("concurrent tile requests: %d errors / %d hits", errors, hits)
-	}
+		}()
+		New(WithStyles("liberty", ""))
+	})
 }
 
-// TestWithTileProvidersValidatesTemplates proves a bad template panics at
-// construction (fail-loud) rather than 500ing on first request.
-func TestWithTileProvidersValidatesTemplates(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on bad template, got none")
-		}
-	}()
-	New(WithTileProviders(map[string]string{
-		"broken": "https://example.com/no-placeholders",
-	}))
-}
-
-// TestWithTileProvidersExtendsAllowlist proves a custom template reaches the
-// frame's tile proxy and the upstream is fetched from the configured host.
-func TestWithTileProvidersExtendsAllowlist(t *testing.T) {
-	stub := &stubFetcher{}
-	p := New(WithDevGrantAll(), WithTileProviders(map[string]string{
-		"custom": "https://my-tiles.example.com/{z}/{x}/{y}.png",
-	}), WithProvider("custom"))
-	p.tileClient = stub
-	app := framework.NewApp(framework.WithConfig(framework.AppConfig{Name: "geomap-custom-tile"}))
-	app.RegisterPlugin(p)
-	if err := app.InitPlugins(); err != nil {
-		t.Fatalf("InitPlugins: %v", err)
+// TestUIHostOption sanity-checks UIHostOption is callable and yields a non-nil
+// option. It is a thin wrapper around uihost.WithExtraScripts(MapJSURL); the
+// framework's own uihost_test proves WithExtraScripts injects <script src> tags
+// before </body>, so asserting the exact URL here would duplicate that harness.
+func TestUIHostOption(t *testing.T) {
+	opt := UIHostOption()
+	if opt == nil {
+		t.Fatal("UIHostOption returned nil")
 	}
-	srv := httptest.NewServer(app.Router())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + RoutePrefix + "/tiles/custom/4/8/6")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status=%d", resp.StatusCode)
-	}
-	if len(stub.reqs) != 1 {
-		t.Fatalf("upstream requests=%d want 1", len(stub.reqs))
-	}
-	if got := stub.reqs[0].URL.String(); got != "https://my-tiles.example.com/4/8/6.png" {
-		t.Errorf("upstream URL=%q", got)
-	}
-}
-
-// TestNewPanicsOnUnknownDefaultProvider proves the default-provider sanity
-// check fails loud when a host wires a non-allowlisted provider.
-func TestNewPanicsOnUnknownDefaultProvider(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on unknown default provider, got none")
-		}
-	}()
-	New(WithProvider("does-not-exist"))
 }

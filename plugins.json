@@ -90,12 +90,10 @@
     {
       "name": "map",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/geomap",
-      "version": "0.1.0-phase0",
-      "description": "Interactive Leaflet map. The fourth sandboxed heavy-JS plugin. Canonical doc is {lat, lng, zoom, markers[]}; click-to-add draggable pins, an in-frame layer control, and a fly-to side panel over the postMessage bridge. Because the opaque-origin frame's CSP forbids external network (connect-src 'none', img-src 'self'), raster tiles are served through a same-origin proxy with an allowlisted set of upstream providers (SSRF guard: fixed host templates, integer-only z/x/y).",
-      "isolation": "sandbox-iframe-opaque",
-      "sandbox": [
-        "allow-scripts"
-      ],
+      "version": "0.3.0",
+      "description": "Interactive vector map (MapLibre GL + OpenFreeMap). A TRUSTED host-page plugin (like tour) — it runs in the host page with fetch/worker access so it can render OpenFreeMap vector tiles (free for commercial use, no API key). Canonical doc is {lat,lng,zoom,markers[]}; click-to-add draggable pins whose popup is a live label editor with per-pin delete, a style switcher (layers), geolocate + scale controls, optional marker clustering, an optional place-search box backed by the plugin's own same-origin geocode proxy, and a fly-to side panel. The host page CSP MUST allow connect-src/img-src https://tiles.openfreemap.org and worker-src blob: (see docs/geomap.md); search needs no extra CSP host because it is proxied. Search is opt-in and adds the capability \"geocode:search\" plus the route /__gofastr/plugin/map/geocode when enabled; the capabilities listed below are the always-on set.",
+      "isolation": "trusted-host-page",
+      "trusted": true,
       "capabilities": [
         "document:read",
         "document:write",
@@ -103,7 +101,6 @@
       ],
       "frameworkCompat": ">=0.28.0",
       "routePrefix": "/__gofastr/plugin/map",
-      "entry": "/__gofastr/plugin/map/map.html",
       "schema": "map-v1",
       "minHeight": "360px",
       "docs": "docs/geomap.md"

@@ -6,6 +6,51 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — geomap 0.3.0: pin editing, search, clustering (2026-07-25)
+
+- **The pin popup is a live editor.** A label input that writes through to the
+  canonical doc plus a per-pin Delete button, replacing the static text popup;
+  `removeMarker(id)` / `setMarkerLabel(id, label)` join the controller API, and
+  read-only re-gates already-open popups in place rather than only blocking new
+  pins.
+
+  Building this surfaced a bug that had shipped silently: MapLibre toggles a
+  marker's popup from the **map's** click event, so the marker click handler's
+  `stopPropagation()` had been disabling every popup since the plugin landed.
+  Nothing tested popups, so nothing caught it. The runtime now lets the event
+  reach the map and ignores map clicks targeting a marker or popup instead.
+
+- **Geolocate + scale controls**, on by default, off via
+  `WithoutGeolocateControl` / `WithoutScaleControl`.
+
+- **Opt-in place search** (`WithSearch`) — an in-map search box backed by a new
+  **same-origin** proxy at `/__gofastr/plugin/map/geocode`, gated on a new
+  `geocode:search` capability and registered only when search is enabled. The
+  browser never calls a geocoder directly: proxying is what allows a
+  policy-compliant identifying `User-Agent`, an application-wide 1 req/s limit
+  (Nominatim's cap is per-application, so only the server can hold it), the
+  caching that policy asks for, and a host page CSP that stays at
+  `connect-src 'self'`. `WithGeocoder` swaps the lookup wholesale;
+  `WithGeocodeEndpoint` points at a self-hosted instance. A failed lookup (502)
+  is deliberately distinct from an empty result set. The example app wires a
+  fixed offline dataset — the e2e journeys must not depend on a third party, and
+  a demo has no business spending donated geocoding capacity.
+
+- **Opt-in marker clustering** (`WithClustering`). Clusters are computed by a
+  `cluster: true` GeoJSON source but rendered as **DOM markers**, so individual
+  pins stay draggable and editable, no style glyphs are needed, and bubbles
+  theme from the same tokens. Two MapLibre constraints are now pinned in code
+  and docs: a source with no layers is never tiled (so `querySourceFeatures`
+  returns nothing forever — a transparent probe layer keeps it alive), and
+  `isStyleLoaded()` is a "no pending work" flag that flickers false while a
+  vector style streams, so gating source creation on it leaves clustering
+  permanently inactive.
+
+- **Twelve new e2e journeys** across WebKit + Chromium covering rename/delete
+  persistence, read-only popup gating, drag persistence, the style switcher and
+  host-theme flip, the toolbar add/clear/reset/load paths, control presence,
+  search (hit and no-match), and clustering fold/expand.
+
 ### Changed — the repo now stands on its own (2026-07-16)
 
 - **Builds from a published GoFastr.** Dropped the `replace` directive pointing

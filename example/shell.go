@@ -27,7 +27,7 @@ var demoEntries = []demoEntry{
 	{"mermaid", "Mermaid", "/mermaid", "Author diagrams and see them render live.", "sandboxed", "📊"},
 	{"monaco", "Monaco", "/monaco", "The VS Code editor — configurable, with a diff mode.", "sandboxed", "🖥️"},
 	{"tour", "Guided Tour", "/tour", "Appcues-style tour that spotlights real page elements.", "trusted", "🧭"},
-	{"map", "Geomap", "/map", "Leaflet map — layers, pins, and a fly-to side panel.", "sandboxed", "🗺️"},
+	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
 }
 
 // registerShell mounts the gallery shell at "/". The plugin demos keep their own

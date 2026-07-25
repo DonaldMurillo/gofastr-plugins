@@ -2,17 +2,16 @@
   "name": "@gofastr/geomap-bundle",
   "private": true,
   "version": "0.0.0-dev",
-  "description": "In-frame Leaflet map bundle for the GoFastr geomap plugin. Builds a single IIFE that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage. Tiles are loaded same-origin via the plugin's tile proxy (the framed CSP blocks external image hosts).",
+  "description": "Trusted host-page MapLibre GL + OpenFreeMap vector-tile bundle for the GoFastr geomap plugin. Builds a single IIFE that scans for [data-fui-geomap] mount elements on the host page and renders a MapLibre map into each (free OpenFreeMap vector tiles, no API key). MapLibre's CSS is injected by the bundle at load.",
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && node build.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "leaflet": "1.9.4"
+    "maplibre-gl": "5.24.0"
   },
   "devDependencies": {
-    "@types/leaflet": "1.9.12",
     "esbuild": "0.23.1",
     "typescript": "^7.0.2"
   }

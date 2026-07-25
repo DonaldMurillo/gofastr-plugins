@@ -2,23 +2,24 @@ package geomap
 
 import (
 	"embed"
-	"io/fs"
 )
 
-//go:embed assets
-var assetsFS embed.FS
+// Embedded built runtime + overlay stylesheet. map.js is produced by `npm run
+// build` under js/ (esbuild IIFE that scans for [data-fui-geomap] mount elements
+// and renders a MapLibre map into each, bundling maplibre-gl + injecting its
+// CSS); map.css is the token-only overlay stylesheet copied verbatim from
+// js/src/map.css. Both are NON-framed host-page assets (trusted plugin — no
+// sandboxed iframe), so they are served plain with correct Content-Types and no
+// CORP relaxation.
+//
+// Rebuild after editing js/src: `cd geomap/js && npm run build`.
+//
+//go:embed assets/map.js
+var mapJSBytes []byte
 
-//go:embed host/adapter.js
-var adapterJSBytes []byte
+//go:embed assets/map.css
+var mapCSSBytes []byte
 
-// framedAssets returns the embedded frame bundle as a sub-FS rooted at the
-// plugin's assets/ directory. The asset server serves map.html / map.js /
-// map.css from here with the framed CSP/CORP relaxation the opaque-origin
-// iframe requires.
-func framedAssets() fs.FS {
-	sub, err := fs.Sub(assetsFS, "assets")
-	if err != nil {
-		panic("geomap: embed assets sub: " + err.Error())
-	}
-	return sub
-}
+// Silence the unused-import lint when embed's only role is the directives
+// above: the directives ARE the use, but gofmt-go's vet is happy as-is.
+var _ = embed.FS{}

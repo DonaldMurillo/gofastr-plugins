@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DonaldMurillo/gofastr-plugins/pluginhost"
 	"github.com/DonaldMurillo/gofastr/core-ui/style"
 	"github.com/DonaldMurillo/gofastr/core/render"
 )
+
 func demoTheme() style.Theme {
 	t := style.DefaultTheme()
 	t.DarkColors = map[string]string{
@@ -22,6 +22,10 @@ func demoTheme() style.Theme {
 		"border-strong": "#3F3F46",
 		"primary":       "#6366F1",
 		"primary-fg":    "#FFFFFF",
+		// The pin-popup Delete label. The light-mode red is unreadable on this
+		// surface (~3.4:1); map.css falls back to the same value when a host
+		// defines no danger token.
+		"danger": "#F87171",
 	}
 	return t
 }
@@ -29,7 +33,8 @@ func demoTheme() style.Theme {
 // demoPlaces is the side-panel list. Clicking a card flies the map to the
 // coordinates and (when writable) drops a labelled pin there. The card list is
 // deliberately a handful of well-known places: enough to exercise flyTo +
-// addMarker + markerSelected without bloating the page.
+// addMarker + markerSelected without bloating the page. The stable card
+// attributes (data-id/lat/lng/zoom/label) are read by the demo script + e2e.
 var demoPlaces = []struct {
 	ID, Label string
 	Lat, Lng  float64
@@ -42,25 +47,27 @@ var demoPlaces = []struct {
 	{"saopaulo", "São Paulo", -23.5505, -46.6333, 11},
 }
 
-// demoProviders mirrors the frame-known layer keys. The select option value is
-// the provider key the proxy / setProvider RPC accepts.
-var demoProviders = []struct{ Key, Label string }{
-	{"osm", "OpenStreetMap"},
-	{"carto-light", "Carto · Light"},
-	{"carto-dark", "Carto · Dark"},
+// demoStyles populates the toolbar style switcher (the OpenFreeMap style names).
+// The in-map style switcher control is seeded separately from MapConfig.Styles.
+var demoStyles = []struct{ Key, Label string }{
+	{"liberty", "Liberty"},
+	{"positron", "Positron"},
+	{"dark", "Dark"},
+	{"bright", "Bright"},
+	{"fiord", "Fiord"},
 }
 
 func (p *Plugin) renderDemo(r *http.Request) render.HTML {
 	tokens := demoTheme().CSSCustomProperties()
 
-	// Seed the mount marker with the saved doc (if any); else an empty doc that
-	// the frame expands into defaults. The frame's hasDoc() treats an absent
-	// blob as "use config defaults", so empty string is fine.
+	// Seed the mount with the saved doc (if any); else an empty doc that map.js
+	// expands into defaults. map.js treats an absent data-doc as "use config
+	// defaults", so an empty blob is fine.
 	docJSON, _ := p.LoadDoc(r.Context(), defaultDocID)
 
-	var providerOpts strings.Builder
-	for _, prov := range demoProviders {
-		providerOpts.WriteString(`<option value="` + prov.Key + `">` + prov.Label + `</option>`)
+	var styleOpts strings.Builder
+	for _, s := range demoStyles {
+		styleOpts.WriteString(`<option value="` + s.Key + `">` + s.Label + `</option>`)
 	}
 
 	var cardsStr strings.Builder
@@ -75,23 +82,21 @@ func (p *Plugin) renderDemo(r *http.Request) render.HTML {
 			`</button>`)
 	}
 
-	mount := Mount(MountConfig{DocID: defaultDocID, Doc: docJSON})
+	mount := p.Mount(MountConfig{DocID: defaultDocID, Doc: docJSON})
 	return render.HTML(strings.NewReplacer(
 		"{{TOKENS}}", tokens,
 		"{{SAVE_URL}}", SaveURL,
-		"{{PROVIDER_OPTIONS}}", providerOpts.String(),
+		"{{STYLE_OPTIONS}}", styleOpts.String(),
 		"{{CARDS}}", cardsStr.String(),
 		"{{PLACES}}", string(placesJSONBytes),
 		"{{MOUNT}}", string(mount),
-		"{{BROKER}}", pluginhost.BrokerScriptURL,
-		"{{CONFIG}}", ConfigScriptURL,
-		"{{ADAPTER}}", AdapterScriptURL,
+		"{{MAP_CSS}}", MapCSSURL,
+		"{{MAP_JS}}", MapJSURL,
 	).Replace(demoPage))
 }
 
-// Tiny helpers keep the template readable AND avoid pulling fmt (whose verbs
-// would clash with the literal % in the page's CSS). jsonFloat formats a float
-// the way encoding/json does, so the data-* attributes match the wire shape.
+// jsonFloat formats a float the way encoding/json does, so the data-* attributes
+// match the wire shape. (fmt verbs would clash with the literal % in the CSS.)
 func jsonFloat(f float64) string {
 	b, _ := json.Marshal(f)
 	return string(b)
@@ -115,12 +120,11 @@ func placeEmoji(id string) string {
 }
 
 // demoPage is the showcase. Placeholders are {{TOKENS}} (bridged theme CSS
-// custom properties), {{SAVE_URL}}, {{PROVIDER_OPTIONS}} (select options),
+// custom properties), {{SAVE_URL}}, {{STYLE_OPTIONS}} (select options),
 // {{CARDS}} (location buttons), {{PLACES}} (JSON for the client), {{MOUNT}}
-// (the iframe mount marker), {{BROKER}}/{{CONFIG}}/{{ADAPTER}} (script srcs).
-// It uses strings.NewReplacer (NOT fmt.Sprintf) because the CSS carries
-// literal % characters (translateX(-100%), color-mix(… 10% …)) that Sprintf
-// would misread.
+// (the inline host-page mount element), {{MAP_CSS}}/{{MAP_JS}} (asset URLs). It
+// uses strings.NewReplacer (NOT fmt.Sprintf) because the CSS carries literal %
+// characters (translateX(-100%), color-mix(… 10% …)) that Sprintf would misread.
 const demoPage = `<!doctype html>
 <html lang="en" data-color-scheme="light">
 <head>
@@ -145,9 +149,7 @@ header h1{font-size:16px;margin:0}
 .count{font-variant-numeric:tabular-nums;color:var(--color-text);min-width:22px;text-align:center}
 main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-template-columns:1fr 280px;gap:16px}
 .map-area{min-width:0}
-.map-area form{margin:0}
-#map-frame-wrap{border:1px solid var(--color-border);border-radius:14px;overflow:hidden;background:var(--color-surface)}
-#map-frame-wrap iframe{display:block;width:100%;border:0}
+#map-mount{border:1px solid var(--color-border);border-radius:14px;overflow:hidden;background:var(--color-surface)}
 .hint{color:var(--color-text-muted);font-size:13px;margin:0 0 10px}
 .saverow{display:flex;align-items:center;gap:10px;margin-top:12px}
 #save-status{font-size:13px;color:var(--color-text-muted)}
@@ -167,6 +169,7 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
   padding:5px 8px;border-radius:6px;pointer-events:none;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 @media (max-width: 820px){ main{grid-template-columns:1fr} }
 </style>
+<link rel="stylesheet" href="{{MAP_CSS}}">
 </head>
 <body>
 <header>
@@ -177,10 +180,11 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 </header>
 
 <div class="toolbar" role="toolbar" aria-label="Map controls">
-  <label class="ctl">Base layer
-    <select id="provider" data-tip="Switch the tile provider (same-origin proxy)">{{PROVIDER_OPTIONS}}</select>
+  <label class="ctl">Style
+    <select id="style" data-tip="Switch the OpenFreeMap vector base style">{{STYLE_OPTIONS}}</select>
   </label>
   <button type="button" class="btn toggle" id="readonly" data-tip="Disable marker editing">Read-only</button>
+  <button type="button" class="btn toggle" id="cluster" data-tip="Group nearby pins into counted bubbles">Cluster pins</button>
   <span class="sep"></span>
   <button type="button" class="btn" id="add-random" data-tip="Drop a pin at the map center">+ Pin at center</button>
   <button type="button" class="btn" id="clear" data-tip="Remove every pin">Clear pins</button>
@@ -190,11 +194,9 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 
 <main>
   <div class="map-area">
-    <p class="hint">A sandboxed Leaflet map. Click the map to drop a pin, drag pins to move them, click a pin to edit or delete. Tiles stream same-origin through the plugin's proxy — the opaque-origin CSP blocks external hosts.</p>
-    <div id="map-frame-wrap">
-      <form method="post" action="{{SAVE_URL}}" id="fui-demo-form">
-        {{MOUNT}}
-      </form>
+    <p class="hint">An OpenFreeMap <strong>vector</strong> map (MapLibre GL), running as a trusted host-page plugin. Click the map to drop a pin; click a pin to rename or delete it; drag pins to move them. Tiles stream directly from tiles.openfreemap.org — the host page CSP allows it (the opaque sandbox could not). Place search, when enabled, goes through the plugin's own same-origin proxy.</p>
+    <div id="map-mount">
+      {{MOUNT}}
     </div>
     <div class="saverow">
       <button type="button" class="btn primary" id="save">Save</button>
@@ -211,163 +213,120 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 
 <script>
 (function () {
-  var PLACES = {{PLACES}};
-
-  // --- theme toggle (host page scheme → broker re-bridges tokens) ----------
+  var SAVE_URL = '{{SAVE_URL}}';
   var html = document.documentElement;
   var themeBtn = document.getElementById('fui-scheme-toggle');
+  var styleSel = document.getElementById('style');
+  var readonlyBtn = document.getElementById('readonly');
+  var pinCount = document.getElementById('pin-count');
+  var saveStatus = document.getElementById('save-status');
+  var hidden = document.querySelector('input[name="map_doc"]');
+
+  function ctrl() { return window.__gofastrGeomap; }
+  // The runtime fires 'gofastr:geomap-ready' on window after it mounts every
+  // [data-fui-geomap]. If the script already ran (readyState !== loading), the
+  // controller exists and we proceed immediately.
+  function whenReady(fn) {
+    if (ctrl()) { fn(); return; }
+    window.addEventListener('gofastr:geomap-ready', fn, { once: true });
+  }
+
+  // --- theme toggle (host page scheme) -----------------------------------
   themeBtn.addEventListener('click', function () {
     var next = html.dataset.colorScheme === 'dark' ? 'light' : 'dark';
     html.dataset.colorScheme = next;
     themeBtn.textContent = next === 'dark' ? 'Light theme' : 'Toggle theme';
   });
 
-  // --- postMessage bridge to the frame (same shape as monaco's demo) ------
-  var seq = 0;
-  function frameIframe() {
-    return document.querySelector('#fui-demo-form iframe') || document.querySelector('iframe');
-  }
-  function frameWin() {
-    var f = frameIframe();
-    return f && f.contentWindow ? f.contentWindow : null;
-  }
-  function send(method, params) {
-    var w = frameWin();
-    if (!w) return;
-    w.postMessage({ v: 1, id: 'demo-' + (++seq), type: 'event', src: 'host', method: method, params: params || {} }, '*');
-  }
+  // --- controls wired to the controller ----------------------------------
+  whenReady(function () {
+    var c = ctrl();
+    styleSel.addEventListener('change', function () { c.setStyle(styleSel.value); });
+    readonlyBtn.addEventListener('click', function () {
+      var on = !readonlyBtn.classList.contains('active');
+      readonlyBtn.classList.toggle('active', on);
+      readonlyBtn.setAttribute('aria-pressed', String(on));
+      c.setReadOnly(on);
+    });
+    var clusterBtn = document.getElementById('cluster');
+    clusterBtn.addEventListener('click', function () {
+      var on = !clusterBtn.classList.contains('active');
+      clusterBtn.classList.toggle('active', on);
+      clusterBtn.setAttribute('aria-pressed', String(on));
+      c.setCluster(on);
+    });
+    document.getElementById('add-random').addEventListener('click', function () { c.addMarker({ label: 'Pin' }); });
+    document.getElementById('clear').addEventListener('click', function () { c.clearMarkers(); });
 
-  // --- controls -----------------------------------------------------------
-  var providerSel = document.getElementById('provider');
-  var readonlyBtn = document.getElementById('readonly');
-  var pinCount = document.getElementById('pin-count');
-  var saveStatus = document.getElementById('save-status');
+    // --- side-panel cards: flyTo + addMarker -----------------------------
+    function clearActiveCards() { document.querySelectorAll('.card.active').forEach(function (el) { el.classList.remove('active'); }); }
+    document.querySelectorAll('.card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var lat = parseFloat(card.getAttribute('data-lat'));
+        var lng = parseFloat(card.getAttribute('data-lng'));
+        var zoom = parseFloat(card.getAttribute('data-zoom'));
+        var label = card.getAttribute('data-label');
+        c.flyTo({ lat: lat, lng: lng, zoom: zoom });
+        c.addMarker({ lat: lat, lng: lng, label: label });
+        clearActiveCards();
+        card.classList.add('active');
+      });
+    });
 
-  providerSel.addEventListener('change', function () {
-    send('setProvider', { provider: providerSel.value });
-  });
-  readonlyBtn.addEventListener('click', function () {
-    var on = !readonlyBtn.classList.contains('active');
-    readonlyBtn.classList.toggle('active', on);
-    readonlyBtn.setAttribute('aria-pressed', String(on));
-    send('setReadOnly', { readOnly: on });
-  });
-  document.getElementById('add-random').addEventListener('click', function () {
-    send('addMarker', { label: 'Pin' });
-  });
-  document.getElementById('clear').addEventListener('click', function () {
-    send('clearMarkers', {});
-  });
-
-  // --- side-panel cards: flyTo + addMarker --------------------------------
-  function clearActiveCards() {
-    document.querySelectorAll('.card.active').forEach(function (c) { c.classList.remove('active'); });
-  }
-  document.querySelectorAll('.card').forEach(function (card) {
-    card.addEventListener('click', function () {
-      var lat = parseFloat(card.getAttribute('data-lat'));
-      var lng = parseFloat(card.getAttribute('data-lng'));
-      var zoom = parseFloat(card.getAttribute('data-zoom'));
-      var label = card.getAttribute('data-label');
-      send('flyTo', { lat: lat, lng: lng, zoom: zoom });
-      send('addMarker', { lat: lat, lng: lng, label: label });
+    // --- inbound: markerSelected highlights the matching card -----------
+    c.onMarkerSelected(function (id) {
+      var d = c.getDoc();
+      if (!d || !Array.isArray(d.markers)) return;
+      var m = null;
+      for (var i = 0; i < d.markers.length; i++) { if (d.markers[i].id === id) { m = d.markers[i]; break; } }
+      if (!m) return;
       clearActiveCards();
-      card.classList.add('active');
+      document.querySelectorAll('.card').forEach(function (el) {
+        if (el.getAttribute('data-label') === (m.label || '')) el.classList.add('active');
+      });
     });
   });
 
-  // --- inbound: markerSelected highlights the matching card ---------------
-  // The adapter dispatches a 'map:markerSelected' CustomEvent on the iframe
-  // element. We map marker id → label by reading the hidden field's doc JSON,
-  // then find the card whose data-label matches.
+  // --- pin count: re-read the hidden field when it changes ---------------
   function hiddenDoc() {
-    var inp = document.querySelector('input[name="map_doc"]');
-    if (!inp || !inp.value) return null;
-    try { return JSON.parse(inp.value); } catch (_) { return null; }
+    if (!hidden || !hidden.value) return null;
+    try { return JSON.parse(hidden.value); } catch (_) { return null; }
   }
-  function highlightCardByMarkerId(id) {
-    var d = hiddenDoc();
-    if (!d || !Array.isArray(d.markers)) return;
-    var m = null;
-    for (var i = 0; i < d.markers.length; i++) { if (d.markers[i].id === id) { m = d.markers[i]; break; } }
-    if (!m) return;
-    var label = m.label || '';
-    clearActiveCards();
-    document.querySelectorAll('.card').forEach(function (c) {
-      if (c.getAttribute('data-label') === label) c.classList.add('active');
-    });
-  }
-  function bindIframeEvents() {
-    var f = frameIframe();
-    if (!f) return;
-    f.addEventListener('map:markerSelected', function (e) {
-      highlightCardByMarkerId(e.detail.id);
-    });
-  }
-
-  // The iframe is created by the broker after it sees the mount marker. Poll
-  // briefly so we can attach the CustomEvent listener (the broker owns the
-  // iframe element reference; we only add a non-blocking event listener).
-  var iframePoll = window.setInterval(function () {
-    if (frameIframe()) { bindIframeEvents(); window.clearInterval(iframePoll); }
-  }, 200);
-
-  // --- pin count: re-read the hidden field when it changes (MutationObserver)
-  var hidden = document.querySelector('input[name="map_doc"]');
   function refreshPinCount() {
     var d = hiddenDoc();
     pinCount.textContent = String((d && Array.isArray(d.markers)) ? d.markers.length : 0);
   }
   refreshPinCount();
   if (hidden && typeof MutationObserver !== 'undefined') {
-    var obs = new MutationObserver(refreshPinCount);
-    obs.observe(hidden, { attributes: true, attributeFilter: ['value'] });
-    // MutationObserver does not fire on programmatic .value sets in all engines
-    // (WebKit included); poll as a belt-and-braces fallback.
-    window.setInterval(refreshPinCount, 1000);
+    new MutationObserver(refreshPinCount).observe(hidden, { attributes: true, attributeFilter: ['value'] });
   }
+  window.setInterval(refreshPinCount, 1000);
 
-  // --- save / load / reset ------------------------------------------------
-  function postSave(payload) {
+  // --- save / load / reset (POSTs the canonical doc from the controller) -
+  function postSave(doc) {
     saveStatus.textContent = 'Saving…';
-    fetch('{{SAVE_URL}}', {
+    fetch(SAVE_URL, {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (r) {
-      saveStatus.textContent = r.ok ? 'Saved ✓' : ('Save failed (' + r.status + ')');
-    })['catch'](function () { saveStatus.textContent = 'Save failed'; });
+      body: JSON.stringify({ docId: 'demo', doc: doc, lat: doc.lat, lng: doc.lng, zoom: doc.zoom, markers: doc.markers, schemaVersion: 'map-v1' })
+    }).then(function (r) { saveStatus.textContent = r.ok ? 'Saved ✓' : ('Save failed (' + r.status + ')'); })
+      ['catch'](function () { saveStatus.textContent = 'Save failed'; });
   }
   document.getElementById('save').addEventListener('click', function () {
-    var d = hiddenDoc();
-    if (!d) { saveStatus.textContent = 'Nothing to save yet.'; return; }
-    postSave({
-      docId: 'demo',
-      doc: d,
-      lat: d.lat, lng: d.lng, zoom: d.zoom, markers: d.markers,
-      schemaVersion: 'map-v1'
-    });
+    var c = ctrl(); if (!c) return;
+    var d = c.getDoc(); if (!d) { saveStatus.textContent = 'Nothing to save yet.'; return; }
+    postSave(d);
   });
-  document.getElementById('load').addEventListener('click', function () {
-    location.reload();
-  });
+  document.getElementById('load').addEventListener('click', function () { location.reload(); });
   document.getElementById('reset').addEventListener('click', function () {
-    send('clearMarkers', {});
+    var c = ctrl(); if (c) c.clearMarkers();
     window.setTimeout(function () {
-      var d = hiddenDoc();
-      postSave({
-        docId: 'demo',
-        doc: d || { lat: 20, lng: 0, zoom: 2, markers: [] },
-        lat: d ? d.lat : 20, lng: d ? d.lng : 0, zoom: d ? d.zoom : 2,
-        markers: [],
-        schemaVersion: 'map-v1'
-      });
-    }, 500);
+      var c2 = ctrl(); var d = c2 ? c2.getDoc() : null;
+      postSave(d || { lat: 20, lng: 0, zoom: 2, markers: [] });
+    }, 400);
   });
 })();
 </script>
-<script src="{{BROKER}}"></script>
-<script src="{{CONFIG}}"></script>
-<script src="{{ADAPTER}}"></script>
+<script src="{{MAP_JS}}"></script>
 </body>
 </html>`

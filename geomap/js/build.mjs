@@ -1,18 +1,21 @@
-// Build script for the Geomap in-frame Leaflet-map bundle.
+// Build script for the GoFastr geomap runtime — a TRUSTED host-page MapLibre
+// GL + OpenFreeMap vector-tile bundle.
 //
-// Emits THREE committed artifacts into ../assets/ (the Go plugin go:embed's them):
+// Emits TWO committed artifacts into ../assets/ (the Go plugin go:embed's them):
 //   - map.js   — single self-contained IIFE (esbuild --bundle --format=iife --minify)
-//                that bundles Leaflet + the controller
-//   - map.css  — token-only map stylesheet (copied from frame/map.css); Leaflet's
-//                own CSS is INLINED into map.js by the cssInjectPlugin below
-//   - map.html — the opaque-origin frame document (copied from frame/map.html)
+//                that scans the host page for [data-fui-geomap] mount elements
+//                and renders a MapLibre map into each. MapLibre's own CSS is
+//                imported by the bundle and injected as a <style> at load by the
+//                cssInjectPlugin below (controls/canvas need it to render).
+//   - map.css  — token-only overlay stylesheet (copied verbatim from src/map.css)
+//                for the demo page's container sizing + style-switcher control.
+//                MapLibre's core CSS is NOT here — it lives inside map.js.
 //
-// Deterministic: `npm ci && npm run build` reproduces the three files byte-for-byte
-// for a fixed dep set (the IIFE is minified and stable; html/css are copied as-is).
+// There is NO map.html: this is a trusted host-page plugin, not a sandboxed
+// iframe document (see tour/js/build.mjs for the same shape).
 //
-// Marker icons: Leaflet's default icon path 404s under a bundler and is blocked
-// at runtime under the opaque origin (img-src <origin> data:). The controller
-// uses an inline-SVG L.divIcon, so NO marker image assets are emitted or fetched.
+// Deterministic: `npm ci && npm run build` reproduces both files byte-for-byte
+// for a fixed dep set (the IIFE is minified and stable; css is copied as-is).
 //
 // Run from this directory: `npm run build`.
 
@@ -25,17 +28,16 @@ import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const srcDir = path.join(here, "src");
-const frameDir = path.join(here, "frame");
 const assetsDir = path.join(here, "..", "assets");
 
 const banner = {
-  js: "/* GoFastr Leaflet map — protocol v1, schemaVersion map-v1. Built IIFE (bundles leaflet); do not edit by hand. */",
+  js: "/* GoFastr geomap runtime — trusted host-page MapLibre GL + OpenFreeMap. Built IIFE (bundles maplibre-gl); do not edit by hand. */",
 };
 
-// esbuild plugin: Leaflet's ESM build imports leaflet.css. Bundling into a single
-// IIFE needs a loader; we inline the CSS as a JS module that injects a <style>
-// tag into the frame's <head> at load. Leaflet's controls/scale/attribution and
-// tile/marker/panning surface need this styling to render correctly.
+// esbuild plugin: maplibre-gl's ESM build imports its CSS. Bundling into a
+// single IIFE needs a loader; we inline the CSS as a JS module that injects a
+// <style> tag into the document <head> at load. MapLibre's controls, scale,
+// attribution, and canvas need this styling to render correctly.
 function cssInjectPlugin() {
   return {
     name: "geomap-css-inject",
@@ -52,7 +54,7 @@ function cssInjectPlugin() {
 async function main() {
   await mkdir(assetsDir, { recursive: true });
 
-  // 1. Bundle map.ts + leaflet to a single minified IIFE.
+  // 1. Bundle map.ts + maplibre-gl to a single minified IIFE.
   const result = await build({
     entryPoints: [path.join(srcDir, "map.ts")],
     bundle: true,
@@ -72,11 +74,9 @@ async function main() {
   if (!jsOut) throw new Error("esbuild produced no output");
   await writeFile(path.join(assetsDir, "map.js"), jsOut.text, "utf8");
 
-  // 2. Copy the frame document + stylesheet.
-  const html = await readFile(path.join(frameDir, "map.html"), "utf8");
-  await writeFile(path.join(assetsDir, "map.html"), html, "utf8");
-
-  const css = await readFile(path.join(frameDir, "map.css"), "utf8");
+  // 2. Copy the overlay stylesheet verbatim (host pages / demo link it; it is
+  //    NOT bundled into map.js — MapLibre's core CSS is, this one isn't).
+  const css = await readFile(path.join(srcDir, "map.css"), "utf8");
   await writeFile(path.join(assetsDir, "map.css"), css, "utf8");
 
   // Report sizes for the build log.
@@ -85,7 +85,6 @@ async function main() {
   const hash = createHash("sha256").update(jsOut.text).digest("hex").slice(0, 12);
   console.log(`\n[built] map.js  ${raw} B raw  ${gzip} B gzip  (iife, sha256:${hash})`);
   console.log(`[built] map.css ${Buffer.byteLength(css, "utf8")} B`);
-  console.log(`[built] map.html ${Buffer.byteLength(html, "utf8")} B`);
 }
 
 async function gzipSize(text) {
