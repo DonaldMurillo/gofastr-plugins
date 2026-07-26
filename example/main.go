@@ -23,6 +23,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
+	"github.com/DonaldMurillo/gofastr-plugins/pdf"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
 	"github.com/DonaldMurillo/gofastr/framework"
@@ -92,6 +93,20 @@ func newApp() (*framework.App, error) {
 		geomap.WithDevGrantAll(),
 		geomap.WithDemoPage(),
 		geomap.WithGeocoder(demoGeocoder),
+	))
+
+	// The PDF viewer / editor / redactor — the fourth SANDBOXED heavy-JS plugin,
+	// and the one whose cage is the product rather than the tax. The frame has
+	// connect-src 'none', so a document opened for redaction structurally cannot
+	// be exfiltrated: the host pushes its bytes in over the bridge and takes the
+	// produced bytes back the same way. Demo at /pdf.
+	//
+	// The demo runs in the fullest mode so the gallery exercises the whole
+	// surface; a real app picks the narrowest mode that fits, because mode is a
+	// host decision enforced on both sides of the bridge (see docs/pdf.md).
+	app.RegisterPlugin(pdf.New(
+		pdf.WithDevGrantAll(),
+		pdf.WithDemoPage(),
 	))
 
 	if err := app.InitPlugins(); err != nil {
