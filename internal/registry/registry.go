@@ -128,16 +128,25 @@ func load(path string) (Index, error) {
 	if err != nil {
 		return Index{}, fmt.Errorf("registry: reading index: %w", err)
 	}
+	idx, err := ParseIndex(src)
+	if err != nil {
+		return Index{}, fmt.Errorf("registry: parsing %s: %w", path, err)
+	}
+	return idx, nil
+}
 
+// ParseIndex parses the curated index from its JSON bytes. It is the in-memory
+// twin of load: same strict decoder, same structs, no filesystem. It is exposed
+// so in-module tooling — the eject CLI, which reads the index from the embedded
+// copy in package gofastrplugins — can parse it without going to disk or
+// re-stating the schema. The strict unknown-field check still applies, so a key
+// added to plugins.json without a matching struct field fails here too.
+func ParseIndex(src []byte) (Index, error) {
 	dec := json.NewDecoder(bytes.NewReader(src))
-	// The guard that keeps these structs honest: a key added to plugins.json
-	// without a matching field here fails the tests rather than being silently
-	// dropped.
 	dec.DisallowUnknownFields()
-
 	var idx Index
 	if err := dec.Decode(&idx); err != nil {
-		return Index{}, fmt.Errorf("registry: parsing %s: %w", path, err)
+		return Index{}, err
 	}
 	return idx, nil
 }
