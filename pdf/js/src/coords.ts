@@ -166,14 +166,27 @@ export function resizePdfRectByCssDelta(
   dxCss: number, dyCss: number,
   minSize = 4
 ): PdfRect {
-  let [x, y, w, h] = r;
-  const o = vp.convertToPdfPoint(0, 0);
-  const d = vp.convertToPdfPoint(dxCss, dyCss);
-  const dx = d[0] - o[0];
-  const dy = d[1] - o[1];
-  if (edge.includes("e")) w = Math.max(minSize, w + dx);
-  if (edge.includes("w")) { const nx = Math.min(x + w - minSize, x + dx); w = x + w - nx; x = nx; }
-  if (edge.includes("n")) { const ny = Math.min(y + h - minSize, y + dy); h = y + h - ny; y = ny; }
-  if (edge.includes("s")) h = Math.max(minSize, h + dy);
-  return [x, y, w, h];
+  // Resize in CSS space (where n/s/e/w are unambiguous: n=top, s=bottom,
+  // e=right, w=left) and convert the result back through the viewport. The
+  // previous implementation manipulated the PDF rect directly but treated PDF
+  // y (origin BOTTOM-LEFT) as if it were CSS y (origin top-left), which
+  // inverted the n/s edges — dragging the south handle down SHRANK the box.
+  // Working in CSS and round-tripping through pdfRectToCss/cssDragToPdfRect is
+  // correct by construction and stays stable under rotation (both conversions
+  // fold the viewport's rotation into the transform).
+  const box = pdfRectToCss(vp, r);
+  let left = box.left, top = box.top, width = box.width, height = box.height;
+  if (edge.includes("e")) width = Math.max(minSize, width + dxCss);
+  if (edge.includes("w")) {
+    const nl = Math.min(left + width - minSize, left + dxCss);
+    width = left + width - nl;
+    left = nl;
+  }
+  if (edge.includes("s")) height = Math.max(minSize, height + dyCss);
+  if (edge.includes("n")) {
+    const nt = Math.min(top + height - minSize, top + dyCss);
+    height = top + height - nt;
+    top = nt;
+  }
+  return cssDragToPdfRect(vp, left, top, left + width, top + height, minSize);
 }

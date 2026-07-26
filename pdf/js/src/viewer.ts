@@ -269,9 +269,20 @@ class PdfViewer {
       await model.loadAllPages((loaded, total) => this.toolbar.setProgress(loaded, total));
       this.toolbar.setProgress(0, 0);
       this.mountPages();
-      this.computeLayout(true);
       this.sidebar.setOutline(await model.getOutline());
       this.sidebar.buildThumbs();
+      // Resolve the fit-width/fit-page scale BEFORE the first layout + render.
+      // Previously the first page-1 render ran at the default scale=1 and the
+      // ready signal (`state.rendered`) fired on THAT render; the
+      // ResizeObserver then recomputed fit-width ~600ms later and evicted +
+      // re-rendered page 1 — so anything reading "rendered" worked against
+      // geometry that was about to change. computeScale reads scrollEl
+      // clientWidth, which is final by now (attach happened at boot and the
+      // sidebar is already laid out above), so the first render is already at
+      // the settled size and the later RO-driven relayout finds scale
+      // unchanged and does no eviction.
+      this.scale = this.computeScale();
+      this.computeLayout(true);
       // Kick off the first render (page 1, in view) then the render loop.
       this.gotoPage(1, true);
       this.onScrollThrottled();
@@ -683,10 +694,18 @@ class PdfViewer {
     // Apply a live search highlight if the active match is on this page.
     this.search.applyHighlight(pageIndex, rt.spans);
 
-    // Page-1 regression contract: emit `rendered` once with page-1 text + sample.
+    // Page-1 regression contract: emit `rendered` ONCE, and only when page 1
+    // is laid out at a non-zero size with a painted canvas. Burning the
+    // one-shot on a 0x0/un-settled render would announce readiness against
+    // geometry that's about to change; skipping here lets the next render
+    // (which will have the final size) fire it.
     if (pageIndex === 0 && !this.page1Emitted) {
-      this.page1Emitted = true;
-      this.emitPage1Rendered(page, rt, text);
+      const painted = rt.canvas.width > 0 && rt.canvas.height > 0
+        && rt.slot.offsetWidth > 0 && rt.slot.offsetHeight > 0;
+      if (painted) {
+        this.page1Emitted = true;
+        this.emitPage1Rendered(page, rt, text);
+      }
     }
 
     this.pumpRender();

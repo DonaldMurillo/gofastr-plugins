@@ -69,12 +69,13 @@ interface Gesture {
   page1: number;
   layer: HTMLElement;
   viewport: ViewportLike;
-  startPdfX: number; startPdfY: number;   // gesture origin in PDF space
+  startCssX: number; startCssY: number;   // gesture origin in layer CSS pixels
   edge?: HandleEdge;                        // resize edge
   annId?: AnnId;                            // move/resize target
   draftId?: AnnId;                          // create: the live preview annotation
   redactId?: string;                        // create: the live preview redaction rect
   inkPts?: Array<[number, number]>;         // ink: accumulated PDF-space points
+  sticky?: boolean;                          // create: keep tool armed after place (Shift)
 }
 
 const STAMP_DATA_CAP_BYTES = 256 * 1024; // base64 length cap (~192 KiB raw)
@@ -96,6 +97,8 @@ class EditorImpl implements Editor {
   private selectedId: AnnId | null = null;
   private gesture: Gesture | null = null;
   private stagedStamp: { mime: string; data: string; kind: "image" | "drawn" | "text"; label: string } | null = null;
+  /** The open modal overlay + the element to restore focus to on close. */
+  private activeModal: { overlay: HTMLElement; invoker: HTMLElement | null } | null = null;
   private boundDown: (e: PointerEvent) => void;
   private boundMove: (e: PointerEvent) => void;
   private boundUp: (e: PointerEvent) => void;
@@ -171,10 +174,7 @@ class EditorImpl implements Editor {
   private onToolChanged(t: ToolId): void {
     // Switching away from a creation tool clears any staged stamp + selection.
     this.stagedStamp = null;
-    if (t !== "select") {
-      this.selectedId = null;
-      this.renderOverlays();
-    }
+    if (t !== "select") this.select(null);
     if (t === "stamp") {
       // Open the picker; actual placement happens after a source is chosen.
       void this.openStampPicker();
@@ -219,11 +219,11 @@ class EditorImpl implements Editor {
     if (tool === "select") {
       const handleEdge = this.handleAt(hit.page1, hit.layer, lx, ly);
       if (handleEdge && this.selectedId) {
-        e.preventDefault();
         const ann = this.doc.getAnnotation(this.selectedId);
         if (ann) {
-          const [px, py] = cssPointToPdf(vp, lx, ly);
-          this.gesture = { kind: "resize", page1: hit.page1, layer: hit.layer, viewport: vp, startPdfX: px, startPdfY: py, edge: handleEdge, annId: this.selectedId };
+          e.preventDefault();
+          this.doc.breakCoalesce(); // isolate this resize into its own undo unit
+          this.gesture = { kind: "resize", page1: hit.page1, layer: hit.layer, viewport: vp, startCssX: lx, startCssY: ly, edge: handleEdge, annId: this.selectedId };
         }
         return;
       }
@@ -231,8 +231,8 @@ class EditorImpl implements Editor {
       this.select(clicked?.id ?? null);
       if (clicked) {
         e.preventDefault();
-        const [px, py] = cssPointToPdf(vp, lx, ly);
-        this.gesture = { kind: "move", page1: hit.page1, layer: hit.layer, viewport: vp, startPdfX: px, startPdfY: py, annId: clicked.id };
+        this.doc.breakCoalesce(); // isolate this move into its own undo unit
+        this.gesture = { kind: "move", page1: hit.page1, layer: hit.layer, viewport: vp, startCssX: lx, startCssY: ly, annId: clicked.id };
       }
       return;
     }
@@ -258,7 +258,7 @@ class EditorImpl implements Editor {
       this.doc.apply(new AddRedactionCommand(red));
       this.gesture = {
         kind: "create", page1: hit.page1, layer: hit.layer, viewport: vp,
-        startPdfX: px, startPdfY: py, redactId: red.id,
+        startCssX: lx, startCssY: ly, redactId: red.id,
       };
       return;
     }
@@ -269,10 +269,12 @@ class EditorImpl implements Editor {
     if (!draft) return;
     this.doc.apply(new AddAnnotationCommand(draft));
     this.select(draft.id);
-    const [px2, py2] = cssPointToPdf(vp, lx, ly);
+    // ink seeds its PDF-space polyline from the first point; rect/ellipse/
+    // arrow derive their rect from CSS corners in onPointerMove.
+    const inkSeed = tool === "ink" ? [cssPointToPdf(vp, lx, ly)] as Array<[number, number]> : undefined;
     this.gesture = {
       kind: "create", page1: hit.page1, layer: hit.layer, viewport: vp,
-      startPdfX: px2, startPdfY: py2, inkPts: tool === "ink" ? [[px2, py2]] : undefined,
+      startCssX: lx, startCssY: ly, inkPts: inkSeed, sticky: e.shiftKey,
     };
     this.gesture.draftId = draft.id;
   }
@@ -283,60 +285,65 @@ class EditorImpl implements Editor {
     e.preventDefault();
     const [lx, ly] = this.localCss(g.layer, e);
     if (g.kind === "create") {
+      // Both corners are layer-CSS pixels; cssDragToPdfRect converts them
+      // through the viewport. (The previous code stored the start corner in
+      // PDF space and converted it a SECOND time inside cssDragToPdfRect —
+      // the double conversion that displaced every dragged annotation.)
       if (g.redactId) {
-        const r = cssDragToPdfRect(g.viewport, g.startPdfX, g.startPdfY, ...this.toPdf(g.viewport, lx, ly));
+        const r = cssDragToPdfRect(g.viewport, g.startCssX, g.startCssY, lx, ly);
         this.updateRedactRect(g.redactId, r);
         return;
       }
       if (!g.draftId) return;
       if (this.tool.getCurrentTool() === "ink") {
+        // Ink is authored as a PDF-space polyline (it survives zoom/rotate
+        // unprojected), so each sample is converted individually.
         const [px, py] = cssPointToPdf(g.viewport, lx, ly);
         g.inkPts = g.inkPts ?? [];
         const last = g.inkPts[g.inkPts.length - 1];
         if (!last || Math.hypot(px - last[0], py - last[1]) > 0.5) g.inkPts.push([px, py]);
         this.updateInk(g.draftId, g.inkPts);
       } else {
-        const r = cssDragToPdfRect(g.viewport, g.startPdfX, g.startPdfY, ...this.toPdf(g.viewport, lx, ly));
+        const r = cssDragToPdfRect(g.viewport, g.startCssX, g.startCssY, lx, ly);
         this.updateRect(g.draftId, r);
       }
       return;
     }
     if (g.kind === "move" && g.annId) {
-      const [px, py] = cssPointToPdf(g.viewport, lx, ly);
-      const dx = px - g.startPdfX, dy = py - g.startPdfY;
-      g.startPdfX = px; g.startPdfY = py;
+      // CSS delta → PDF delta via the dedicated helper, so the move tracks
+      // the cursor 1:1 at any zoom/rotation. Ink points shift by the same
+      // resolved PDF delta so the stroke moves with its bounding box.
+      const dxCss = lx - g.startCssX, dyCss = ly - g.startCssY;
+      g.startCssX = lx; g.startCssY = ly;
       const ann = this.doc.getAnnotation(g.annId);
       if (!ann) return;
-      const newRect = nudgePdfRectByCssDelta(g.viewport, ann.rect, 0, 0); // identity baseline
-      // Move by PDF delta directly (dx,dy already in PDF space).
-      void newRect;
-      this.doc.apply(new UpdateAnnotationCommand(g.annId, (a) => {
-        const r = a.rect;
-        a.rect = [r[0] + dx, r[1] + dy, r[2], r[3]];
-        if (a.type === "ink") a.points = a.points.map((p) => [p[0] + dx, p[1] + dy] as [number, number]);
-      }));
+      const moved = nudgePdfRectByCssDelta(g.viewport, ann.rect, dxCss, dyCss);
+      const dpx = moved[0] - ann.rect[0], dpy = moved[1] - ann.rect[1];
+      this.doc.applyCoalesced(new UpdateAnnotationCommand(g.annId, (a) => {
+        a.rect = moved;
+        if (a.type === "ink" && a.points) a.points = a.points.map((p) => [p[0] + dpx, p[1] + dpy] as [number, number]);
+      }), "move:" + g.annId);
       return;
     }
     if (g.kind === "resize" && g.annId && g.edge) {
       const ann = this.doc.getAnnotation(g.annId);
       if (!ann) return;
-      const [px, py] = cssPointToPdf(g.viewport, lx, ly);
-      const dxCss = px - g.startPdfX, dyCss = py - g.startPdfY;
-      g.startPdfX = px; g.startPdfY = py;
-      // resizePdfRectByCssDelta expects a CSS delta; convert PDF delta back to
-      // CSS via the inverse difference so the maths stays in one place.
-      const newRect = resizePdfRectByCssDelta(g.viewport, ann.rect, g.edge, dxCss, dyCss);
-      this.doc.apply(new UpdateAnnotationCommand(g.annId, (a) => { a.rect = newRect; }));
+      const newRect = resizePdfRectByCssDelta(g.viewport, ann.rect, g.edge, lx - g.startCssX, ly - g.startCssY);
+      g.startCssX = lx; g.startCssY = ly;
+      this.doc.applyCoalesced(new UpdateAnnotationCommand(g.annId, (a) => { a.rect = newRect; }), "resize:" + g.annId);
     }
   }
-
   private onPointerUp(_e: PointerEvent): void {
     const g = this.gesture;
-    if (!g) return;
-    // Highlight commit: if a text selection exists over a page, convert it.
+    // Highlight is selection-driven and never opens a gesture (pointerdown
+    // returns early so the native text selection can form), so its commit must
+    // run BEFORE the null-gesture bail below — otherwise releasing a text
+    // selection with the Highlight tool armed does nothing.
     if (this.tool.getCurrentTool() === "highlight") {
       this.commitHighlightIfSelection();
     }
+    if (!g) return;
+    let placedId: AnnId | null = null;
     if (g.kind === "create" && g.draftId) {
       if (this.tool.getCurrentTool() === "ink" && g.inkPts && g.inkPts.length > 1) {
         this.smoothInk(g.draftId, g.inkPts);
@@ -346,6 +353,8 @@ class EditorImpl implements Editor {
       if (ann && this.isDegenerateDraft(ann)) {
         this.doc.apply(new RemoveAnnotationCommand(g.draftId));
         this.select(null);
+      } else if (ann) {
+        placedId = g.draftId;
       }
     }
     if (g.kind === "create" && g.redactId) {
@@ -358,6 +367,15 @@ class EditorImpl implements Editor {
       }
     }
     this.gesture = null;
+    // Select-after-place (the default in every editor of this kind): once a
+    // real annotation lands, drop the creation tool and keep the just-placed
+    // annotation selected so it can be moved/resized immediately. Hold Shift
+    // at pointerdown to keep the tool armed (sticky) for a burst of placements.
+    // Redaction rects stay armed by default — authoring many is the norm.
+    if (placedId && !g.sticky) {
+      this.select(placedId);
+      this.tool.chooseTool("select");
+    }
   }
 
   // Highlight: turn the current text-layer selection into page-space quads.
@@ -413,25 +431,33 @@ class EditorImpl implements Editor {
       case "arrow":
         return { id: cryptoId(), page: page1, type: tool, rect: [px, py, 1, 1], color, fill: null, width, opacity: this.style.opacity };
       case "text":
-        return { id: cryptoId(), page: page1, type: "text", rect: [px, py, 160, 24], color, text: "Text", fontSize: 14 };
+        // Place the painted top-left at the click: PDF y is the BOTTOM edge of
+        // the rect, so shift up by the height so the box's top lands at the
+        // click point (otherwise it appears one box-height above the click).
+        return { id: cryptoId(), page: page1, type: "text", rect: [px, py - 24, 160, 24], color, text: "Text", fontSize: 14 };
       case "note":
-        return { id: cryptoId(), page: page1, type: "note", rect: [px, py, 20, 20], color, text: "" };
+        return { id: cryptoId(), page: page1, type: "note", rect: [px, py - 20, 20, 20], color, text: "" };
       default:
         return null;
     }
   }
 
+  // Create-drag previews mutate the live annotation WITHOUT recording undo —
+  // the AddAnnotation command pushed at pointerdown is the single undo unit for
+  // the whole creation, so one Undo removes a just-placed annotation. (Move and
+  // resize of an EXISTING annotation use applyCoalesced in onPointerMove so a
+  // whole drag is one undo unit too.)
   private updateRect(id: AnnId, rect: PdfRect): void {
-    this.doc.apply(new UpdateAnnotationCommand(id, (a) => { a.rect = rect; }));
+    this.doc.mutateAnnotation(id, (a) => { a.rect = rect; });
   }
 
   private updateInk(id: AnnId, pts: Array<[number, number]>): void {
     if (pts.length === 0) return;
-    this.doc.apply(new UpdateAnnotationCommand(id, (a) => {
+    this.doc.mutateAnnotation(id, (a) => {
       if (a.type !== "ink") return;
       a.points = pts.slice();
       a.rect = inkBoundingRect(pts);
-    }));
+    });
   }
 
   // Catmull-Rom resample for a smoother freehand stroke. Replaces the raw
@@ -462,6 +488,74 @@ class EditorImpl implements Editor {
     if (a.type === "note") return false; // click-placed, fixed size
     if (a.type === "ink") return a.points.length < 2;
     return a.rect[2] < 3 || a.rect[3] < 3;
+  }
+
+  // --- modal focus management -------------------------------------------
+  // The dialog opens from the Stamp tool button; Escape, backdrop click and
+  // Cancel must all dismiss it, focus must be trapped inside while open, and
+  // focus must return to the invoking button on close. Previously Escape only
+  // cleared the staged stamp — the comment above the modal claimed Escape
+  // closed it, but it never did, so a user could open the picker and be
+  // unable to leave it.
+
+  /** Open a managed modal: records the invoker, mounts the overlay, focuses the
+   *  first focusable control. The editor's keydown handler closes it on Escape
+   *  and traps Tab while it is the active modal. */
+  private openModal(overlay: HTMLElement, invokerHint?: HTMLElement | null): void {
+    // Prefer the explicit hint (the opening button) so focus is restored to the
+    // right control even when a synthetic/programmatic click did not move
+    // document.activeElement onto the button (a headless-engine quirk; a real
+    // user click or Enter focuses it, matching activeElement).
+    const invoker = invokerHint ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    this.activeModal = { overlay, invoker };
+    document.body.appendChild(overlay);
+    // Focus the first focusable control (the first tab) so keyboard users land
+    // inside the dialog, not on the backdrop.
+    const f = this.modalFocusables();
+    if (f.length > 0) f[0].focus();
+  }
+
+  /** Tear down the active modal and restore focus to the invoking control. */
+  private closeModal(): void {
+    const m = this.activeModal;
+    this.activeModal = null;
+    if (m) {
+      m.overlay.remove();
+      // Restore focus synchronously. requestAnimationFrame was unreliable in
+      // headless WebKit (the rAF never fired before the probe read activeElement),
+      // leaving focus on the body; focusing here in the Escape/click handler is
+      // correct and deterministic.
+      try { m.invoker?.focus(); } catch { /* element gone */ }
+    }
+  }
+
+  /** Visible, enabled focusable controls inside the active modal, in DOM order. */
+  private modalFocusables(): HTMLElement[] {
+    const m = this.activeModal;
+    if (!m) return [];
+    const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const nodes = Array.from(m.overlay.querySelectorAll<HTMLElement>(sel));
+    return nodes.filter((n) => {
+      if (n.hasAttribute("disabled")) return false;
+      if (n.getAttribute("aria-hidden") === "true") return false;
+      const rect = (n as HTMLElement).getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+  }
+
+  /** Wrap Tab/Shift+Tab within the active modal so focus cannot escape. */
+  private trapTab(e: KeyboardEvent): void {
+    const f = this.modalFocusables();
+    if (f.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const cur = document.activeElement;
+    const i = f.indexOf(cur as HTMLElement);
+    const shift = e.shiftKey;
+    let next: HTMLElement;
+    if (i === -1) next = shift ? f[f.length - 1] : f[0];
+    else next = shift ? f[(i - 1 + f.length) % f.length] : f[(i + 1) % f.length];
+    next.focus();
   }
 
   // --- stamp / signature picker -------------------------------------------
@@ -510,7 +604,11 @@ class EditorImpl implements Editor {
 
     panel.appendChild(tabs); panel.appendChild(body); panel.appendChild(actions);
     overlay.appendChild(panel);
-    document.body.appendChild(overlay);
+    // The Stamp tool button opened this dialog; restore focus to it on close.
+    // A real user click focuses it (document.activeElement), but a synthetic
+    // click in a headless engine may not, so resolve it explicitly.
+    const stampBtn = document.querySelector<HTMLElement>('button.pdf-tool-btn[aria-label="Stamp"]');
+    this.openModal(overlay, stampBtn);
 
     const showPane = (which: "image" | "draw" | "type") => {
       for (const t of [tabImage, tabDraw, tabType]) t.setAttribute("aria-selected", "false");
@@ -523,7 +621,7 @@ class EditorImpl implements Editor {
     tabDraw.addEventListener("click", () => showPane("draw"));
     tabType.addEventListener("click", () => showPane("type"));
 
-    const close = () => overlay.remove();
+    const close = () => this.closeModal();
     cancelBtn.addEventListener("click", close);
     overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 
@@ -617,6 +715,9 @@ class EditorImpl implements Editor {
 
   private select(id: AnnId | null): void {
     this.selectedId = id;
+    // Mirror onto __pdfState so tests can observe selection (the host parent
+    // cannot read into the opaque frame; this in-frame field is the channel).
+    state.selectedId = id;
     this.renderOverlays();
   }
 
@@ -658,6 +759,15 @@ class EditorImpl implements Editor {
     // Undo/redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z). Capture so the viewer's own
     // key handler (which listens on the scroll region) doesn't also act.
     const meta = e.ctrlKey || e.metaKey;
+    // While a managed modal is open it owns the keyboard: Escape closes it,
+    // Tab is trapped inside, and every other key (tool shortcuts, delete,
+    // undo) is swallowed so the dialog is modal in behaviour, not just name.
+    if (this.activeModal) {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); this.closeModal(); return; }
+      if (e.key === "Tab") { this.trapTab(e); return; }
+      e.stopPropagation();
+      return;
+    }
     if (meta && (e.key === "z" || e.key === "Z")) {
       e.preventDefault();
       e.stopPropagation();
@@ -679,8 +789,13 @@ class EditorImpl implements Editor {
       return;
     }
     if (e.key === "Escape") {
+      // Cancel any in-flight gesture, drop selection, and return to the
+      // Select tool — the standard "Escape cancels what I was doing" escape
+      // hatch. Also clears a staged stamp so it cannot surprise the next click.
+      this.gesture = null;
       this.select(null);
       this.stagedStamp = null;
+      if (this.tool.getCurrentTool() !== "select") this.tool.chooseTool("select");
       return;
     }
     // Tool shortcuts: v select, h highlight, d draw(ink), r rect, e ellipse,
@@ -745,7 +860,7 @@ class EditorImpl implements Editor {
   // --- redaction (mode === "redact") --------------------------------------
 
   private updateRedactRect(id: string, rect: PdfRect): void {
-    this.doc.apply(new UpdateRedactionCommand(id, (r) => { r.rect = rect; }));
+    this.doc.mutateRedaction(id, (r) => { r.rect = rect; });
   }
 
   /** Refresh the pending list + Apply button from the live doc state. */
@@ -1104,11 +1219,6 @@ class EditorImpl implements Editor {
     // render; renderPage is only called on rendered pages anyway.
     if (!vp) return identityViewport();
     return vp;
-  }
-
-  // small tuple unpack helper
-  private toPdf(vp: ViewportLike, lx: number, ly: number): [number, number] {
-    return cssPointToPdf(vp, lx, ly);
   }
 }
 

@@ -334,6 +334,12 @@ export class OverlayDoc {
   private redoStack: Command[] = [];
   private listeners = new Set<DocListener>();
   private dirty = false;
+  // Coalescing: consecutive `applyCoalesced` calls with the SAME key merge into
+  // a single undo entry (the first captures the before-state; later ones mutate
+  // the live state without pushing). Used by drag move/resize so one Undo reverts
+  // the whole gesture, not the last sub-pixel delta. Any other command ends the
+  // run. `breakCoalesce()` is called at gesture start to isolate gestures.
+  private coalesceKey: string | null = null;
 
   constructor(initial?: Partial<OverlayState>) {
     this.state = {
@@ -347,12 +353,57 @@ export class OverlayDoc {
     };
   }
 
-  /** Apply a command forward, clear the redo stack, and notify. */
+  /** Apply a command forward, clear the redo stack, and notify. Any command
+   *  ends an in-progress coalesce run so a gesture and the next action stay
+   *  separate undo units. */
   apply(cmd: Command): void {
+    this.coalesceKey = null;
     cmd.apply(this.state);
     this.undoStack.push(cmd);
     this.redoStack.length = 0;
     this.dirty = true;
+    this.emit();
+  }
+
+  /** Apply `cmd` but merge it into the top of the undo stack when `key` matches
+   *  the active coalesce key — the first call pushes (capturing before-state),
+   *  subsequent calls mutate the live state without pushing. Result: a whole
+   *  drag is ONE undo unit. Call `breakCoalesce()` at gesture start. */
+  applyCoalesced(cmd: Command, key: string): void {
+    if (key === this.coalesceKey && this.undoStack.length > 0) {
+      // Same gesture: apply the mutation to the live state, keep the existing
+      // undo entry (its captured before-state is the pre-gesture original).
+      cmd.apply(this.state);
+      this.emit();
+      return;
+    }
+    this.coalesceKey = key;
+    cmd.apply(this.state);
+    this.undoStack.push(cmd);
+    this.redoStack.length = 0;
+    this.dirty = true;
+    this.emit();
+  }
+
+  /** End any in-progress coalesce run so the next applyCoalesced starts a fresh
+   *  undo unit. Call at the start of each gesture. */
+  breakCoalesce(): void { this.coalesceKey = null; }
+
+  /** Mutate a single annotation in place WITHOUT recording an undo entry — used
+   *  for the live preview during a create drag, where the AddAnnotation command
+   *  (pushed at pointerdown) is the single undo unit for the whole creation. */
+  mutateAnnotation(id: AnnId, fn: (a: Annotation) => void): void {
+    const a = this.state.annotations.find((x) => x.id === id);
+    if (!a) return;
+    fn(a);
+    this.emit();
+  }
+
+  /** Mutate a single redaction in place without recording undo (create drag). */
+  mutateRedaction(id: string, fn: (r: Redaction) => void): void {
+    const r = this.state.redactions.find((x) => x.id === id);
+    if (!r) return;
+    fn(r);
     this.emit();
   }
 
@@ -361,6 +412,7 @@ export class OverlayDoc {
   undoDepth(): number { return this.undoStack.length; }
 
   undo(): boolean {
+    this.coalesceKey = null;
     const cmd = this.undoStack.pop();
     if (!cmd) return false;
     cmd.undo(this.state);
@@ -370,6 +422,7 @@ export class OverlayDoc {
   }
 
   redo(): boolean {
+    this.coalesceKey = null;
     const cmd = this.redoStack.pop();
     if (!cmd) return false;
     cmd.apply(this.state);
@@ -377,6 +430,7 @@ export class OverlayDoc {
     this.emit();
     return true;
   }
+
 
   isDirty(): boolean { return this.dirty; }
 

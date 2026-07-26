@@ -39,6 +39,10 @@ export interface PdfFrameState {
   // P2 annotate surface — mirrored for the e2e suite.
   mode: "view" | "annotate" | "redact";
   annotationCount: number;
+  /** The currently-selected annotation id (null = none). Exposed so selection
+   *  is observable to tests — a feature that cannot be seen cannot be
+   *  regression-tested. Read live via window.__pdfState.selectedId. */
+  selectedId: string | null;
   redactionCount: number;          // P3 — pending redactions authored
   dirty: boolean;
   undoDepth: number;
@@ -86,6 +90,7 @@ export const state: PdfFrameState = {
   matchIndex: 0,
   mode: "view",
   annotationCount: 0,
+  selectedId: null,
   redactionCount: 0,
   dirty: false,
   undoDepth: 0,
