@@ -150,10 +150,24 @@ type SaveRequest struct {
 // verification report (opaque JSON — the frame owns its shape); Kind is the
 // export intent, which the route has already mode-checked.
 type ExportRequest struct {
-	DocID  string          // persistence key
-	Kind   string          // "export" | "download" | "print" | "redact"
-	Bytes  []byte          // the produced PDF bytes
-	Report json.RawMessage // the in-frame verification report (opaque; may be nil)
+	DocID string // persistence key
+	Kind  string // "export" | "download" | "print" | "redact"
+	Bytes []byte // the produced PDF bytes
+	// Filename is the frame's suggested name, already sanitised of path
+	// separators and Content-Disposition metacharacters. It is a HINT: the
+	// handler decides where bytes actually go, and may ignore it. Empty when
+	// the frame offered none.
+	Filename string
+	// Report is the in-frame verification report — for a redact export, the
+	// evidence that the content under every rect is gone. Opaque JSON: the
+	// frame owns its shape.
+	//
+	// It rides an HTTP header, so it is bounded. When a report would exceed
+	// that bound the adapter substitutes a compact record carrying the same
+	// verdicts plus "truncated":true — the detail can be lost, the VERDICT
+	// never is, and a host must not read a missing report as a pass. Nil means
+	// the frame sent none at all (a plain export, not a redaction).
+	Report json.RawMessage
 }
 
 // ExportKind values the mode enforcement branches on. They are the only kinds

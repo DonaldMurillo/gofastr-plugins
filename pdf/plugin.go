@@ -140,10 +140,18 @@ func normalizeMode(m Mode) Mode {
 // Every field is always serialised (no omitempty) so the frame always receives
 // a complete config and never has to guess a default.
 type frameConfig struct {
-	Mode       string `json:"mode"`       // Mode.String() — "view" | "annotate" | "redact"
-	RedactDPI  int    `json:"redactDPI"`  // rasterization DPI for redacted pages
-	MaxBytes   int64  `json:"maxBytes"`   // host ceiling; the frame sizes its upload windows to it
-	SchemaHash string `json:"schemaHash"` // unused-reserved; documents the interchange version stably
+	Mode      string `json:"mode"`      // Mode.String() — "view" | "annotate" | "redact"
+	RedactDPI int    `json:"redactDPI"` // rasterization DPI for redacted pages
+	MaxBytes  int64  `json:"maxBytes"`  // host ceiling; the frame sizes its upload windows to it
+	// ExportEnabled reports whether the host wired [WithExportHandler], which
+	// is what grants pdf:export. The adapter merges the capability into
+	// init.capabilities from this, so the frame can offer export only when it
+	// will actually succeed — rather than letting the user annotate, redact
+	// and press Export before discovering the refusal. It is a REPORT of a
+	// decision the host already made: POST /export re-checks the grant
+	// regardless of what the frame believes.
+	ExportEnabled bool   `json:"exportEnabled"`
+	SchemaHash    string `json:"schemaHash"` // unused-reserved; documents the interchange version stably
 }
 
 // savedDoc is the in-memory persisted overlay (the demo / default store).
@@ -460,7 +468,26 @@ func (p *Plugin) memSave(_ context.Context, req SaveRequest) error {
 // works with zero configuration. A host wanting real documents injects
 // [WithSource].
 func (p *Plugin) defaultSource(_ context.Context, _ string) ([]byte, error) {
-	return samplePDFBytes(), nil
+	return SampleDocument(), nil
+}
+
+// SampleDocument returns the embedded two-page sample PDF the demo renders —
+// real selectable text (including the SPIKE_SECRET_ALPHA marker the tests look
+// for) plus an embedded raster image.
+//
+// Exported for demos, probes and tests that wire their own [WithSource] and
+// still want the stock document for every id they do not special-case. A
+// WithSource hook fully REPLACES the default, and returning (nil, nil) means
+// "no such document" (404) rather than "fall back to the sample" — a
+// production host must never silently serve a demo file in place of a document
+// it failed to find, so the fallback is opt-in and explicit.
+//
+// The returned slice is a copy; the embedded bytes are not mutable by callers.
+func SampleDocument() []byte {
+	b := samplePDFBytes()
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
 }
 
 // configScriptBytes renders the host-page config script that publishes this
@@ -473,9 +500,10 @@ func (p *Plugin) defaultSource(_ context.Context, _ string) ([]byte, error) {
 // inline), so no script-context escaping is required.
 func (p *Plugin) configScriptBytes() []byte {
 	cfg := frameConfig{
-		Mode:      p.mode.String(),
-		RedactDPI: p.redactDPI,
-		MaxBytes:  p.maxBytes,
+		Mode:          p.mode.String(),
+		RedactDPI:     p.redactDPI,
+		MaxBytes:      p.maxBytes,
+		ExportEnabled: p.exportHandler != nil,
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {

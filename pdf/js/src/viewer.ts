@@ -32,8 +32,14 @@ import { buildAnnotLayer } from "./annots";
 import { SearchController, type SearchStatus } from "./search";
 import { Sidebar } from "./sidebar";
 import { Toolbar, type ToolbarCallbacks } from "./toolbar";
-
-// Hand the worker's exports to pdf.js so it takes the main-thread fake-worker
+import { DocumentBytesAssembler, isDocumentBytesChunk } from "./docbytes";
+import {
+  OverlayDoc, serializeOverlay, deserializeOverlay, type OverlayState,
+  AddAnnotationCommand, SetFormFieldCommand, AddPageOpCommand,
+} from "./doc";
+import { createEditor, type Editor, type EditorHost } from "./overlay-editor";
+import { pdfSha256 } from "./sha";
+import { buildFormLayer } from "./forms";
 // path. Assigned once at module load, before any getDocument() call.
 window.pdfjsWorker = { WorkerMessageHandler };
 
@@ -56,6 +62,8 @@ interface PageRuntime {
   canvas: HTMLCanvasElement;
   textLayer: HTMLElement;
   annotLayer: HTMLElement;
+  editLayer: HTMLElement;      // editor overlay: tools paint + selection here
+  formLayer: HTMLElement;      // AcroForm fill inputs (annotate mode)
   placeholder: HTMLElement;
   spans: TextSpanRef[];
   gen: number;           // render generation; stale completions are ignored
@@ -91,6 +99,22 @@ class PdfViewer {
   private pinchStartDist = 0;
   private pinchStartPct = 100;
   private page1Emitted = false;
+  // P2 editing surface. The OverlayDoc is the single source of truth for
+  // annotations/forms/pageOps; the assembler reassembles the chunked
+  // documentBytes stream. `loading` + `state.rendered` is the guard that
+  // makes the FIRST delivery win (chunked OR legacy loadBytes).
+  readonly doc = new OverlayDoc();
+  private readonly docBytes: DocumentBytesAssembler;
+  private loading = false;
+  private mode: "view" | "annotate" | "redact" = "view";
+  private canWrite = false;
+  private canExport = false;
+  private docChangedTimer = 0;
+  private editorMounted = false;
+  private editor: Editor | null = null;
+  private exportSeq = 0;
+  private sourceBytes: Uint8Array = new Uint8Array(0);
+  private readonly pendingExports = new Map<string, { filename: string; started: number; watchdog?: number }>();
 
   constructor() {
     this.rootEl = el("div", { id: "pdf-app", cls: "pdf-app" });
@@ -119,10 +143,23 @@ class PdfViewer {
       (page) => this.gotoPage(page),
       (s) => this.onSearchStatus(s)
     );
-
     this.rootEl.appendChild(this.toolbar.root);
     const body = el("div", { id: "pdf-body", cls: "pdf-body" }, [this.sidebar.root, this.scrollEl]);
     this.rootEl.appendChild(body);
+
+    // Chunked documentBytes assembler. onReady loads; onError surfaces a
+    // clear renderError rather than hanging on a spinner.
+    this.docBytes = new DocumentBytesAssembler(
+      (bytes) => { void this.loadFromBytes(bytes, "documentBytes"); },
+      (message) => {
+        state.error = message;
+        sendEvent("renderError", { message });
+        this.toolbar.setStatus(message, "error");
+      },
+    );
+    // Doc mutations → debounced docChanged (gated on document:write) + the
+    // state mirrors the e2e suite reads.
+    this.doc.subscribe(() => this.onDocChanged());
   }
 
   // The model isn't known until the document loads; controllers hold a reference
@@ -156,13 +193,13 @@ class PdfViewer {
   // Re-derive scale (fit modes depend on the live client width) and re-render
   // the visible pages. Custom-zoom scale is pct-based, so only fit modes react.
   private relayout(): void {
-    if (!this.model) return;
+    if (!this.pagesReady()) return;
     if (this.zoomMode !== "custom") {
       const before = this.scale;
       this.scale = this.computeScale();
       if (Math.abs(this.scale - before) > 1e-4) {
         for (const rt of this.pages) rt.gen++;
-        this.inFlight = null;
+        this.cancelInFlight();
         this.renderQueue = [];
         this.computeLayout(true);
         for (let i = 0; i < this.pages.length; i++) this.evictPage(i);
@@ -175,12 +212,30 @@ class PdfViewer {
 
   onInit(params: unknown): void {
     if (hasTokens(params)) applyTokens(params.tokens);
+    this.applyModeFromInit(params);
+    this.applyCapabilitiesFromInit(params);
+    this.applyDocFromInit(params);
   }
 
   onThemeChanged(params: unknown): void {
     if (hasTokens(params)) applyTokens(params.tokens);
   }
 
+  // documentBytes: the chunked delivery path (the target contract). The
+  // assembler collects chunks by reqId, orders by seq, completes at total,
+  // and hands the concatenated bytes to loadFromBytes. Out-of-order and
+  // duplicate chunks are defended in the assembler; an incomplete stream
+  // surfaces a clear error instead of hanging on a spinner.
+  onDocumentBytes(params: unknown): void {
+    if (!isDocumentBytesChunk(params)) return;
+    this.docBytes.push(params);
+  }
+
+  // loadBytes: the legacy single-shot delivery. The adapter STILL emits this
+  // after the chunks as a backward-compat fallback; the loading||rendered guard
+  // ensures only the FIRST delivery renders, so a frame that handled the
+  // chunked path ignores the late loadBytes (and vice-versa). Once the host
+  // drops the fallback this stays as a tolerant no-op for older hosts.
   async onLoadBytes(params: unknown): Promise<void> {
     const bytes = asBytes(params);
     if (!bytes) {
@@ -190,10 +245,23 @@ class PdfViewer {
       this.toolbar.setStatus(msg, "error");
       return;
     }
+    await this.loadFromBytes(bytes, "loadBytes");
+  }
+
+  // Shared load path. `source` labels status/error messages so an assembler
+  // timeout is distinguishable from a legacy-load failure in the host mirror.
+  private async loadFromBytes(bytes: Uint8Array, source: string): Promise<void> {
+    if (this.loading || state.rendered) return; // FIRST delivery wins
+    this.loading = true;
     try {
       this.toolbar.setStatus("Opening document…", "loading");
-      const model = await loadDocument(bytes);
+      // pdf.js transfers (detaches) the underlying ArrayBuffer of the bytes
+      // handed to getDocument — keep our own copy for the export path, and
+      // give pdf.js a separate copy so sourceBytes stays intact.
+      this.sourceBytes = bytes.slice();
+      const model = await loadDocument(bytes.slice());
       this.model = model;
+      this.bindOverlaySrc(this.sourceBytes, model.pageCount);
       this.toolbar.setStatus("Preparing pages…", "loading");
       await model.loadAllPages((loaded, total) => this.toolbar.setProgress(loaded, total));
       this.toolbar.setProgress(0, 0);
@@ -206,11 +274,129 @@ class PdfViewer {
       this.onScrollThrottled();
       sendEvent("resize", { height: DESIRED_FRAME_HEIGHT });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = source + ": " + (e instanceof Error ? e.message : String(e));
       state.error = msg;
       sendEvent("renderError", { message: msg });
       this.toolbar.setStatus("Failed to open document: " + msg, "error");
+    } finally {
+      this.loading = false;
     }
+  }
+
+  // Bind the overlay's src to the loaded bytes (sha256 + page count). Best-
+  // effort: a mismatch is a soft warning in the doc model, never a hard fail,
+  // so a missing crypto.subtle (plain http to a non-localhost host) degrades
+  // to a non-cryptographic fingerprint without opening any hole.
+  private bindOverlaySrc(bytes: Uint8Array, pageCount: number): void {
+    void pdfSha256(bytes).then((sha) => {
+      this.doc.setStateSrc({ sha256: sha, pageCount });
+    });
+  }
+
+  private applyModeFromInit(params: unknown): void {
+    let mode: "view" | "annotate" | "redact" = "view";
+    if (params && typeof params === "object") {
+      const cfg = (params as { config?: unknown }).config;
+      if (cfg && typeof cfg === "object") {
+        const m = (cfg as { mode?: unknown }).mode;
+        if (m === "view" || m === "annotate" || m === "redact") mode = m;
+      }
+    }
+    this.mode = mode;
+    state.mode = mode;
+    // The editing surface (overlay layer + edit toolbar) is constructed once
+    // the mode is known; annotate/redact get it, view does not. Redaction's
+    // own tools are P3 — the seam is left obvious in EditToolbar.
+    this.mountEditorIfGranted();
+  }
+
+  private applyCapabilitiesFromInit(params: unknown): void {
+    // docChanged is gated on document:write. pdf:export is enforced by the Go
+    // /export route (E_CAPABILITY_DENIED if not granted); the adapter's
+    // DEFAULT_CAPS does not advertise it, so the frame enables the button in
+    // annotate/redact and surfaces the Go-side denial as an error — matching
+    // "UI gating is a convenience" (brief §6).
+    let caps: unknown[] = [];
+    if (params && typeof params === "object") {
+      const c = (params as { capabilities?: unknown }).capabilities;
+      if (Array.isArray(c)) caps = c;
+    }
+    this.canWrite = caps.includes("document:write");
+    this.canExport = caps.includes("pdf:export") || this.mode !== "view";
+    if (this.editor) this.editor.syncDocState();
+  }
+
+
+  private applyDocFromInit(params: unknown): void {
+    // The host may round-trip a previously-saved overlay via init.doc. Parse
+    // it into the live OverlayDoc so edits layer on top of saved state.
+    if (!params || typeof params !== "object") return;
+    const doc = (params as { doc?: unknown }).doc;
+    if (!doc) return;
+    const loaded = deserializeOverlay(doc);
+    for (const a of loaded.annotations) this.doc.apply(new AddAnnotationCommand(a));
+    for (const [k, v] of loaded.formFields) this.doc.apply(new SetFormFieldCommand(k, v.v));
+    for (const op of loaded.pageOps) this.doc.apply(new AddPageOpCommand(op));
+    this.doc.state.rev = loaded.rev;
+    // Loaded edits are not "dirty" — they are the persisted baseline.
+    this.doc.markClean();
+  }
+
+  private onDocChanged(): void {
+    state.annotationCount = this.doc.state.annotations.length;
+    state.dirty = this.doc.isDirty();
+    state.undoDepth = this.doc.undoDepth();
+    if (this.editor) this.editor.syncDocState();
+    // Debounce: a burst of edits (typing, dragging a handle) emits ONE
+    // docChanged when the user pauses. Gated on document:write so a host
+    // that did not grant the cap never receives events it would drop.
+    if (!this.canWrite) return;
+    if (this.docChangedTimer) window.clearTimeout(this.docChangedTimer);
+    this.docChangedTimer = window.setTimeout(() => {
+      this.docChangedTimer = 0;
+      const payload = serializeOverlay(this.doc.state);
+      sendEvent("docChanged", {
+        doc: payload,
+        markdown: null,
+        dirty: this.doc.isDirty(),
+        rev: this.doc.state.rev,
+      });
+    }, 250);
+  }
+
+  private mountEditorIfGranted(): void {
+    // P2 seam: annotate/redact get the overlay layer + edit toolbar; view
+    // does not. Redaction-specific tools (P3) branch on this.mode === "redact"
+    // inside EditToolbar — left as an obvious seam, not wired here.
+    if (this.editorMounted) return;
+    if (this.mode !== "annotate" && this.mode !== "redact") return;
+    this.editorMounted = true;
+    this.editor = createEditor(this.doc, {
+      getModel: () => this.model,
+      getViewport: (page1) => this.model ? this.model.viewportFor(page1 - 1, this.scale, this.rotation) : null,
+      getEditSurface: (page1) => {
+        const rt = this.pages[page1 - 1];
+        if (!rt || !rt.rendered) return null;
+        const vp = this.model ? this.model.viewportFor(page1 - 1, this.scale, this.rotation) : null;
+        if (!vp) return null;
+        return { layer: rt.editLayer, viewport: vp };
+      },
+      forEachPage: (cb) => {
+        for (let i = 0; i < this.pages.length; i++) {
+          const rt = this.pages[i];
+          if (rt && rt.rendered) cb(i + 1, rt.editLayer);
+        }
+      },
+      pagesEl: this.pagesEl,
+      getBytes: () => this.sourceBytes,
+      getCurrentPage: () => this.currentPage,
+      canExport: () => this.canExport,
+      mode: this.mode,
+      setStatus: (msg, kind) => this.toolbar.setStatus(msg, kind),
+      onExportBytes: (bytes, kind, filename) => this.requestExport(bytes, kind, filename),
+      invalidateOverlays: () => this.invalidateOverlayLayer(),
+    });
+    this.rootEl.insertBefore(this.editor.toolbar.root, this.rootEl.firstChild);
   }
 
   // --- page slots ----------------------------------------------------------
@@ -225,15 +411,17 @@ class PdfViewer {
       const canvas = el("canvas", { cls: "pdf-canvas", attrs: { "aria-hidden": "true" } });
       const textLayer = el("div", { cls: "text-layer", role: "presentation" });
       const annotLayer = el("div", { cls: "annot-layer", role: "presentation" });
+      const editLayer = el("div", { cls: "edit-layer", role: "presentation" });
+      const formLayer = el("div", { cls: "form-layer", role: "presentation" });
       const placeholder = el("div", { cls: "pdf-page-placeholder", text: "Page " + (i + 1), attrs: { "aria-hidden": "true" } });
-      const inner = el("div", { cls: "pdf-page-inner" }, [canvas, textLayer, annotLayer, placeholder]);
+      const inner = el("div", { cls: "pdf-page-inner" }, [canvas, textLayer, annotLayer, editLayer, formLayer, placeholder]);
       const slot = el("div", {
         cls: "pdf-page",
         attrs: { "data-page": String(i + 1) },
         style: { width: "0px", height: "0px" },
       }, [inner]);
       this.pagesEl.appendChild(slot);
-      this.pages[i] = { slot, canvas, textLayer, annotLayer, placeholder, spans: [], gen: 0, rendered: false, textContent: null, annotBuilt: false };
+      this.pages[i] = { slot, canvas, textLayer, annotLayer, editLayer, formLayer, placeholder, spans: [], gen: 0, rendered: false, textContent: null, annotBuilt: false };
     }
   }
 
@@ -241,22 +429,28 @@ class PdfViewer {
   // cumulative tops. When `anchor` is true, scroll is re-anchored to keep the
   // current page at the same relative position (so zoom/rotate don't jump).
   private computeLayout(anchor: boolean): void {
-    if (!this.model) return;
+    if (!this.pagesReady()) return;
     const prevPage = this.currentPage - 1;
     const prevTop = this.cumTops[prevPage] ?? 0;
     const prevH = this.pages[prevPage]?.slot.offsetHeight ?? 1;
     const ratio = prevH > 0 ? (this.scrollEl.scrollTop - prevTop) / prevH : 0;
 
+    // Local binding: pagesReady() proved this.model is set, but a method call
+    // cannot narrow a field for TypeScript, and a non-null assertion would
+    // silence the checker rather than satisfy it.
+    const model = this.model;
+    if (!model) return;
+
     let y = 0;
-    for (let i = 0; i < this.model.pageCount; i++) {
+    for (let i = 0; i < this.pages.length; i++) {
       const rt = this.pages[i];
-      const g = this.model.geom(i, this.scale, this.rotation);
+      const g = model.geom(i, this.scale, this.rotation);
       rt.slot.style.width = Math.floor(g.cssW) + "px";
       rt.slot.style.height = Math.floor(g.cssH) + "px";
       this.cumTops[i] = y;
       y += Math.floor(g.cssH) + PAGE_GAP;
     }
-    this.cumTops[this.model.pageCount] = y;
+    this.cumTops[this.pages.length] = y;
     this.totalHeight = y;
     this.pagesEl.style.height = y + "px";
 
@@ -316,33 +510,48 @@ class PdfViewer {
   }
 
   private scheduleRenders(): void {
-    if (!this.model) return;
+    if (!this.pagesReady()) return;
     const top = this.scrollEl.scrollTop;
     const vh = this.scrollEl.clientHeight;
     const lo = this.pageAtOffset(top - vh * RENDER_MARGIN);
     const hi = this.pageAtOffset(top + vh + vh * RENDER_MARGIN);
     const center = top + vh / 2;
     const want: number[] = [];
-    for (let i = lo; i <= hi && i < this.model.pageCount; i++) {
-      if (!this.pages[i].rendered) want.push(i);
+    // Bound by the RUNTIME array, not model.pageCount. The two disagree for a
+    // moment after the model lands and before the page slots are built, and a
+    // ResizeObserver or scroll firing in that window would index past the end.
+    // (The chunked documentBytes path shifted that timing enough to hit it —
+    // the old single-shot load happened to close the gap by luck.)
+    const last = Math.min(hi, this.pages.length - 1);
+    for (let i = Math.max(0, lo); i <= last; i++) {
+      if (!this.pages[i]?.rendered) want.push(i);
     }
     // Prioritize by distance to viewport center.
     want.sort((a, b) => {
-      const ca = this.cumTops[a] + (this.pages[a].slot.offsetHeight || 0) / 2 - center;
-      const cb = this.cumTops[b] + (this.pages[b].slot.offsetHeight || 0) / 2 - center;
+      const ca = this.cumTops[a] + (this.pages[a]?.slot.offsetHeight || 0) / 2 - center;
+      const cb = this.cumTops[b] + (this.pages[b]?.slot.offsetHeight || 0) / 2 - center;
       return Math.abs(ca) - Math.abs(cb);
     });
     this.renderQueue = want;
     this.pumpRender();
   }
 
+  // True once the model AND its page runtimes both exist and agree. Several
+  // loops walk model.pageCount while indexing this.pages, and the two disagree
+  // for a window after the document lands and before the slots are built — a
+  // ResizeObserver or a scroll firing in that window used to throw. One guard,
+  // checked at every entry point, rather than optional-chaining each access.
+  private pagesReady(): boolean {
+    return !!this.model && this.pages.length === this.model.pageCount;
+  }
+
   private evictFar(): void {
-    if (!this.model) return;
+    if (!this.pagesReady()) return;
     const top = this.scrollEl.scrollTop;
     const vh = this.scrollEl.clientHeight;
     const lo = this.pageAtOffset(top - vh * EVICT_MARGIN);
     const hi = this.pageAtOffset(top + vh + vh * EVICT_MARGIN);
-    for (let i = 0; i < this.model.pageCount; i++) {
+    for (let i = 0; i < this.pages.length; i++) {
       if (i >= lo && i <= hi) continue;
       const rt = this.pages[i];
       if (!rt.rendered && !this.renderQueue.includes(i) && (!this.inFlight || this.inFlight.pageIndex !== i)) continue;
@@ -372,11 +581,24 @@ class PdfViewer {
     clearCanvas(rt.canvas);
     rt.textLayer.replaceChildren();
     rt.annotLayer.replaceChildren();
+    rt.editLayer.replaceChildren();
+    rt.formLayer.replaceChildren();
     rt.placeholder.removeAttribute("hidden");
   }
 
   // --- render loop ---------------------------------------------------------
 
+
+  // Cancel any in-flight render task and clear the slot. Relayout/zoom must
+  // call this BEFORE nulling inFlight, otherwise pumpRender starts a second
+  // render on the same canvas and pdf.js throws "same canvas during multiple
+  // render() operations".
+  private cancelInFlight(): void {
+    if (this.inFlight) {
+      try { this.inFlight.task.cancel(); } catch { /* ignore */ }
+      this.inFlight = null;
+    }
+  }
   private pumpRender(): void {
     if (this.inFlight) return;
     if (!this.model || this.renderQueue.length === 0) return;
@@ -424,6 +646,13 @@ class PdfViewer {
       });
       rt.annotBuilt = true;
     } catch { /* best-effort */ }
+
+    // Paint editor overlays + form inputs for this page now that its surface
+    // is ready. Forms only render in annotate/redact (the fill UI); view skips.
+    if (this.editor) this.editor.renderPage(pageIndex);
+    if (this.mode !== "view") {
+      void buildFormLayer(page, viewport, rt.formLayer, { doc: this.doc });
+    }
 
     // Apply a live search highlight if the active match is on this page.
     this.search.applyHighlight(pageIndex, rt.spans);
@@ -528,7 +757,7 @@ class PdfViewer {
     this.scale = this.computeScale();
     // Invalidate all in-flight/queued renders (geometry changed).
     for (const rt of this.pages) rt.gen++;
-    this.inFlight = null;
+    this.cancelInFlight();
     this.renderQueue = [];
     this.computeLayout(anchor);
     // Mark all pages unrendered (their canvas is now the wrong size); re-render.
@@ -710,6 +939,64 @@ class PdfViewer {
       matchIndex: state.matchIndex,
     });
   }
+
+  // --- export (bridge egress) ---------------------------------------------
+  //
+  // The frame cannot download (sandbox forbids it). Produced bytes leave via a
+  // `requestExport` event the host adapter relays to POST /export; the host
+  // returns a URL (or an error) as `exportResult`. See pdf/host/adapter.js
+  // relayExport + pdf/handlers.go handleExport for the wire shape. `kind` is
+  // mode-checked on the Go side; "redact" requires ModeRedact.
+  requestExport(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string): void {
+    const reqId = "exp-" + (++this.exportSeq);
+    state.lastExportBytes = bytes.length;
+    state.lastExportError = null;
+    this.toolbar.setStatus("Exporting " + filename + "…", "loading");
+    sendEvent("requestExport", {
+      reqId,
+      kind,
+      filename,
+      bytes,
+    });
+    this.pendingExports.set(reqId, { filename, started: Date.now() });
+    // The adapter is the one that resolves this with exportResult; if the host
+    // never answers, a 30s watchdog surfaces a clear error instead of an
+    // infinite spinner. (No host timeout exists in protocol v1 — requests are
+    // host→plugin; export is plugin→host event, fire-and-forget by spec, so
+    // the watchdog is the frame's own responsibility.)
+    const watchdog = window.setTimeout(() => {
+      if (this.pendingExports.has(reqId)) {
+        this.pendingExports.delete(reqId);
+        const msg = "export timed out (host did not answer exportResult)";
+        state.lastExportError = msg;
+        this.toolbar.setStatus(msg, "error");
+      }
+    }, 30_000);
+    this.pendingExports.get(reqId)!.watchdog = watchdog;
+  }
+
+  onExportResult(params: unknown): void {
+    if (!params || typeof params !== "object") return;
+    const p = params as { reqId?: unknown; url?: unknown; error?: unknown };
+    if (typeof p.reqId !== "string") return;
+    const entry = this.pendingExports.get(p.reqId);
+    if (!entry) return;
+    this.pendingExports.delete(p.reqId);
+    if (entry.watchdog) window.clearTimeout(entry.watchdog);
+    if (typeof p.error === "string" && p.error) {
+      state.lastExportError = p.error;
+      this.toolbar.setStatus("Export failed: " + p.error, "error");
+    } else if (typeof p.url === "string") {
+      state.lastExportError = null;
+      this.toolbar.setStatus("Exported " + entry.filename + " (" + state.lastExportBytes + " B)", "ready");
+    }
+  }
+
+  // Invalidate the per-page overlay layer so a doc mutation (add/move/delete)
+  // or a zoom/rotation change re-paints annotations on the affected pages.
+  invalidateOverlayLayer(): void {
+    if (this.editor) this.editor.renderOverlays();
+  }
 }
 
 // --- small helpers (multi-site or non-obvious) ----------------------------
@@ -776,7 +1063,16 @@ function boot(): void {
     loadBytes: (params) => {
       void viewer.onLoadBytes(params);
     },
-    requestSave: () => ({ doc: null, schemaVersion: SCHEMA_VERSION }),
+    documentBytes: (params) => {
+      viewer.onDocumentBytes(params);
+    },
+    requestSave: () => ({
+      doc: serializeOverlay(viewer.doc.state),
+      schemaVersion: SCHEMA_VERSION,
+    }),
+    exportResult: (params) => {
+      viewer.onExportResult(params);
+    },
     teardown: () => ({}),
   };
   window.addEventListener("message", createRouter(handlers));

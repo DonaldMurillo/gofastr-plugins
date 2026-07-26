@@ -26,6 +26,9 @@ export type ElAttrs = {
   ariaSelected?: boolean | string | null;
   ariaPressed?: boolean | string | null;
   tabIndex?: number;
+  disabled?: boolean;
+  checked?: boolean;
+  ariaModal?: boolean | null;
   data?: Record<string, string>;
   style?: Record<string, string>;
   attrs?: Record<string, string>;
@@ -53,6 +56,16 @@ export function el<K extends keyof HTMLElementTagNameMap>(
     if (attrs.ariaSelected !== undefined && attrs.ariaSelected !== null) node.setAttribute("aria-selected", String(attrs.ariaSelected));
     if (attrs.ariaPressed !== undefined && attrs.ariaPressed !== null) node.setAttribute("aria-pressed", String(attrs.ariaPressed));
     if (attrs.tabIndex !== undefined) node.tabIndex = attrs.tabIndex;
+    if (attrs.disabled !== undefined) {
+      const btn = node as HTMLElement & { disabled?: boolean };
+      if (typeof btn.disabled === "boolean") btn.disabled = attrs.disabled;
+      else node.setAttribute("aria-disabled", String(attrs.disabled));
+    }
+    if (attrs.checked !== undefined) {
+      const chk = node as HTMLElement & { checked?: boolean };
+      if (typeof chk.checked === "boolean") chk.checked = attrs.checked;
+    }
+    if (attrs.ariaModal !== undefined && attrs.ariaModal !== null) node.setAttribute("aria-modal", String(attrs.ariaModal));
     if (attrs.data) for (const [k, v] of Object.entries(attrs.data)) node.setAttribute("data-" + k, v);
     if (attrs.style) for (const [k, v] of Object.entries(attrs.style)) node.style.setProperty(k, v);
     if (attrs.attrs) for (const [k, v] of Object.entries(attrs.attrs)) node.setAttribute(k, v);

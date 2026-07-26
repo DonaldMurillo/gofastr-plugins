@@ -60,6 +60,22 @@
   // the host supplies WithExportHandler — the gate lives there, not here.
   var DEFAULT_CAPS = ["document:read", "document:write", "theme:read"];
 
+  // The capability set bridged to the frame as init.capabilities.
+  //
+  // pdf:export is OPTIONAL: the Go side only grants it when the host wired
+  // WithExportHandler, and it publishes that fact through config.js. Without
+  // this merge the frame would never learn it holds the grant, so it would
+  // either hide export permanently or — worse — offer it and let the user
+  // discover the refusal only after doing the work. The frame still cannot
+  // grant itself anything: this reports a decision the Go side already made,
+  // and POST /export re-checks it regardless of what the frame believes.
+  function capabilities() {
+    var caps = DEFAULT_CAPS.slice();
+    var cfg = window.__gofastrPdfConfig;
+    if (cfg && cfg.exportEnabled) caps.push("pdf:export");
+    return caps;
+  }
+
   // 4 MiB per documentBytes chunk. Small enough that a single postMessage
   // structured clone stays well under any reasonable transport bound, large
   // enough that a typical multi-page PDF crosses in one or two chunks. The
@@ -111,16 +127,10 @@
             bytes: chunk
           });
         }
-        // BACKWARD-COMPAT FALLBACK: also deliver the whole document as a
-        // single loadBytes event. The chunked documentBytes contract above is
-        // the target (it scales to documents larger than a postMessage can
-        // carry in one structured clone), but a frame that has not yet grown
-        // the documentBytes assembler still understands loadBytes and renders
-        // from it. The frame's runRender is guarded by `rendering ||
-        // state.rendered`, so a frame that handles documentBytes renders once
-        // and then ignores the late loadBytes — no double render. Drop this
-        // once every consumer ships the documentBytes assembler.
-        api.sendEvent("loadBytes", { bytes: all });
+        // No loadBytes fallback: the frame ships the documentBytes assembler
+        // (src/docbytes.ts), so a second whole-document event would be a
+        // redundant multi-megabyte structured clone whose only protection
+        // against double-rendering was a guard in the frame. One contract.
       })
       ["catch"](function (e) {
         var msg = e && e.message ? e.message : String(e);
@@ -136,6 +146,34 @@
   // ride headers (the repo's raw-body + headers encoding). The Go side gates
   // pdf:export + mode-checks the kind, then the export handler stores the
   // bytes and returns a URL we relay back as exportResult.
+  // Conservative ceiling for a single header value. Real limits are 8-16 KB
+  // across servers and proxies; 6 KB leaves room for the rest of the request.
+  var REPORT_HEADER_LIMIT = 6144;
+
+  // Keep the verdicts, drop the evidence. A host reading this still learns
+  // whether verification passed and which checks failed — it only loses the
+  // per-item detail, and it is told that it did.
+  function compactReport(report) {
+    var out = { truncated: true };
+    if (report && typeof report === "object") {
+      if (typeof report.ok === "boolean") out.ok = report.ok;
+      if (Array.isArray(report.checks)) {
+        out.checks = report.checks.map(function (c) {
+          return { name: c && c.name, ok: !!(c && c.ok) };
+        });
+      }
+      if (report.failed != null) out.failed = report.failed;
+    }
+    return out;
+  }
+
+  // A filename crosses into a Content-Disposition on the way back out, so
+  // strip anything that could break out of it or walk a path. The host is
+  // free to ignore the hint entirely; it is a suggestion, not a destination.
+  function sanitizeFilename(name) {
+    return String(name).replace(/[^\w.\- ]+/g, "_").slice(0, 128);
+  }
+
   function relayExport(api, params) {
     params = params || {};
     var reqId = params.reqId || ("exp-" + (++reqCounter));
@@ -143,12 +181,24 @@
     var bytes = params.bytes; // Uint8Array (may be absent on a dry run)
     var headers = { "X-Export-Kind": kind };
     if (params.docId) headers["X-Export-DocID"] = String(params.docId);
+    if (params.filename) headers["X-Export-Filename"] = sanitizeFilename(params.filename);
     if (params.report != null) {
-      // The verification report is a small JSON object (six checks). JSON-
-      // stringify into a header; if it ever exceeds practical header limits
-      // the frame should switch to a multipart body, but the report is tiny.
-      try { headers["X-Export-Report"] = JSON.stringify(params.report); }
-      catch (e) { /* a non-serialisable report is dropped, not fatal */ }
+      // The verification report rides a header, so it MUST stay small — and
+      // for a redaction export it is the audit record, so it must never
+      // shrink silently. Reports are bounded by design (six verdicts plus a
+      // capped sample of evidence, never an unbounded list of occurrences).
+      // If one still exceeds the limit, we substitute a compact record that
+      // KEEPS the verdicts and says truncated:true, rather than dropping the
+      // header and leaving the host to infer a pass from silence.
+      try {
+        var json = JSON.stringify(params.report);
+        if (json.length > REPORT_HEADER_LIMIT) {
+          json = JSON.stringify(compactReport(params.report));
+        }
+        headers["X-Export-Report"] = json;
+      } catch (e) {
+        headers["X-Export-Report"] = '{"truncated":true,"error":"report not serialisable"}';
+      }
     }
     if (bytes) headers["Content-Type"] = "application/pdf";
     var tok = api.csrfToken();
@@ -184,7 +234,7 @@
       entry:        VIEWER_HTML_URL,
       isolation:    "sandbox-iframe-opaque",
       sandbox:      ["allow-scripts"],
-      capabilities: DEFAULT_CAPS,
+      capabilities: capabilities(),
       minHeight:    "480px",
       schema:       SCHEMA_VERSION,
       title:        "PDF viewer"
@@ -226,11 +276,22 @@
         case "themeApplied":
           frame.__pdfTheme = params; // {scheme, sample:{--name:value}}
           break;
+        case "docChanged":
+          // Mirror the editing state the e2e suite asserts on. These live in
+          // the frame, which the parent cannot read across an opaque origin —
+          // the mirror IS the only channel, so an unmirrored counter is an
+          // untestable feature.
+          frame.__pdfDirty = !!params.dirty;
+          frame.__pdfAnnotationCount = params.annotationCount || 0;
+          frame.__pdfUndoDepth = params.undoDepth || 0;
+          frame.__pdfRedactionCount = params.redactionCount || 0;
+          frame.__pdfRev = params.rev || 0;
+          break;
         case "requestExport":
           relayExport(api, params);
           break;
         default:
-          // resize / focusChanged / bootError / docChanged handled generically.
+          // resize / focusChanged / bootError handled generically.
           break;
       }
     }

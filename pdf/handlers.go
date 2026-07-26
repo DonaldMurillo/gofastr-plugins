@@ -168,10 +168,11 @@ func (p *Plugin) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	url, err := p.exportHandler(r.Context(), ExportRequest{
-		DocID:  docID,
-		Kind:   kind,
-		Bytes:  bytes,
-		Report: report,
+		DocID:    docID,
+		Kind:     kind,
+		Bytes:    bytes,
+		Filename: sanitizeExportFilename(r.Header.Get("X-Export-Filename")),
+		Report:   report,
 	})
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
@@ -305,4 +306,44 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 // docs/DECISIONS.md rather than papered over here.
 func writeJSONCapabilityDenied(w http.ResponseWriter) {
 	pluginhost.WriteCapabilityDenied(w, CapPDFExport)
+}
+
+// sanitizeExportFilename re-sanitises the frame's suggested filename.
+//
+// The adapter already sanitises it, but the adapter runs in the browser and a
+// header is attacker-controllable regardless of what our own code sends — so
+// this is not a duplicate check, it is the one that counts. A filename that
+// reaches a Content-Disposition or a path join carrying quotes, CRLF or ".."
+// is a header-injection or path-traversal primitive. Anything outside a safe
+// set becomes "_", the length is bounded, and any directory component is
+// dropped.
+func sanitizeExportFilename(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	// Drop any path component — a filename is a name, never a location.
+	if i := strings.LastIndexAny(raw, `/\`); i >= 0 {
+		raw = raw[i+1:]
+	}
+	var b strings.Builder
+	for _, r := range raw {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.' || r == '-' || r == '_' || r == ' ':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+		if b.Len() >= 128 {
+			break
+		}
+	}
+	name := strings.TrimSpace(b.String())
+	// "..", "." and the empty string are not usable names.
+	if strings.Trim(name, ".") == "" {
+		return ""
+	}
+	return name
 }

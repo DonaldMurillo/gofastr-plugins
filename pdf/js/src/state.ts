@@ -6,7 +6,8 @@
 //   ready, rendered, error, text (FIRST rendered page), pageCount, nonBlank,
 //   nonWhitePixels, pdfjsVersion, probes, caps.
 // ADDED (welcome — extra e2e handles): currentPage, zoom, rotation,
-//   matchCount, matchIndex.
+//   matchCount, matchIndex, mode, annotationCount, dirty, undoDepth,
+//   lastExportBytes (length only), lastExportError.
 
 import { version as pdfjsVersion } from "pdfjs-dist";
 
@@ -33,6 +34,13 @@ export interface PdfFrameState {
   rotation: number;      // user view rotation, 0/90/180/270
   matchCount: number;
   matchIndex: number;    // 1-based; 0 = no active match
+  // P2 annotate surface — mirrored for the e2e suite.
+  mode: "view" | "annotate" | "redact";
+  annotationCount: number;
+  dirty: boolean;
+  undoDepth: number;
+  lastExportBytes: number;   // LENGTH ONLY — never the bytes (they are confidential)
+  lastExportError: string | null;
 }
 
 declare global {
@@ -62,6 +70,13 @@ export const state: PdfFrameState = {
   rotation: 0,
   matchCount: 0,
   matchIndex: 0,
+  mode: "view",
+  annotationCount: 0,
+  dirty: false,
+  undoDepth: 0,
+  lastExportBytes: 0,
+  lastExportError: null,
 };
 
 window.__pdfState = state;
+
