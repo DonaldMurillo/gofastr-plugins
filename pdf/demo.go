@@ -31,7 +31,7 @@ const demoPage = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PDF viewer — SPIKE demo</title>
+<title>PDF viewer, editor and redactor — GoFastr plugin</title>
 <style>
 %s
 body { margin: 0; font-family: var(--font-body, system-ui, sans-serif); background: var(--color-background); color: var(--color-text); }
@@ -45,11 +45,12 @@ button.fui-btn { font: inherit; padding: var(--spacing-sm, 4px) var(--spacing-md
 </head>
 <body>
 <header>
-  <h1>PDF viewer — SPIKE</h1>
+  <h1>PDF viewer, editor and redactor</h1>
   <button type="button" class="fui-btn" id="fui-scheme-toggle">Toggle theme</button>
 </header>
 <main>
-  <p class="lead">An opaque-origin sandboxed iframe runs <code>pdf.js</code> worker-free on the main thread under <code>connect-src 'none'</code>. The host fetches the sample PDF same-origin and forwards the bytes over the <code>postMessage</code> bridge; the frame fetches nothing. Watch this console — the spike asserts ZERO CSP violations and ZERO console errors.</p>
+  <p class="lead">Read, annotate and <strong>truly redact</strong> a PDF. Draw a rectangle over something on page 1, press <em>Apply redaction</em>, and the exported file has that content <em>removed</em> — not covered: the page is rasterized, the document rebuilt, and the result checked before it is handed back.</p>
+  <p class="lead">It runs in a sandboxed frame with <code>connect-src 'none'</code>, so it has no network at all. The document arrives over the <code>postMessage</code> bridge and produced files leave the same way — which means the code editing your document cannot send it anywhere.</p>
   <p class="lead" id="pdf-host-status" role="status" aria-live="polite">Waiting for frame…</p>
   %s
 </main>

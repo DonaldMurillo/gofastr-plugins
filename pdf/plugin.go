@@ -35,7 +35,7 @@ import (
 // Name + RoutePrefix against that row, so they MUST NOT drift.
 const (
 	Name             = "pdf"
-	Version          = "0.1.0-spike"
+	Version          = "0.1.0"
 	RoutePrefix      = "/__gofastr/plugin/pdf"
 	ViewerHTMLURL    = RoutePrefix + "/viewer.html"
 	ViewerJSURL      = RoutePrefix + "/viewer.js"
