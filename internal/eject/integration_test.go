@@ -26,6 +26,17 @@ func TestEjectEveryPluginBuilds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping eject integration build under -short")
 	}
+	// Opt-in, and it has to be: this test spawns a `go build` that compiles
+	// gofastr plus every ejected package from cold. Under `go test ./...` that
+	// runs CONCURRENTLY with the chromedp suites in example/ and pdf/, and on a
+	// two-core CI runner it starves them — Chrome then misses its 20s websocket
+	// handshake and the run fails as "chrome start (is Chrome installed?)",
+	// which reads as a broken browser rather than as this test hogging the box.
+	// It cost two red runs before the pattern was visible, so the compute is
+	// fenced off into its own CI job instead of racing the browsers.
+	if os.Getenv("GOFASTR_EJECT_BUILD") == "" {
+		t.Skip("set GOFASTR_EJECT_BUILD=1 to run the eject build canary (it is heavy; CI runs it in its own job)")
+	}
 	goBin, err := exec.LookPath("go")
 	if err != nil {
 		t.Skip("go tool not in PATH; cannot verify the ejected build")
