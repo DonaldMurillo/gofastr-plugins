@@ -795,12 +795,269 @@ body {
   gap: var(--spacing-xs, 4px);
 }
 
+/* ---- redaction (mode === "redact") ---------------------------------- */
+
+/* The removal marker on the page: heavy black border + diagonal hatch over a
+ * flat fill, so it reads as "content excised" — never as a drawn rectangle
+ * (the footgun this plugin exists to prevent). Pointer-events enabled so the
+ * list's jump-to and the rect stay associated, but it is not selectable. */
+.pdf-redact-rect {
+  position: absolute;
+  border: 2px solid var(--color-text, #111);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--color-text, #111) 0,
+      var(--color-text, #111) 2px,
+      rgba(0, 0, 0, 0.55) 2px,
+      rgba(0, 0, 0, 0.55) 6px
+    );
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.pdf-redact-rect-label {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  max-width: calc(100% - 4px);
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--color-primary-fg, #fff);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The side panel: pending list + result. Sits under the edit toolbar. */
+.pdf-redact-panel {
+  background: var(--color-surface, #fff);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  color: var(--color-text, #111);
+  font-size: var(--font-size-sm, 0.85rem);
+}
+
+.pdf-redact-title {
+  margin: 0 0 var(--spacing-xs, 4px);
+  font-size: var(--font-size-md, 0.95rem);
+}
+
+.pdf-redact-hint {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-list {
+  list-style: none;
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.pdf-redact-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+}
+
+.pdf-redact-jump {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.pdf-redact-page {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-surface-soft, #f4f4f5);
+  border-radius: var(--radii-sm, 4px);
+  padding: 0 4px;
+}
+
+.pdf-redact-label {
+  color: var(--color-text, #111);
+}
+
+.pdf-redact-preview {
+  color: var(--color-text-subtle, #71717a);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+
+.pdf-redact-del {
+  flex: 0 0 auto;
+}
+
+.pdf-redact-empty {
+  color: var(--color-text-subtle, #71717a);
+  font-style: italic;
+}
+
+/* reason input + apply button live in the edit toolbar's redact group */
+.pdf-reason-input {
+  font: inherit;
+  min-height: 32px;
+  width: 14em;
+  max-width: 40vw;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radii-md, 8px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+}
+
+.pdf-reason-input:focus-visible {
+  outline: 2px solid var(--color-primary, #6366F1);
+  outline-offset: 1px;
+}
+
+.pdf-apply-redact-btn {
+  background: var(--color-danger, #dc2626);
+  color: var(--color-primary-fg, #fff);
+  border-color: var(--color-danger, #dc2626);
+  font-weight: 600;
+}
+
+.pdf-apply-redact-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* the confirm modal's consequence + occurrences assist */
+.pdf-redact-confirm {
+  width: min(520px, 94vw);
+}
+
+.pdf-redact-consequence {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text, #111);
+}
+
+.pdf-redact-meta {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-occ {
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px);
+  background: var(--color-surface-soft, #f4f4f5);
+  border-radius: var(--radii-md, 8px);
+}
+
+.pdf-redact-occ-title {
+  margin: 0 0 var(--spacing-xs, 4px);
+  font-weight: 600;
+}
+
+.pdf-redact-occ-list {
+  list-style: none;
+  margin: 0 0 var(--spacing-xs, 4px);
+  padding: 0;
+  max-height: 120px;
+  overflow: auto;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-add-occ {
+  margin-top: var(--spacing-xs, 4px);
+}
+
+/* progress bar during rasterization */
+.pdf-progress {
+  height: 10px;
+  width: 100%;
+  background: var(--color-surface-soft, #f4f4f5);
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-sm, 4px);
+  overflow: hidden;
+}
+
+.pdf-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-primary, #6366F1);
+  transition: width 0.15s ease-out;
+}
+
+.pdf-redact-progress-text {
+  margin: var(--spacing-xs, 4px) 0 0;
+  color: var(--color-text-muted, #6b7280);
+}
+
+/* result report */
+.pdf-redact-verdict {
+  margin: 0 0 var(--spacing-sm, 8px);
+}
+
+.pdf-redact-ok { color: var(--color-primary, #6366F1); }
+.pdf-redact-fail { color: var(--color-danger, #dc2626); }
+
+.pdf-redact-checks {
+  list-style: none;
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+}
+
+.pdf-redact-check {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface-soft, #f4f4f5);
+}
+
+.pdf-redact-check.ok .pdf-redact-check-name { color: var(--color-primary, #6366F1); }
+.pdf-redact-check.fail .pdf-redact-check-name { color: var(--color-danger, #dc2626); font-weight: 600; }
+.pdf-redact-check-detail {
+  color: var(--color-text-muted, #6b7280);
+  font-size: var(--font-size-xs, 0.75rem);
+  word-break: break-word;
+}
+
+.pdf-redact-warn {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-warning, #b45309);
+}
+
+.pdf-redact-rasterized {
+  margin: 0;
+  color: var(--color-text-subtle, #71717a);
+}
+
+.pdf-redact-error {
+  margin: 0;
+  color: var(--color-danger, #dc2626);
+  word-break: break-word;
+}
+
 /* touch targets for the edit toolbar */
 @media (pointer: coarse) {
   .pdf-edit-btn,
-  .pdf-modal-tab {
+  .pdf-modal-tab,
+  .pdf-apply-redact-btn {
     min-height: 44px;
     min-width: 44px;
+  }
+  .pdf-reason-input {
+    min-height: 44px;
   }
 }
 

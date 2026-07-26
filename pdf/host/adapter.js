@@ -286,6 +286,13 @@
           frame.__pdfUndoDepth = params.undoDepth || 0;
           frame.__pdfRedactionCount = params.redactionCount || 0;
           frame.__pdfRev = params.rev || 0;
+          // Redaction progress + the last verification report. The report also
+          // travels to the server on the export request; this mirror is what
+          // lets a browser test assert the SIX CHECKS passed without going
+          // through the host round-trip — the parent cannot read into the
+          // opaque frame, so without it the verdict is untestable from here.
+          if (params.redactState !== undefined) frame.__pdfRedactState = params.redactState;
+          if (params.lastVerifyReport !== undefined) frame.__pdfLastVerifyReport = params.lastVerifyReport;
           break;
         case "requestExport":
           relayExport(api, params);

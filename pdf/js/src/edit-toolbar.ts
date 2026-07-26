@@ -12,7 +12,7 @@
 import { el } from "./dom";
 import type { AnnotationType } from "./doc";
 
-export type ToolId = "select" | AnnotationType;
+export type ToolId = "select" | "redact" | AnnotationType;
 
 export interface EditStyle {
   color: string;
@@ -28,6 +28,11 @@ export interface EditToolbarCallbacks {
   onExport: (flatten: boolean) => void;
   onPageOp: (op: "rotate" | "delete" | "insert") => void;
   canExport: () => boolean;
+  // --- P3 redaction (mode === "redact" only) ---
+  /** Apply (arm + confirm + rasterize + verify) all pending redactions. */
+  onApplyRedaction?: () => void;
+  /** Reason label applied to the next drawn redaction rect. */
+  onReason?: (reason: string) => void;
 }
 
 const DEFAULT_TOOLS: Array<{ id: ToolId; label: string; glyph: string }> = [
@@ -53,11 +58,17 @@ export class EditToolbar {
   private readonly exportBtn: HTMLButtonElement;
   private readonly flattenCheckbox: HTMLInputElement;
   private readonly cb: EditToolbarCallbacks;
+  private readonly mode: "view" | "annotate" | "redact";
+  private readonly reasonInput: HTMLInputElement | null = null;
+  private readonly applyRedactBtn: HTMLButtonElement | null = null;
   private current: ToolId = "select";
   private style: EditStyle = { color: "#FFEB3B", width: 3, opacity: 0.35 };
+  private reason: string = "";
 
-  constructor(cb: EditToolbarCallbacks) {
+  constructor(cb: EditToolbarCallbacks, mode: "view" | "annotate" | "redact" = "annotate") {
     this.cb = cb;
+    this.mode = mode;
+
 
     // Tools group — toggles, one pressed at a time.
     const toolGroup = el("div", { cls: "pdf-tool-group", role: "group", ariaLabel: "Annotation tools" });
@@ -83,6 +94,23 @@ export class EditToolbar {
       btn.appendChild(el("span", { cls: "pdf-visually-hidden", text: t.label }));
       this.toolBtns.set(t.id, btn);
       toolGroup.appendChild(btn);
+    }
+    // P3 redact mode: an extra Redact draw tool that authors removal rects
+    // (not annotations). Lives in the same tool group so the one-pressed-at-
+    // a-time toggle covers it.
+    if (this.mode === "redact") {
+      const rBtn = el("button", {
+        cls: "pdf-edit-btn pdf-tool-btn pdf-redact-tool",
+        type: "button",
+        text: "▭",
+        title: "Redact (draw removal rectangle)",
+        ariaLabel: "Redact tool",
+        ariaPressed: false,
+        on: { click: () => this.chooseTool("redact") },
+      }) as HTMLButtonElement;
+      rBtn.appendChild(el("span", { cls: "pdf-visually-hidden", text: "Redact tool" }));
+      this.toolBtns.set("redact", rBtn);
+      toolGroup.appendChild(rBtn);
     }
 
     // Style group — colour presets + stroke width presets.
@@ -164,9 +192,36 @@ export class EditToolbar {
     }) as HTMLButtonElement;
     expGroup.appendChild(this.exportBtn);
 
-    this.root = el("div", { cls: "pdf-edit-toolbar", role: "toolbar", ariaLabel: "PDF annotation" }, [
-      toolGroup, styleGroup, histGroup, pagesGroup, expGroup,
-    ]);
+    const groups: HTMLElement[] = [toolGroup, styleGroup, histGroup, pagesGroup];
+    // P3 redact mode: reason label + Apply Redaction (arm → confirm → rasterize
+    // → verify → emit). Hidden outside redact mode (the Go route rejects
+    // kind:"redact" anyway — this is convenience, not the control).
+    if (this.mode === "redact") {
+      const redactGroup = el("div", { cls: "pdf-tool-group pdf-redact-group", role: "group", ariaLabel: "Redaction" });
+      this.reasonInput = el("input", {
+        type: "text",
+        cls: "pdf-reason-input",
+        attrs: { placeholder: "Reason (optional)", maxlength: "80", "aria-label": "Redaction reason label" },
+      }) as HTMLInputElement;
+      this.reasonInput.addEventListener("input", () => {
+        this.reason = this.reasonInput!.value;
+        this.cb.onReason?.(this.reason);
+      });
+      redactGroup.appendChild(this.reasonInput);
+      this.applyRedactBtn = el("button", {
+        cls: "pdf-edit-btn pdf-apply-redact-btn",
+        type: "button",
+        text: "Apply redaction",
+        title: "Permanently rasterize redacted pages and remove their text",
+        ariaLabel: "Apply redaction",
+        disabled: true,
+        on: { click: () => this.cb.onApplyRedaction?.() },
+      }) as HTMLButtonElement;
+      redactGroup.appendChild(this.applyRedactBtn);
+      groups.push(redactGroup);
+    }
+    groups.push(expGroup);
+    this.root = el("div", { cls: "pdf-edit-toolbar", role: "toolbar", ariaLabel: this.mode === "redact" ? "PDF redaction" : "PDF annotation" }, groups);
   }
 
   chooseTool(t: ToolId): void {
@@ -185,6 +240,14 @@ export class EditToolbar {
 
   getStyle(): EditStyle { return this.style; }
   getCurrentTool(): ToolId { return this.current; }
+  getCurrentReason(): string { return this.reason; }
+
+  /** Drive the Apply button from the pending redaction count. */
+  setRedactionCount(n: number): void {
+    if (!this.applyRedactBtn) return;
+    this.applyRedactBtn.disabled = n === 0;
+    this.applyRedactBtn.textContent = n === 0 ? "Apply redaction" : `Apply ${n} redaction${n === 1 ? "" : "s"}`;
+  }
 
   /** Drive disabled states from the live doc state. */
   syncState(snap: { canUndo: boolean; canRedo: boolean; canExport: boolean }): void {

@@ -6,10 +6,12 @@
 //   ready, rendered, error, text (FIRST rendered page), pageCount, nonBlank,
 //   nonWhitePixels, pdfjsVersion, probes, caps.
 // ADDED (welcome — extra e2e handles): currentPage, zoom, rotation,
-//   matchCount, matchIndex, mode, annotationCount, dirty, undoDepth,
-//   lastExportBytes (length only), lastExportError.
+//   matchCount, matchIndex, mode, annotationCount, redactionCount, dirty,
+//   undoDepth, lastExportBytes (length only), lastExportError,
+//   lastVerifyReport (structured redaction verdicts), redactState.
 
 import { version as pdfjsVersion } from "pdfjs-dist";
+import type { VerifyReportSummary } from "./redact/verify";
 
 export const SCHEMA_VERSION = "pdf-v1";
 export const VIEWER_VERSION = "1.0.0";
@@ -37,10 +39,22 @@ export interface PdfFrameState {
   // P2 annotate surface — mirrored for the e2e suite.
   mode: "view" | "annotate" | "redact";
   annotationCount: number;
+  redactionCount: number;          // P3 — pending redactions authored
   dirty: boolean;
   undoDepth: number;
   lastExportBytes: number;   // LENGTH ONLY — never the bytes (they are confidential)
   lastExportError: string | null;
+  // P3 redaction — the structured verification report from the last redact
+  // export (null until a redaction has been applied + verified). The host
+  // reads this as the audit record; it is bounded (verdicts + capped sample).
+  lastVerifyReport: VerifyReportSummary | null;
+  // P3 redaction — coarse surface state for the host: "idle" | "armed" |
+  redactState: "idle" | "armed" | "working" | "done" | "error";
+  // P3 redact timing — wall-clock and longest single main-thread page block
+  // (ms), for the perf report. The pipeline yields between pages so the UI
+  // stays responsive; maxBlockMs is bounded by one page's render+encode.
+  lastRedactTotalMs: number;
+  lastRedactMaxBlockMs: number;
 }
 
 declare global {
@@ -72,10 +86,15 @@ export const state: PdfFrameState = {
   matchIndex: 0,
   mode: "view",
   annotationCount: 0,
+  redactionCount: 0,
   dirty: false,
   undoDepth: 0,
   lastExportBytes: 0,
   lastExportError: null,
+  lastVerifyReport: null,
+  redactState: "idle",
+  lastRedactTotalMs: 0,
+  lastRedactMaxBlockMs: 0,
 };
 
 window.__pdfState = state;

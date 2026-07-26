@@ -227,6 +227,75 @@ export class AddPageOpCommand implements Command {
   undo(ov: OverlayState): void { ov.pageOps.pop(); }
   describe(): string { return this.op.op + " page"; }
 }
+// --- redaction commands (P3) ----------------------------------------------
+// Redactions live in ov.redactions (PDF user space, same convention as
+// annotations). They are authored here and consumed by the rasterize+verify
+// pipeline at export; they never become PDF annotation objects.
+
+export class AddRedactionCommand implements Command {
+  readonly kind = "addRedaction";
+  private insertAt = -1;
+  constructor(private readonly red: Redaction) {}
+  apply(ov: OverlayState): void {
+    ov.redactions.push(this.red);
+    this.insertAt = ov.redactions.length - 1;
+  }
+  undo(ov: OverlayState): void {
+    const i = ov.redactions.lastIndexOf(this.red);
+    if (i >= 0) ov.redactions.splice(i, 1);
+    else if (this.insertAt >= 0) ov.redactions.splice(this.insertAt, 1);
+  }
+  describe(): string { return "Add redaction"; }
+}
+
+export class RemoveRedactionCommand implements Command {
+  readonly kind = "removeRedaction";
+  private removed: Redaction | null = null;
+  private index = -1;
+  constructor(private readonly id: string) {}
+  apply(ov: OverlayState): void {
+    const i = ov.redactions.findIndex((r) => r.id === this.id);
+    if (i < 0) return;
+    this.removed = ov.redactions[i];
+    this.index = i;
+    ov.redactions.splice(i, 1);
+  }
+  undo(ov: OverlayState): void {
+    if (this.removed) ov.redactions.splice(this.index, 0, this.removed);
+  }
+  describe(): string { return "Delete redaction"; }
+}
+
+// UpdateRedaction mutates one redaction (rect / reason) via a mutator; the
+// mutator receives a shallow clone of the pre-mutation state for capture.
+export class UpdateRedactionCommand implements Command {
+  readonly kind = "updateRedaction";
+  private before: Redaction | null = null;
+  private idx = -1;
+  constructor(
+    private readonly id: string,
+    private readonly applyFn: (r: Redaction) => void,
+  ) {}
+  apply(ov: OverlayState): void {
+    const i = ov.redactions.findIndex((r) => r.id === this.id);
+    if (i < 0) return;
+    this.idx = i;
+    this.before = { ...ov.redactions[i], rect: ov.redactions[i].rect.slice() as PdfRect };
+    this.applyFn(ov.redactions[i]);
+  }
+  undo(ov: OverlayState): void {
+    if (this.before && this.idx >= 0) ov.redactions[this.idx] = this.before;
+  }
+  describe(): string { return "Edit redaction"; }
+}
+
+export class ClearRedactionsCommand implements Command {
+  readonly kind = "clearRedactions";
+  private prev: Redaction[] = [];
+  apply(ov: OverlayState): void { this.prev = ov.redactions.slice(); ov.redactions.length = 0; }
+  undo(ov: OverlayState): void { ov.redactions = this.prev.slice(); }
+  describe(): string { return "Clear redactions"; }
+}
 
 // A batch groups dependent edits (e.g. "split annotation" or "paste N stamps")
 // into one undo unit. Sub-commands are applied in order and undone in reverse.
@@ -257,7 +326,7 @@ function cloneAnnotation(a: Annotation): Annotation {
 
 // --- the document ----------------------------------------------------------
 
-export type DocListener = (snapshot: { dirty: boolean; rev: number; annotationCount: number; undoDepth: number }) => void;
+export type DocListener = (snapshot: { dirty: boolean; rev: number; annotationCount: number; redactionCount: number; undoDepth: number }) => void;
 
 export class OverlayDoc {
   readonly state: OverlayState;
@@ -325,6 +394,13 @@ export class OverlayDoc {
   annotationsForPage(page1: number): Annotation[] {
     return this.state.annotations.filter((a) => a.page === page1);
   }
+  redactionsForPage(page1: number): Redaction[] {
+    return this.state.redactions.filter((r) => r.page === page1);
+  }
+
+  getRedaction(id: string): Redaction | null {
+    return this.state.redactions.find((r) => r.id === id) ?? null;
+  }
 
   /** Bind the overlay to its source PDF (called once after the bytes load). */
   setStateSrc(src: { sha256: string; pageCount: number; ref?: string; kind?: "id" | "url" }): void {
@@ -347,6 +423,7 @@ export class OverlayDoc {
       dirty: this.dirty,
       rev: this.state.rev,
       annotationCount: this.state.annotations.length,
+      redactionCount: this.state.redactions.length,
       undoDepth: this.undoStack.length,
     };
   }

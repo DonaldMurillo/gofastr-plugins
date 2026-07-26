@@ -29,3 +29,4 @@ go.work.sum
 
 # Throwaway spike screenshots (probe artifacts, not deliverables)
 pdf/js/*.png
+pdf/js/*.pdf

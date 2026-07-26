@@ -35,11 +35,13 @@ import { Toolbar, type ToolbarCallbacks } from "./toolbar";
 import { DocumentBytesAssembler, isDocumentBytesChunk } from "./docbytes";
 import {
   OverlayDoc, serializeOverlay, deserializeOverlay, type OverlayState,
-  AddAnnotationCommand, SetFormFieldCommand, AddPageOpCommand,
+  AddAnnotationCommand, AddRedactionCommand, SetFormFieldCommand, AddPageOpCommand,
+  cryptoId,
 } from "./doc";
 import { createEditor, type Editor, type EditorHost } from "./overlay-editor";
 import { pdfSha256 } from "./sha";
 import { buildFormLayer } from "./forms";
+import { verifyRedaction, type VerifyInput, type VerifyReport } from "./redact/verify";
 // path. Assigned once at module load, before any getDocument() call.
 window.pdfjsWorker = { WorkerMessageHandler };
 
@@ -107,6 +109,7 @@ class PdfViewer {
   private readonly docBytes: DocumentBytesAssembler;
   private loading = false;
   private mode: "view" | "annotate" | "redact" = "view";
+  private redactDPI = 200;
   private canWrite = false;
   private canExport = false;
   private docChangedTimer = 0;
@@ -295,18 +298,25 @@ class PdfViewer {
 
   private applyModeFromInit(params: unknown): void {
     let mode: "view" | "annotate" | "redact" = "view";
-    if (params && typeof params === "object") {
-      const cfg = (params as { config?: unknown }).config;
+    if (params && typeof params === "object" && "config" in params) {
+      const cfg = params.config;
       if (cfg && typeof cfg === "object") {
-        const m = (cfg as { mode?: unknown }).mode;
-        if (m === "view" || m === "annotate" || m === "redact") mode = m;
+        if ("mode" in cfg) {
+          const m = cfg.mode;
+          if (m === "view" || m === "annotate" || m === "redact") mode = m;
+        }
+        // P3 redact DPI is host-supplied (pdf.WithRedactDPI, default 200). The
+        // Go side clamps 72..600; we only need a sane integer here.
+        if ("redactDPI" in cfg && typeof cfg.redactDPI === "number" && Number.isFinite(cfg.redactDPI)) {
+          this.redactDPI = Math.max(72, Math.min(600, Math.round(cfg.redactDPI)));
+        }
       }
     }
     this.mode = mode;
     state.mode = mode;
     // The editing surface (overlay layer + edit toolbar) is constructed once
-    // the mode is known; annotate/redact get it, view does not. Redaction's
-    // own tools are P3 — the seam is left obvious in EditToolbar.
+    // the mode is known; annotate/redact get it, view does not. Redaction tools
+    // branch on mode === "redact" inside EditToolbar + the RedactPanel.
     this.mountEditorIfGranted();
   }
 
@@ -344,6 +354,7 @@ class PdfViewer {
 
   private onDocChanged(): void {
     state.annotationCount = this.doc.state.annotations.length;
+    state.redactionCount = this.doc.state.redactions.length;
     state.dirty = this.doc.isDirty();
     state.undoDepth = this.doc.undoDepth();
     if (this.editor) this.editor.syncDocState();
@@ -360,6 +371,15 @@ class PdfViewer {
         markdown: null,
         dirty: this.doc.isDirty(),
         rev: this.doc.state.rev,
+        annotationCount: this.doc.state.annotations.length,
+        redactionCount: this.doc.state.redactions.length,
+        undoDepth: this.doc.undoDepth(),
+        // Surface the redact surface state + last verify report in the event
+        // stream. The adapter mirrors redactionCount onto __pdfRedactionCount
+        // today; __pdfRedactState / __pdfLastVerifyReport need two more lines
+        // in pdf/host/adapter.js (outside this build's ownership).
+        redactState: state.redactState,
+        lastVerifyReport: state.lastVerifyReport,
       });
     }, 250);
   }
@@ -390,13 +410,19 @@ class PdfViewer {
       pagesEl: this.pagesEl,
       getBytes: () => this.sourceBytes,
       getCurrentPage: () => this.currentPage,
+      jumpToPage: (page) => this.gotoPage(page),
       canExport: () => this.canExport,
       mode: this.mode,
+      redactDPI: this.redactDPI,
       setStatus: (msg, kind) => this.toolbar.setStatus(msg, kind),
-      onExportBytes: (bytes, kind, filename) => this.requestExport(bytes, kind, filename),
+      onExportBytes: (bytes, kind, filename, report) => this.requestExport(bytes, kind, filename, report),
       invalidateOverlays: () => this.invalidateOverlayLayer(),
     });
     this.rootEl.insertBefore(this.editor.toolbar.root, this.rootEl.firstChild);
+    // P3 redact: mount the redaction panel directly under the toolbar.
+    if (this.editor.redactPanel) {
+      this.rootEl.insertBefore(this.editor.redactPanel.root, this.editor.toolbar.root.nextSibling);
+    }
   }
 
   // --- page slots ----------------------------------------------------------
@@ -939,6 +965,12 @@ class PdfViewer {
       matchIndex: state.matchIndex,
     });
   }
+  /** Test-only: author a redaction rect through the real command path. */
+  applyTestRedaction(page: number, rect: [number, number, number, number], reason: string): void {
+    this.doc.apply(new AddRedactionCommand({ id: cryptoId(), page, rect, reason }));
+    state.redactionCount = this.doc.state.redactions.length;
+    if (this.editor) this.editor.syncDocState();
+  }
 
   // --- export (bridge egress) ---------------------------------------------
   //
@@ -947,17 +979,14 @@ class PdfViewer {
   // returns a URL (or an error) as `exportResult`. See pdf/host/adapter.js
   // relayExport + pdf/handlers.go handleExport for the wire shape. `kind` is
   // mode-checked on the Go side; "redact" requires ModeRedact.
-  requestExport(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string): void {
+  requestExport(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string, report?: unknown): void {
     const reqId = "exp-" + (++this.exportSeq);
     state.lastExportBytes = bytes.length;
     state.lastExportError = null;
     this.toolbar.setStatus("Exporting " + filename + "…", "loading");
-    sendEvent("requestExport", {
-      reqId,
-      kind,
-      filename,
-      bytes,
-    });
+    const payload: Record<string, unknown> = { reqId, kind, filename, bytes };
+    if (report !== undefined) payload.report = report;
+    sendEvent("requestExport", payload);
     this.pendingExports.set(reqId, { filename, started: Date.now() });
     // The adapter is the one that resolves this with exportResult; if the host
     // never answers, a 30s watchdog surfaces a clear error instead of an
@@ -1076,6 +1105,14 @@ function boot(): void {
     teardown: () => ({}),
   };
   window.addEventListener("message", createRouter(handlers));
+  // Spike regression hook: run the PRODUCTION verifier on ad-hoc bytes (a
+  // fake-redacted file the UI never produced) so the footgun test asserts the
+  // same code that gates release. Pure function — no bridge, no emit.
+  (window as unknown as { __pdfVerifyRedaction?: (bytes: Uint8Array, input: VerifyInput) => Promise<VerifyReport> }).__pdfVerifyRedaction = (bytes, input) => verifyRedaction(bytes, input);
+  // Spike regression hook: author a redaction rect deterministically (a pointer
+  // drag over a precise glyph box would make the test flaky). The Apply button +
+  // pipeline + verifier are still exercised end-to-end by the test.
+  (window as unknown as { __pdfAddRedaction?: (page: number, rect: [number, number, number, number], reason: string) => void }).__pdfAddRedaction = (page, rect, reason) => viewer.applyTestRedaction(page, rect, reason);
   announceReady();
 }
 

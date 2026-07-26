@@ -15,9 +15,10 @@ import type { PdfModel } from "./pdfdoc";
 import { el } from "./dom";
 import {
   AddAnnotationCommand, RemoveAnnotationCommand, UpdateAnnotationCommand,
-  AddPageOpCommand, cryptoId,
+  AddPageOpCommand, AddRedactionCommand, RemoveRedactionCommand, UpdateRedactionCommand,
+  BatchCommand, cryptoId,
 } from "./doc";
-import type { OverlayDoc, Annotation, AnnId, AnnotationType } from "./doc";
+import type { OverlayDoc, Annotation, AnnId, AnnotationType, Redaction } from "./doc";
 import {
   pdfRectToCss, pdfQuadToCss, cssDragToPdfRect, cssPointToPdf, cssRectToPdfQuad,
   boundingQuads, nudgePdfRectByCssDelta, resizePdfRectByCssDelta,
@@ -26,6 +27,11 @@ import {
 import { EditToolbar, type ToolId, type EditStyle } from "./edit-toolbar";
 import type { StatusKind } from "./toolbar";
 import { produceExportBytes } from "./export";
+import { captureGroundTruth, capturedNeedles, findOtherOccurrences, type OtherOccurrence } from "./redact/capture";
+import { rasterizeRedactions } from "./redact/rasterize";
+import { verifyRedaction, summarizeReport, type VerifyReport, type VerifyRect } from "./redact/verify";
+import { RedactPanel } from "./redact/panel";
+import { state } from "./state";
 // What the viewer exposes to the editor. `getEditSurface` returns null when a
 // page isn't mounted/rendered, so the editor can call it defensively.
 export interface EditorHost {
@@ -36,15 +42,21 @@ export interface EditorHost {
   pagesEl: HTMLElement;
   getBytes(): Uint8Array;
   getCurrentPage(): number;
+  /** Scroll the viewport to the given 1-based page (redact list jump-to). */
+  jumpToPage(page: number): void;
   canExport(): boolean;
   mode: "view" | "annotate" | "redact";
+  /** Rasterization DPI for redacted pages (init.config.redactDPI, default 200). */
+  redactDPI: number;
   setStatus(msg: string, kind: StatusKind): void;
-  onExportBytes(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string): void;
+  onExportBytes(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string, report?: unknown): void;
   invalidateOverlays(): void;
 }
 
 export interface Editor {
   readonly toolbar: { readonly root: HTMLElement };
+  /** Present only in redact mode; the viewer mounts it under the toolbar. */
+  readonly redactPanel?: { readonly root: HTMLElement };
   renderPage(pageIndex0: number): void;
   renderOverlays(): void;
   syncDocState(): void;
@@ -61,10 +73,13 @@ interface Gesture {
   edge?: HandleEdge;                        // resize edge
   annId?: AnnId;                            // move/resize target
   draftId?: AnnId;                          // create: the live preview annotation
+  redactId?: string;                        // create: the live preview redaction rect
   inkPts?: Array<[number, number]>;         // ink: accumulated PDF-space points
 }
 
 const STAMP_DATA_CAP_BYTES = 256 * 1024; // base64 length cap (~192 KiB raw)
+
+function msg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 
 export function createEditor(doc: OverlayDoc, host: EditorHost): Editor {
   const ed = new EditorImpl(doc, host);
@@ -74,6 +89,7 @@ export function createEditor(doc: OverlayDoc, host: EditorHost): Editor {
 
 class EditorImpl implements Editor {
   readonly toolbar: { readonly root: HTMLElement };
+  readonly redactPanel?: RedactPanel;
   private readonly tool: EditToolbar;
   private readonly doc: OverlayDoc;
   private readonly host: EditorHost;
@@ -85,10 +101,15 @@ class EditorImpl implements Editor {
   private boundUp: (e: PointerEvent) => void;
   private boundKey: (e: KeyboardEvent) => void;
   private style: EditStyle = { color: "#FFEB3B", width: 3, opacity: 0.35 };
+  private currentReason: string = "";
+  private redactBusy = false;
+  /** Cached ground-truth previews for the pending list (id → preview). */
+  private previews = new Map<string, string>();
 
   constructor(doc: OverlayDoc, host: EditorHost) {
     this.doc = doc;
     this.host = host;
+    const isRedact = host.mode === "redact";
     this.tool = new EditToolbar({
       onTool: (t) => this.onToolChanged(t),
       onStyle: (s) => { this.style = s; },
@@ -97,8 +118,18 @@ class EditorImpl implements Editor {
       onExport: (flatten) => { void this.exportPdf(flatten); },
       onPageOp: (op) => this.applyPageOp(op),
       canExport: () => this.host.canExport(),
-    });
+      onApplyRedaction: isRedact ? () => { void this.armRedaction(); } : undefined,
+      onReason: isRedact ? (r) => { this.currentReason = r; } : undefined,
+    }, host.mode);
     this.toolbar = this.tool;
+    if (isRedact) {
+      this.redactPanel = new RedactPanel({
+        onJumpTo: (page) => this.host.jumpToPage(page),
+        onDelete: (id) => { this.doc.apply(new RemoveRedactionCommand(id)); this.previews.delete(id); this.syncRedactPanel(); },
+        onApply: () => { void this.armRedaction(); },
+        onAddOccurrences: (needle, occ) => this.addOccurrences(needle, occ),
+      });
+    }
     // Static-bound handlers so add/removeEventListener keep their identity.
     this.boundDown = (e) => this.onPointerDown(e);
     this.boundMove = (e) => this.onPointerMove(e);
@@ -133,6 +164,7 @@ class EditorImpl implements Editor {
       canRedo: this.doc.canRedo(),
       canExport: this.host.canExport(),
     });
+    this.syncRedactPanel();
     this.renderOverlays();
   }
 
@@ -213,16 +245,34 @@ class EditorImpl implements Editor {
       return;
     }
 
+    // Redact tool: begin a drag gesture with a live preview redaction rect.
+    if (tool === "redact") {
+      e.preventDefault();
+      const [px, py] = cssPointToPdf(vp, lx, ly);
+      const red: Redaction = {
+        id: cryptoId(),
+        page: hit.page1,
+        rect: [px, py, 1, 1],
+        reason: this.currentReason,
+      };
+      this.doc.apply(new AddRedactionCommand(red));
+      this.gesture = {
+        kind: "create", page1: hit.page1, layer: hit.layer, viewport: vp,
+        startPdfX: px, startPdfY: py, redactId: red.id,
+      };
+      return;
+    }
+
     // Creation tools: begin a drag gesture with a live preview.
     e.preventDefault();
     const draft = this.newDraft(tool, hit.page1, vp, lx, ly);
     if (!draft) return;
     this.doc.apply(new AddAnnotationCommand(draft));
     this.select(draft.id);
-    const [px, py] = cssPointToPdf(vp, lx, ly);
+    const [px2, py2] = cssPointToPdf(vp, lx, ly);
     this.gesture = {
       kind: "create", page1: hit.page1, layer: hit.layer, viewport: vp,
-      startPdfX: px, startPdfY: py, inkPts: tool === "ink" ? [[px, py]] : undefined,
+      startPdfX: px2, startPdfY: py2, inkPts: tool === "ink" ? [[px2, py2]] : undefined,
     };
     this.gesture.draftId = draft.id;
   }
@@ -233,6 +283,11 @@ class EditorImpl implements Editor {
     e.preventDefault();
     const [lx, ly] = this.localCss(g.layer, e);
     if (g.kind === "create") {
+      if (g.redactId) {
+        const r = cssDragToPdfRect(g.viewport, g.startPdfX, g.startPdfY, ...this.toPdf(g.viewport, lx, ly));
+        this.updateRedactRect(g.redactId, r);
+        return;
+      }
       if (!g.draftId) return;
       if (this.tool.getCurrentTool() === "ink") {
         const [px, py] = cssPointToPdf(g.viewport, lx, ly);
@@ -291,6 +346,15 @@ class EditorImpl implements Editor {
       if (ann && this.isDegenerateDraft(ann)) {
         this.doc.apply(new RemoveAnnotationCommand(g.draftId));
         this.select(null);
+      }
+    }
+    if (g.kind === "create" && g.redactId) {
+      const red = this.doc.getRedaction(g.redactId);
+      if (red && (red.rect[2] < 3 || red.rect[3] < 3)) {
+        // A click without a drag — drop the 1×1 draft so it cannot arm.
+        this.doc.apply(new RemoveRedactionCommand(g.redactId));
+      } else {
+        this.syncRedactPanel();
       }
     }
     this.gesture = null;
@@ -678,6 +742,158 @@ class EditorImpl implements Editor {
     this.doc.apply(new AddPageOpCommand({ op: "insert", page, value: 0 }));
     this.host.setStatus("A blank page will be inserted after page " + page + " in the export", "ready");
   }
+  // --- redaction (mode === "redact") --------------------------------------
+
+  private updateRedactRect(id: string, rect: PdfRect): void {
+    this.doc.apply(new UpdateRedactionCommand(id, (r) => { r.rect = rect; }));
+  }
+
+  /** Refresh the pending list + Apply button from the live doc state. */
+  private syncRedactPanel(): void {
+    if (!this.redactPanel) return;
+    const reds = this.doc.state.redactions;
+    this.redactPanel.setPending(reds, this.previews);
+    this.tool.setRedactionCount(reds.length);
+  }
+
+  /** Add rects for every other occurrence of `needle` (the assist). */
+  private addOccurrences(needle: string, occ: OtherOccurrence[]): void {
+    const cmds = occ.map((o) => new AddRedactionCommand({
+      id: cryptoId(), page: o.page, rect: o.rect.slice() as PdfRect, reason: needle ? `“${needle.slice(0, 40)}”` : "occurrence",
+    }));
+    // One undo unit for the whole batch.
+    this.doc.apply(new BatchCommand(cmds, "Redact " + occ.length + " occurrence" + (occ.length === 1 ? "" : "s")));
+    this.syncRedactPanel();
+    this.host.invalidateOverlays();
+    this.host.setStatus(`Added ${occ.length} redaction${occ.length === 1 ? "" : "s"} for “${needle.slice(0, 40)}”`, "ready");
+  }
+
+  /**
+   * Arm → confirm → capture → rasterize → verify → emit. The capture happens
+   * BEFORE the confirm so the modal can show the other-occurrences assist and
+   * the consequence can name the real page count. If verification fails, NO
+   * bytes are emitted (a file the user believes is redacted is worse than none).
+   */
+  private async armRedaction(): Promise<void> {
+    if (this.redactBusy) return;
+    const model = this.host.getModel();
+    if (!model) { this.host.setStatus("No document to redact", "error"); return; }
+    const redactions = this.doc.state.redactions.slice();
+    if (redactions.length === 0) { this.host.setStatus("Draw a redaction rectangle first", "error"); return; }
+    if (!this.host.canExport()) { this.host.setStatus("Export is not granted for this mount", "error"); return; }
+    if (!this.redactPanel) return;
+
+    this.redactBusy = true;
+    state.redactState = "armed";
+    this.host.setStatus("Capturing redaction targets…", "loading");
+    this.redactPanel.clearBody();
+
+    // 1. Capture ground truth BEFORE modifying anything: the strings under each
+    //    rect are the needles the verifier later proves absent.
+    let captured;
+    try {
+      captured = await captureGroundTruth(model, redactions);
+    } catch (e) {
+      this.redactBusy = false;
+      state.redactState = "error";
+      this.host.setStatus("Capture failed: " + msg(e), "error");
+      return;
+    }
+    for (const c of captured) this.previews.set(c.redactionId, c.preview);
+    this.syncRedactPanel();
+    const needles = capturedNeedles(captured);
+
+    // 2. Occurrences assist: for the longest captured needle (most specific),
+    // find every other line that still contains it and is not already redacted.
+    const primaryNeedle = needles.slice().sort((a, b) => b.length - a.length)[0] ?? "";
+    let occurrences: OtherOccurrence[] = [];
+    if (primaryNeedle) {
+      try { occurrences = await findOtherOccurrences(model, primaryNeedle, redactions); } catch { /* non-fatal */ }
+    }
+
+    const affectedPages = new Set(redactions.map((r) => r.page)).size;
+    const dpi = this.host.redactDPI || 200;
+
+    // 3. Arm + confirm — the modal names the irreversible consequence.
+    await new Promise<void>((resolve) => {
+      this.redactPanel!.showConfirm({
+        redactionCount: redactions.length,
+        pages: affectedPages,
+        dpi,
+        occurrences,
+        needle: primaryNeedle,
+        onConfirm: () => resolve(),
+        onCancel: () => { this.redactBusy = false; state.redactState = "idle"; this.host.setStatus("Redaction cancelled", "ready"); },
+      });
+    });
+    if (!this.redactBusy) return; // cancelled via onCancel
+
+    // 4. Rasterize affected pages only (main-thread work — yields to keep UI live).
+    state.redactState = "working";
+    this.host.setStatus(`Rasterizing ${affectedPages} page${affectedPages === 1 ? "" : "s"} at ${dpi} DPI…`, "loading");
+    this.redactPanel.setProgress(0, redactions.length, 0);
+    const tStart = performance.now();
+    let lastPageAt = tStart;
+    let maxBlockMs = 0;
+    let output;
+    try {
+      output = await rasterizeRedactions({
+        sourceBytes: this.host.getBytes(),
+        model,
+        redactions,
+        dpi,
+        onProgress: (_done, _total, _page) => {
+          const now = performance.now();
+          // Gap between consecutive progress callbacks ≈ one page's
+          // render+paint+embed — the longest single main-thread block.
+          maxBlockMs = Math.max(maxBlockMs, now - lastPageAt);
+          lastPageAt = now;
+          this.redactPanel!.setProgress(_done, _total, _page);
+        },
+      });
+    } catch (e) {
+      this.redactBusy = false;
+      state.redactState = "error";
+      const m = msg(e);
+      this.redactPanel.setError("Rasterization failed: " + m);
+      this.host.setStatus("Redaction failed: " + m, "error");
+      return;
+    }
+    state.lastRedactTotalMs = Math.round(performance.now() - tStart);
+    state.lastRedactMaxBlockMs = Math.round(maxBlockMs);
+
+    // 5. Verify BEFORE releasing the bytes.
+    this.host.setStatus("Verifying redaction…", "loading");
+    const verifyRects: VerifyRect[] = redactions.map((r) => ({ page: r.page, rect: r.rect }));
+    let report: VerifyReport;
+    try {
+      report = await verifyRedaction(output.bytes, { needles, redactions: verifyRects });
+    } catch (e) {
+      this.redactBusy = false;
+      state.redactState = "error";
+      const m = msg(e);
+      this.redactPanel.setError("Verification failed to run: " + m);
+      this.host.setStatus("Verification failed: " + m, "error");
+      return;
+    }
+    state.lastVerifyReport = summarizeReport(report);
+
+    // 6. Emit only on success; surface failure with the full report.
+    if (report.ok) {
+      state.redactState = "done";
+      state.lastExportError = null;
+      this.redactPanel.setResult(report);
+      this.host.onExportBytes(output.bytes, "redact", "gofastr-redacted.pdf", summarizeReport(report));
+      this.host.setStatus(`Redacted ${affectedPages} page${affectedPages === 1 ? "" : "s"} — verified, ${output.bytes.length} B`, "ready");
+    } else {
+      state.redactState = "error";
+      state.lastExportError = "verification failed";
+      this.redactPanel.setResult(report);
+      this.host.setStatus("Verification FAILED — no file emitted", "error");
+    }
+    this.redactBusy = false;
+  }
+
 
   // --- rendering -----------------------------------------------------------
 
@@ -702,6 +918,12 @@ class EditorImpl implements Editor {
     for (const a of anns) {
       const node = this.paintAnnotation(a, vp);
       if (node) layer.appendChild(node);
+    }
+    // Redaction rects (mode === "redact"): distinct hatched markers so they
+    // read as removal regions, not annotations. Painted under the selection
+    // ring so a selected annotation's handles stay on top.
+    for (const r of this.doc.redactionsForPage(page1)) {
+      layer.appendChild(this.paintRedaction(r, vp));
     }
     // Selection ring + handles on top.
     const sel = this.selectedId ? this.doc.getAnnotation(this.selectedId) : null;
@@ -729,6 +951,26 @@ class EditorImpl implements Editor {
       if (sel.type === "note") layer.appendChild(this.notePopup(sel));
       if (sel.type === "text") layer.appendChild(this.textEditor(sel, vp));
     }
+  }
+
+  /** Paint a redaction rect as a distinct hatched removal marker (not an
+   *  annotation). The reason label reads inside; the heavy border + hatch
+   *  pattern signals "content removed here", not "box drawn here". */
+  private paintRedaction(r: Redaction, vp: ViewportLike): HTMLElement {
+    const box = pdfRectToCss(vp, r.rect);
+    const node = el("div", {
+      cls: "pdf-redact-rect",
+      attrs: { "data-rid": r.id, "data-page": String(r.page), role: "img", "aria-label": `Redaction on page ${r.page}${r.reason ? ": " + r.reason : ""}` },
+      style: {
+        left: box.left + "px", top: box.top + "px",
+        width: box.width + "px", height: box.height + "px",
+      },
+    });
+    if (r.reason) {
+      const label = el("span", { cls: "pdf-redact-rect-label", text: r.reason });
+      node.appendChild(label);
+    }
+    return node;
   }
 
   private paintAnnotation(a: Annotation, vp: ViewportLike): HTMLElement | null {
