@@ -6,6 +6,26 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Changed — gofastr v0.38.1 → v0.46.0 (2026-07-26)
+
+- Eight framework releases in one step. No plugin code changed: build, vet, the
+  full Go suite and the WebKit + Chromium journeys all pass untouched.
+
+  Two of the breaking changes land squarely on this repo's contract, so both were
+  checked rather than assumed. The **iframe sandbox sanitizer is now an allow-list
+  on both sides** (v0.45.0 flipped the Go half; v0.46.0 fixed the JS sink that
+  actually sets the attribute), which breaks a manifest requesting
+  `allow-popups-to-escape-sandbox`, `allow-top-navigation` or `allow-downloads` —
+  ours request only `pluginhost.DefaultSandbox` (`allow-scripts`), the single
+  token that keeps the frame opaque. And **`Manifest.Entry` must now be a
+  same-origin absolute path**, dual-enforced in Go and the JS broker; mermaid's
+  and monaco's entries already were, and `Validate()` runs at registration, which
+  the suite exercises.
+
+- `frameworkCompat` stays at `>=0.28.0`, verified rather than carried forward:
+  the repo still builds against v0.28.0, v0.38.1 and v0.42.0. The field remains a
+  best-effort build floor, not a tested runtime matrix.
+
 ### Fixed — the tour overlay showed before it was positioned (2026-07-25)
 
 - `showStep` made the overlay visible and only then deferred the **first**
