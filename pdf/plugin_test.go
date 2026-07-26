@@ -46,6 +46,7 @@ func TestInitServesAssetsWithCorrectContentTypes(t *testing.T) {
 		{ViewerJSURL, "text/javascript; charset=utf-8"},
 		{ViewerCSSURL, "text/css; charset=utf-8"},
 		{AdapterScriptURL, "text/javascript; charset=utf-8"},
+		{ConfigScriptURL, "text/javascript; charset=utf-8"},
 		{SamplePDFURL, "application/pdf"},
 	}
 	for _, c := range cases {
@@ -316,6 +317,30 @@ func TestRenderInOpaqueFrame(t *testing.T) {
 	}
 	if stats.PageCount < 2 {
 		t.Errorf("expected multi-page PDF, got pageCount=%v", stats.PageCount)
+	}
+
+	// (a1) THE isolation guarantee: the frame's own probes (mirrored on
+	//      __pdfProbes by the adapter) must report cookie / parent / storage
+	//      access ALL blocked. Without this assertion a future change that
+	//      de-opaques the frame (a stray allow-same-origin, a sandbox leak)
+	//      silently goes green — the whole cage would be an untested
+	//      assumption. This is the single most important check in the package.
+	var probes struct {
+		CookieEmpty    bool `json:"cookieEmpty"`
+		ParentBlocked  bool `json:"parentBlocked"`
+		StorageBlocked bool `json:"storageBlocked"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(
+		`(function(){var f=document.querySelector('iframe');return f.__pdfProbes||{};})()`,
+		&probes)); err != nil {
+		t.Fatalf("read isolation probes: %v", err)
+	}
+	if !probes.CookieEmpty || !probes.ParentBlocked || !probes.StorageBlocked {
+		t.Errorf("isolation probes must all be blocked: cookieEmpty=%v parentBlocked=%v storageBlocked=%v — a probe reading host state means the frame is no longer opaque-origin isolated",
+			probes.CookieEmpty, probes.ParentBlocked, probes.StorageBlocked)
+	} else {
+		t.Logf("isolation probes: cookieEmpty=%v parentBlocked=%v storageBlocked=%v (opaque-origin guarantee holds)",
+			probes.CookieEmpty, probes.ParentBlocked, probes.StorageBlocked)
 	}
 
 	// (b) the extracted text layer contains the secret string.

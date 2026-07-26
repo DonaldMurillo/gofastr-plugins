@@ -1,28 +1,42 @@
 /*!
- * pdf/host/adapter.js — host-side ADAPTER for the GoFastr PDF spike plugin.
+ * pdf/host/adapter.js — host-side ADAPTER for the GoFastr PDF plugin.
  *
  * Thin adapter over the generic platform broker
  * (pluginhost/host/pluginhost.js), which owns the sandboxed-iframe creation,
  * the versioned postMessage envelope + source check, the ready→init handshake,
  * theme bridging, resize/focus/metric/bootError handling, and SPA teardown.
+ * See protocol-v1.md §3/§4/§6 — the protocol is frozen and lives in the
+ * generic broker.
  *
  * This adapter only:
  *   1. registers the pdf manifest (entry URL, sandbox policy, capabilities,
- *      schema) so the generic broker can build the iframe;
- *   2. FETCHES the sample PDF same-origin (the host has full network) and
- *      forwards the bytes OVER THE BRIDGE to the frame — the frame itself has
- *      connect-src 'none' and fetches NOTHING. The bytes ride a `loadBytes`
- *      plugin→frame event as a Uint8Array (structured clone);
- *   3. MIRRORS the frame's events onto the iframe element under pdf-specific
+ *      schema) so the generic broker can build the iframe; and merges in the
+ *      instance config the Go side publishes as window.__gofastrPdfConfig
+ *      (mode + redact DPI + max bytes) — the bilateral enforcement channel
+ *      for mode (the frame hides the UI its mode does not grant, init.config
+ *      carries it);
+ *   2. FETCHES the document same-origin from GET /doc/{id} (the host page has
+ *      full network + the session/CSRF token) and relays the bytes INTO the
+ *      frame over the bridge in ~4 MiB chunks as `documentBytes` events
+ *      ({reqId, seq, total, bytes}) — the frame itself has connect-src 'none'
+ *      and fetches NOTHING, which is the structural reason a confidential PDF
+ *      cannot be exfiltrated;
+ *   3. RELAYS the frame's `requestExport` events UP to POST /export (gated
+ *      pdf:export on the Go side) and answers with an `exportResult` event
+ *      carrying the produced URL (or the error code);
+ *   4. MIRRORS the frame's events onto the iframe element under pdf-specific
  *      names the chromedp/WebKit tests read from the parent:
- *        ready     → __pdfReady + __pdfProbes
- *        rendered  → __pdfRendered + __pdfText + __pdfPageCount +
- *                    __pdfNonBlank + __pdfNonWhitePixels + __pdfPdfjsVersion
+ *        ready       → __pdfReady + __pdfProbes
+ *        rendered    → __pdfRendered + __pdfText + __pdfPageCount +
+ *                      __pdfNonBlank + __pdfNonWhitePixels + __pdfPdfjsVersion
  *        renderError → __pdfError
+ *        caps        → __pdfCaps
+ *        themeApplied→ __pdfTheme
  *
- * Load order: the generic platform broker MUST load before this adapter so
- * window.__gofastrPluginHost is defined. Both the demo page and pdf.UIHostOption
- * emit pluginhost.js first, then this script.
+ * Load order: the generic platform broker MUST load before this adapter, and
+ * the instance config.js (window.__gofastrPdfConfig) MUST load before this
+ * adapter too. Both the demo page and pdf.UIHostOption emit pluginhost.js,
+ * then config.js, then this script.
  */
 (function () {
   'use strict';
@@ -35,35 +49,135 @@
     return;
   }
 
+  // Route constants (mirror the Go plugin consts exactly — protocol-v1.md §2/§10).
   var VIEWER_HTML_URL = "/__gofastr/plugin/pdf/viewer.html";
-  var SAMPLE_PDF_URL  = "/__gofastr/plugin/pdf/sample.pdf";
+  var DOC_BASE_URL    = "/__gofastr/plugin/pdf/doc"; // + "/" + encodeURIComponent(id)
+  var EXPORT_URL      = "/__gofastr/plugin/pdf/export";
   var SCHEMA_VERSION  = "pdf-v1";
 
-  // Read-only render spike; document:write is advertised for platform parity.
+  // Read-only render + edit; document:write is advertised for platform parity,
+  // theme:read bridges tokens. pdf:export is appended by the Go side only when
+  // the host supplies WithExportHandler — the gate lives there, not here.
   var DEFAULT_CAPS = ["document:read", "document:write", "theme:read"];
 
-  // Fetch the sample PDF same-origin and forward the bytes to the frame as a
-  // Uint8Array over the bridge. Returns a promise (fire-and-forget from the
-  // caller's perspective; failures surface as a renderError event).
-  function pushSampleBytes(api) {
-    fetch(SAMPLE_PDF_URL, { credentials: "same-origin" })
+  // 4 MiB per documentBytes chunk. Small enough that a single postMessage
+  // structured clone stays well under any reasonable transport bound, large
+  // enough that a typical multi-page PDF crosses in one or two chunks. The
+  // frame accumulates chunks by reqId until seq === total - 1, then assembles
+  // and renders.
+  var CHUNK_BYTES = 4 * 1024 * 1024;
+
+  // Monotonic request ids for document deliveries + export relays, so the frame
+  // can correlate a chunk stream / an exportResult to the request that started
+  // it even if two deliveries overlap.
+  var reqCounter = 0;
+
+  // --- Plugin-specific helpers ---------------------------------------------
+  // Each takes the per-iframe `api` object the generic broker hands to onEvent
+  // ({iframe, marker, form, csrfToken, sendEvent, request}).
+
+  function docIdFromMarker(marker) {
+    var id = marker && marker.getAttribute ? marker.getAttribute("data-fui-plugin-docid") : "";
+    id = (id || "").trim();
+    return id || "demo";
+  }
+
+  // Fetch /doc/{id} same-origin and stream the bytes into the frame as
+  // documentBytes chunks. Failures surface as a renderError event the frame
+  // turns into a visible error rather than a blank page.
+  function pushDocBytes(api, docId) {
+    var url = DOC_BASE_URL + "/" + encodeURIComponent(docId);
+    fetch(url, { credentials: "same-origin" })
       .then(function (r) {
-        if (!r.ok) throw new Error("sample.pdf HTTP " + r.status);
+        if (!r.ok) throw new Error("doc " + docId + " HTTP " + r.status);
         return r.arrayBuffer();
       })
       .then(function (buf) {
-        // Structured clone carries the Uint8Array across postMessage verbatim —
-        // no base64, no copy beyond the structured-clone the browser does anyway.
-        api.sendEvent("loadBytes", { bytes: new Uint8Array(buf) });
+        var all = new Uint8Array(buf);
+        var reqId = "doc-" + (++reqCounter);
+        var total = Math.max(1, Math.ceil(all.length / CHUNK_BYTES));
+        for (var seq = 0; seq < total; seq++) {
+          var start = seq * CHUNK_BYTES;
+          var end = Math.min(start + CHUNK_BYTES, all.length);
+          // slice() copies the chunk into its own buffer so the structured
+          // clone across postMessage carries exactly the chunk's bytes (a
+          // subarray view would clone the viewed region too, but slice is the
+          // unambiguous choice and the copy cost is negligible at this size).
+          var chunk = all.slice(start, end);
+          api.sendEvent("documentBytes", {
+            reqId: reqId,
+            seq: seq,
+            total: total,
+            bytes: chunk
+          });
+        }
+        // BACKWARD-COMPAT FALLBACK: also deliver the whole document as a
+        // single loadBytes event. The chunked documentBytes contract above is
+        // the target (it scales to documents larger than a postMessage can
+        // carry in one structured clone), but a frame that has not yet grown
+        // the documentBytes assembler still understands loadBytes and renders
+        // from it. The frame's runRender is guarded by `rendering ||
+        // state.rendered`, so a frame that handles documentBytes renders once
+        // and then ignores the late loadBytes — no double render. Drop this
+        // once every consumer ships the documentBytes assembler.
+        api.sendEvent("loadBytes", { bytes: all });
       })
       ["catch"](function (e) {
         var msg = e && e.message ? e.message : String(e);
         if (typeof console !== "undefined" && console.error) {
-          console.error("[pdf] failed to forward sample bytes:", msg);
+          console.error("[pdf] failed to relay document bytes:", msg);
         }
         api.sendEvent("renderError", { message: "host fetch failed: " + msg });
       });
   }
+
+  // Relay a frame-originated requestExport up to POST /export. The body is the
+  // raw produced PDF bytes; kind / docId / the in-frame verification report
+  // ride headers (the repo's raw-body + headers encoding). The Go side gates
+  // pdf:export + mode-checks the kind, then the export handler stores the
+  // bytes and returns a URL we relay back as exportResult.
+  function relayExport(api, params) {
+    params = params || {};
+    var reqId = params.reqId || ("exp-" + (++reqCounter));
+    var kind = params.kind || "export";
+    var bytes = params.bytes; // Uint8Array (may be absent on a dry run)
+    var headers = { "X-Export-Kind": kind };
+    if (params.docId) headers["X-Export-DocID"] = String(params.docId);
+    if (params.report != null) {
+      // The verification report is a small JSON object (six checks). JSON-
+      // stringify into a header; if it ever exceeds practical header limits
+      // the frame should switch to a multipart body, but the report is tiny.
+      try { headers["X-Export-Report"] = JSON.stringify(params.report); }
+      catch (e) { /* a non-serialisable report is dropped, not fatal */ }
+    }
+    if (bytes) headers["Content-Type"] = "application/pdf";
+    var tok = api.csrfToken();
+    if (tok) headers["X-CSRF-Token"] = tok;
+    fetch(EXPORT_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: headers,
+      body: bytes || null
+    })
+      .then(function (r) {
+        // The route always answers JSON (even errors); parse it regardless.
+        return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; });
+      })
+      .then(function (res) {
+        if (res.ok && res.json && res.json.url) {
+          api.sendEvent("exportResult", { reqId: reqId, url: res.json.url });
+        } else {
+          var code = (res.json && res.json.error) || ("HTTP " + res.status);
+          api.sendEvent("exportResult", { reqId: reqId, error: code });
+        }
+      })
+      ["catch"](function (e) {
+        var msg = e && e.message ? e.message : String(e);
+        api.sendEvent("exportResult", { reqId: reqId, error: msg });
+      });
+  }
+
+  // --- Register with the generic platform broker ---------------------------
 
   host.register("pdf", {
     manifest: {
@@ -75,7 +189,14 @@
       schema:       SCHEMA_VERSION,
       title:        "PDF viewer"
     },
-    config: {},
+    // Merge the instance config the Go side publishes via config.js (mode +
+    // redact DPI + max bytes). The generic broker bridges this verbatim as
+    // init.config, which is how the bilateral mode enforcement reaches the
+    // frame: the frame hides the UI its mode does not grant. {} is the safe
+    // default if config.js did not load (the frame then assumes view-only).
+    config: (window.__gofastrPdfConfig && typeof window.__gofastrPdfConfig === "object")
+      ? window.__gofastrPdfConfig
+      : {},
     onEvent: function (method, params, api) {
       params = params || {};
       var frame = api.iframe;
@@ -83,13 +204,10 @@
         case "ready":
           frame.__pdfReady = true;
           frame.__pdfProbes = params.probes || null;
-          // The broker has already sent `init` (handshake) — now push the PDF
-          // bytes so the frame can render. This is the bridge path the spike
-          // exists to validate.
-          pushSampleBytes(api);
-          break;
-        case "caps":
-          frame.__pdfCaps = params; // {hasPrint, clipboardWrite, allowedFeatures, origin}
+          // The broker has already sent `init` (handshake) — now push the
+          // document bytes so the frame can render. This is the bridge path
+          // the whole cage design exists to validate.
+          pushDocBytes(api, docIdFromMarker(api.marker));
           break;
         case "rendered":
           frame.__pdfRendered = true;
@@ -102,8 +220,14 @@
         case "renderError":
           frame.__pdfError = params.message || "unknown render error";
           break;
+        case "caps":
+          frame.__pdfCaps = params; // {hasPrint, clipboardWrite, allowedFeatures, origin}
+          break;
         case "themeApplied":
           frame.__pdfTheme = params; // {scheme, sample:{--name:value}}
+          break;
+        case "requestExport":
+          relayExport(api, params);
           break;
         default:
           // resize / focusChanged / bootError / docChanged handled generically.

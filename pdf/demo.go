@@ -83,16 +83,32 @@ button.fui-btn { font: inherit; padding: var(--spacing-sm, 4px) var(--spacing-md
 </script>
 <script src="%s"></script>
 <script src="%s"></script>
+<script src="%s"></script>
 </body>
 </html>`
 
 func (p *Plugin) renderDemo(r *http.Request) render.HTML {
+	// The ?doc= query param is the SEAM the scanned-document regression tests
+	// use: they point the plugin at a fixture via WithSource and load
+	// /pdf?doc=<fixture-id> so the mount marker carries that id and the adapter
+	// fetches /doc/<fixture-id>. Without ?doc= the demo mounts the default
+	// "demo" id, which the default source resolves to the embedded sample.
 	tokens := demoTheme().CSSCustomProperties()
-	mount := Mount(MountConfig{DocID: defaultDocID})
+	docID := r.URL.Query().Get("doc")
+	if docID == "" {
+		docID = defaultDocID
+	}
+	mount := Mount(MountConfig{DocID: docID})
+	// Script order is load-bearing: the platform broker first (defines
+	// __gofastrPluginHost), then this instance's config.js (publishes
+	// __gofastrPdfConfig — the mode + redact DPI the frame reads from
+	// init.config), then the adapter (registers with the broker, merging the
+	// config global into the manifest config it registers).
 	return render.HTML(fmt.Sprintf(demoPage,
 		tokens,
 		string(mount),
 		pluginhost.BrokerScriptURL,
+		ConfigScriptURL,
 		AdapterScriptURL,
 	))
 }
