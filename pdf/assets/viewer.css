@@ -1,0 +1,85 @@
+/* GoFastr PDF viewer (SPIKE) — token-only frame stylesheet.
+ *
+ * Every color/value is a CSS custom property bridged from the host (the frame
+ * writes its own :root block from init.tokens). No bespoke hex. Matches the
+ * mermaid/monaco frame convention so the viewer inherits the host palette.
+ *
+ * The canvas + text layer are absolutely positioned in a wrapper sized to the
+ * rendered page; the text layer is overlaid for selectable text (transparent
+ * text, just hit-testing), exactly like pdf.js's default viewer.
+ */
+
+:root {
+  /* Host-bridged tokens (written by viewer.js from init.tokens). These fallbacks
+     are only seen if the bridge has not yet applied tokens. */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-muted: #6b7280;
+  --color-border: #d1d5db;
+  --color-accent: #2563eb;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+#pdf-root {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  line-height: 0;
+}
+
+#pdf-canvas {
+  display: block;
+}
+
+.text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  /* The text layer is invisible-by-default overlay text: the canvas shows the
+     glyphs; this layer only provides selection hit-testing. */
+  color: transparent;
+  pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.text-layer span {
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0 0;
+  color: transparent;
+}
+
+.pdf-status {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.pdf-status[data-state="error"] {
+  color: #b91c1c;
+}
+
+.pdf-status[data-state="ready"] {
+  color: var(--color-accent);
+}

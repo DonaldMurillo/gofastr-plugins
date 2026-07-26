@@ -73,6 +73,30 @@
       "docs": "docs/monaco.md"
     },
     {
+      "name": "pdf",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/pdf",
+      "version": "0.1.0-spike",
+      "description": "PDF viewer / editor / redactor built on pdf.js (render) + pdf-lib (write). The fourth sandboxed heavy-JS plugin. pdf.js runs WORKER-FREE on the main thread and the frame fetches nothing: under the framed CSP's connect-src 'none' the document bytes arrive over the postMessage bridge, which means the frame holding a confidential PDF structurally cannot exfiltrate it. Canonical doc is an annotation OVERLAY ({src, annotations[], formFields{}, redactions[], pageOps[]}) in PDF user space, never the file bytes. Host-selected mode (view/annotate/redact) is enforced on both sides. Redaction rasterizes affected pages and rebuilds a fresh document, then verifies the output before releasing it; download and print are host capabilities because the CSP sandbox token forbids them in-frame.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "optionalCapabilities": [
+        "pdf:export"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/pdf",
+      "entry": "/__gofastr/plugin/pdf/viewer.html",
+      "schema": "pdf-v1",
+      "minHeight": "480px",
+      "docs": "docs/pdf.md"
+    },
+    {
       "name": "tour",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/tour",
       "version": "0.1.0",

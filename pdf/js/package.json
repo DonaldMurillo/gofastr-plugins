@@ -1,0 +1,20 @@
+{
+  "name": "@gofastr/pdf-viewer-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame PDF viewer bundle for the GoFastr pdf spike plugin. Builds a single worker-free IIFE that runs inside the opaque-origin sandboxed iframe under connect-src 'none' and renders a PDF whose bytes arrive over the postMessage bridge.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "gen-sample": "node scripts/gen-sample-pdf.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.1.200"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "pdf-lib": "1.17.1",
+    "typescript": "^7.0.2"
+  }
+}
