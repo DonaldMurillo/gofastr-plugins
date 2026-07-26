@@ -74,6 +74,32 @@ jobs:
       - name: go test
         run: go test ./... -count=1
 
+  # The eject build canary gets its own runner because it is the one test that
+  # competes for the machine. It ejects every plugin into a temp module and
+  # runs a cold `go build` over it; sharing a two-core runner with the chromedp
+  # suites starved them until Chrome missed its websocket handshake, which
+  # surfaces as "chrome start (is Chrome installed?)" and reads like a broken
+  # browser rather than a busy box. No Chrome is installed here, and nothing
+  # else runs alongside it.
+  eject:
+    name: eject canary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Proves an ejected plugin compiles against gofastr ALONE — no
+      # gofastr-plugins require survives the rewrite. This is what fails the day
+      # a plugin gains an import ejection cannot resolve, or someone adds a
+      # plugin without adding its embed patterns to source.go.
+      - name: eject every plugin and build it standalone
+        run: go test ./internal/eject/ -run TestEjectEveryPluginBuilds -count=1 -v
+        env:
+          GOFASTR_EJECT_BUILD: "1"
+
   js:
     name: ${{ matrix.plugin }} bundle
     runs-on: ubuntu-latest

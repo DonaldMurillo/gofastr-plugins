@@ -32,6 +32,8 @@ gofastr-plugins/
 │                 redaction cannot be exfiltrated by the frame that edits it
 ├── example/      ONE gofastr app that imports & mounts every plugin —
 │                 the integration host, visual/e2e surface, completeness canary
+├── cmd/          gofastr-plugin, the eject CLI: vendor a plugin into your own
+│                 repo and own it, shadcn-style; see "Own it" below
 ├── plugins.json  the curated registry index (convention, not a service) —
 │                 hosts fetch and vendor this file; see "The registry" below
 ├── docs/         PLAN.md, DECISIONS.md, design/ (frozen) + platform/plugin docs
@@ -80,6 +82,22 @@ guards run again inside the release workflow, so a broken index cannot reach a
 host. Bump `registryVersion` on a breaking field change, since vendored copies
 are then stale.
 
+## Own it: eject a plugin into your repo
+
+Sometimes you do not want a plugin — you want *your* version of it: a different
+toolbar, a different canonical document shape, a capability upstream will not
+grant. `cmd/gofastr-plugin` copies a plugin's source into your repo and rewrites
+the one import that tied it to this one, so the vendored copy depends on
+[`gofastr`](https://github.com/DonaldMurillo/gofastr) alone and the
+`gofastr-plugins` require comes straight out of your `go.mod`. You own the
+result; `diff` tells you when upstream moved.
+
+```sh
+go run github.com/DonaldMurillo/gofastr-plugins/cmd/gofastr-plugin@latest add mermaid
+```
+
+See [`docs/eject.md`](docs/eject.md) for the walkthrough, the lock file, and the
+honest tradeoff.
 
 ## Develop
 

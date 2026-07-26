@@ -6,6 +6,51 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — gofastr-plugin: eject a plugin into your own repo (2026-07-26)
+
+`cmd/gofastr-plugin` is the eject CLI. It copies a plugin's source into a
+consumer repo the way shadcn copies a component, and the consumer owns the
+result. It works for one reason: every plugin in this repo imports this repo's
+`pluginhost`, and that package is a pure alias forwarding to
+`gofastr/framework/pluginhost` in the core (see
+[`pluginhost/pluginhost.go`](pluginhost/pluginhost.go)). The CLI rewrites that
+import on the way out, so an ejected plugin depends on `gofastr` and nothing
+else from this repo. The `gofastr-plugins` require can come straight out of the
+consumer's `go.mod`.
+
+- **What lands.** The plugin's Go sources (imports rewritten), the prebuilt
+  bundle under `assets/` served same-origin via `go:embed` (unchanged), the host
+  adapter, and the `js/` TypeScript sources plus `build.mjs` so the bundle can
+  be rebuilt after an edit. Default target: `internal/plugins/<name>`.
+- **It writes files and nothing else.** No `go get`, no `go mod tidy`, no `npm
+  install`, and no edit to your `go.mod`. Dependency resolution belongs to
+  whoever runs the project — they own the lockfiles, the proxy, and the choice
+  of which `gofastr` patch to move to. What lands is code plus configuration
+  (`package.json`, `package-lock.json`, `tsconfig.json`, `build.mjs`), which is
+  enough to make the install reproducible when they run it. The CLI prints the
+  commands; it does not execute them.
+- **The lock file** (`gofastr-plugins.json` at the project root) records two
+  hashes per vendored file: what the CLI wrote, and the upstream source it came
+  from. `gofastr-plugin diff` reads that pair to tell whether *you* moved (your
+  file no longer matches the written hash) or *upstream* moved, and exits
+  non-zero on drift, so it works as a CI check. A plain `cp -r` fork cannot tell
+  the two apart.
+- **`--force` is the conflict rule.** `add` refuses to overwrite a file whose
+  hash no longer matches what the CLI wrote (one you have edited) unless you
+  pass `--force`. `--with-tests` also vendors the `*_test.go` files, which pulls
+  `chromedp` into the consumer's `go.mod`; off by default for that reason.
+  `--no-js` takes only the prebuilt bundle.
+- **The tradeoff, stated plainly.** Eject when you need to change the plugin — a
+  different toolbar, a different canonical document, a capability upstream will
+  not grant. Do not eject just to use it: importing keeps you on `go get -u` for
+  fixes, and ejecting takes you off it. Upstream fixes reach an ejected copy only
+  when you run `diff` and merge them by hand. Owning the source moves no security
+  boundary: a vendored sandboxed plugin is still opaque-origin sandboxed and
+  still talks over the same versioned `postMessage` bridge; `geomap` and `pdf`
+  still need the host CSP their docs specify.
+
+See [`docs/eject.md`](docs/eject.md).
+
 ### Fixed — a finished redaction could look like it never finished (2026-07-26)
 
 `redactState` reached the host only as a passenger on `docChanged` — an event
@@ -39,6 +84,7 @@ separate statements is precisely what let `done` be set without ever being sent.
   1's title verbatim, and a journey drives the button and then requires a
   subsequent redaction to actually complete. It fails against the previous
   bundle.
+
 
 ### Added — pdf 0.1.0: viewer, editor and redactor (2026-07-26)
 
