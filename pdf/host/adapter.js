@@ -215,9 +215,14 @@
       })
       .then(function (res) {
         if (res.ok && res.json && res.json.url) {
+          // Mirror the produced URL so a test can fetch the ACTUAL bytes the
+          // host stored and inspect them. Asserting on the frame's own report
+          // alone would only prove the frame agrees with itself.
+          api.iframe.__pdfLastExportUrl = res.json.url;
           api.sendEvent("exportResult", { reqId: reqId, url: res.json.url });
         } else {
           var code = (res.json && res.json.error) || ("HTTP " + res.status);
+          api.iframe.__pdfLastExportError = code;
           api.sendEvent("exportResult", { reqId: reqId, error: code });
         }
       })

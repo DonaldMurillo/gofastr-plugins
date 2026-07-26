@@ -118,3 +118,131 @@ test("the frame issues no programmatic network requests of its own", async ({ pa
 
   expect(offenders, `frame made programmatic requests: ${offenders.join(", ")}`).toEqual([]);
 });
+
+// --- redaction ------------------------------------------------------------
+//
+// The journey the whole plugin exists for. It asserts against the bytes the
+// HOST actually stored, not against the frame's opinion of its own work: a
+// verifier grading its own homework proves nothing, and "the UI said done" is
+// exactly the failure mode a redaction tool must not have.
+
+const SECRET = "SPIKE_SECRET_ALPHA";
+// A rect over the secret line, in PDF user space (points, bottom-left origin).
+const SECRET_RECT = [40, 700, 400, 40];
+
+test("redaction removes the content from the exported file, and proves it", async ({ page, request }) => {
+  const frame = page.frameLocator("iframe");
+  const inner = page.frames().find((f) => f !== page.mainFrame());
+  expect(inner, "pdf frame must be present").toBeTruthy();
+
+  // Author the redaction through the frame's own hook, then drive the real
+  // arm/confirm UI — the confirmation is a load-bearing part of the design, so
+  // the test goes through it rather than around it.
+  await inner!.evaluate(
+    ([pg, rect, reason]) =>
+      (window as unknown as { __pdfAddRedaction: (p: number, r: number[], s: string) => void })
+        .__pdfAddRedaction(pg as number, rect as number[], reason as string),
+    [1, SECRET_RECT, "PII"]
+  );
+  await expect(frame.locator('button[aria-label="Apply redaction"]')).toBeVisible();
+  await frame.locator('button[aria-label="Apply redaction"]').click();
+  await frame.locator(".pdf-redact-confirm-btn").click();
+
+  // Wait for the pipeline to settle via the HOST-side mirror.
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __pdfRedactState?: string }) | null;
+      return f?.__pdfRedactState === "done" || f?.__pdfRedactState === "error";
+    },
+    undefined,
+    { timeout: 60_000 }
+  );
+
+  const result = await page.evaluate(() => {
+    const f = document.querySelector("iframe") as HTMLIFrameElement & {
+      __pdfRedactState?: string;
+      __pdfLastVerifyReport?: { ok: boolean; checks: { name: string; ok: boolean }[] };
+      __pdfLastExportUrl?: string;
+      __pdfLastExportError?: string;
+    };
+    return {
+      state: f.__pdfRedactState,
+      report: f.__pdfLastVerifyReport,
+      url: f.__pdfLastExportUrl,
+      error: f.__pdfLastExportError,
+    };
+  });
+
+  expect(result.error ?? null, "export must not error").toBeNull();
+  expect(result.state).toBe("done");
+
+  // All six checks must pass. Naming them makes a silently-dropped check visible
+  // — an empty checks array would otherwise satisfy an `every()`.
+  expect(result.report?.ok).toBe(true);
+  expect(result.report?.checks.map((c) => c.name).sort()).toEqual(
+    ["annotations", "byteSearch", "incremental", "metadata", "rectIntersect", "textExtract"]
+  );
+  for (const c of result.report!.checks) expect(c.ok, `check ${c.name} must pass`).toBe(true);
+
+  // Now the independent part: fetch what the host actually stored and search it
+  // ourselves.
+  expect(result.url, "host must return an export URL").toBeTruthy();
+  const stored = await request.get(result.url!);
+  expect(stored.ok()).toBe(true);
+  const body = await stored.body();
+  expect(body.length).toBeGreaterThan(1000);
+
+  // SELF-CHECK FIRST. A plain `body.includes("SPIKE_SECRET_ALPHA")` would be
+  // VACUOUS here: pdf-lib writes text as hex strings inside FlateDecode
+  // streams, so the literal never appears in the raw bytes even BEFORE
+  // redaction — the assertion would pass against an untouched file and prove
+  // nothing. So we run the same search against the original document and
+  // require it to FIND the secret. If this self-check ever stops finding it,
+  // the search is broken and the absence check below is worthless.
+  const original = await request.get("/__gofastr/plugin/pdf/doc/demo");
+  expect(original.ok()).toBe(true);
+  expect(
+    await containsDecoded(await original.body(), SECRET),
+    "self-check: the search must FIND the secret in the un-redacted source, " +
+      "otherwise the absence assertion below is vacuous"
+  ).toBe(true);
+
+  expect(
+    await containsDecoded(body, SECRET),
+    "secret must not survive anywhere in the exported bytes"
+  ).toBe(false);
+});
+
+// containsDecoded searches PDF bytes the way the in-frame verifier does:
+// raw, then every inflated stream, then hex-string tokens decoded to text
+// (including UTF-16BE). Anything less misses hex-encoded text and compressed
+// object streams entirely — the trap that makes a naive `grep` report a clean
+// file that is still leaking.
+async function containsDecoded(buf: Buffer, needle: string): Promise<boolean> {
+  const zlib = await import("node:zlib");
+  const latin = buf.toString("latin1");
+  const scan = (s: string): boolean => {
+    if (s.includes(needle)) return true;
+    // Hex strings: <48656C6C6F> — also handle a UTF-16BE BOM.
+    for (const m of s.matchAll(/<([0-9A-Fa-f]{4,})>/g)) {
+      const bytes = Buffer.from(m[1], "hex");
+      if (bytes.toString("latin1").includes(needle)) return true;
+      if (bytes.length > 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+        if (bytes.subarray(2).swap16().toString("utf16le").includes(needle)) return true;
+      }
+    }
+    return false;
+  };
+  if (scan(latin)) return true;
+  for (const m of latin.matchAll(/stream\r?\n/g)) {
+    const start = m.index! + m[0].length;
+    const end = latin.indexOf("endstream", start);
+    if (end < 0) continue;
+    try {
+      if (scan(zlib.inflateSync(buf.subarray(start, end)).toString("latin1"))) return true;
+    } catch {
+      /* not a flate stream (raw image data, etc.) — the raw pass covered it */
+    }
+  }
+  return false;
+}
