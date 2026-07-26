@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  GoFastr PDF viewer (SPIKE) — opaque-origin sandboxed frame document
+  GoFastr PDF viewer — opaque-origin sandboxed frame document
   (protocol v1, schema pdf-v1).
 
   Served same-origin at /__gofastr/plugin/pdf/viewer.html and loaded inside
@@ -17,16 +17,24 @@
         ; connect-src   'none'
         ; frame-ancestors <origin>
         ; base-uri      <origin>
-      Consequences (this spike's whole point):
-        * connect-src 'none' => NO fetch/XHR/WebSocket. The PDF bytes MUST arrive
-          over the postMessage bridge (host adapter fetches same-origin, forwards
-          the ArrayBuffer). pdf.js cannot fetch standard fonts or cMaps either.
-        * no blob: source => blob: Web Workers are CSP-blocked (worker-src falls
-          back to default-src <origin>), so pdf.js runs WORKER-FREE on the main
-          thread (globalThis.pdfjsWorker.WorkerMessageHandler).
-        * script-src <origin> (no 'unsafe-eval') => fine; pdf.js v6 uses no eval.
-    - the ONLY host channel is window.parent.postMessage. viewer.js never touches
-      host DOM, cookies, or storage.
+      Consequences:
+        * connect-src 'none' => NO fetch/XHR/WebSocket. The PDF bytes arrive
+          over the postMessage bridge (host adapter fetches same-origin,
+          forwards the ArrayBuffer). pdf.js cannot fetch standard fonts or
+          cMaps either.
+        * no blob: source => blob: Web Workers are CSP-blocked (worker-src
+          falls back to default-src <origin>), so pdf.js runs WORKER-FREE on
+          the main thread (globalThis.pdfjsWorker.WorkerMessageHandler).
+        * script-src <origin> (no 'unsafe-eval') => fine; pdf.js v6 uses no
+          eval; the no-wasm JPX/JBIG2 fallbacks are statically inlined by
+          build.mjs.
+    - the ONLY host channel is window.parent.postMessage. viewer.js never
+      touches host DOM, cookies, or storage.
+
+  The entire viewer UI (toolbar, sidebar, scroll, page canvases, text/annotation
+  layers) is built imperatively by viewer.js into #pdf-root. This document is
+  intentionally minimal: a mount point + the single bundled script.
+
   Sub-resources are referenced by RELATIVE path so they resolve under the plugin
   asset route prefix regardless of the host-appended ?v= cache-buster.
 -->
@@ -39,18 +47,7 @@
     <link rel="stylesheet" href="./viewer.css" />
   </head>
   <body>
-    <div id="pdf-root" role="region" aria-label="PDF document viewer">
-      <!--
-        Page-1 render targets. The canvas receives the rasterized page; the text
-        layer div receives pdf.js's selectable text overlay. Both are populated by
-        viewer.js after the PDF bytes arrive over the bridge.
-      -->
-      <div id="pdf-page-wrapper" class="pdf-page-wrapper">
-        <canvas id="pdf-canvas" aria-label="Rendered PDF page 1"></canvas>
-        <div id="pdf-text-layer" class="text-layer" role="presentation"></div>
-      </div>
-      <p id="pdf-status" class="pdf-status" aria-live="polite">Loading&hellip;</p>
-    </div>
+    <div id="pdf-root" role="region" aria-label="PDF document viewer"></div>
     <!--
       The ?v= on the iframe SRC is a host-appended cache-buster for viewer.html;
       sub-resource references stay relative and do not depend on its value. The

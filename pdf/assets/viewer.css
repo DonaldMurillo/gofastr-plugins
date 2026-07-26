@@ -1,85 +1,577 @@
-/* GoFastr PDF viewer (SPIKE) — token-only frame stylesheet.
+/*
+ * GoFastr PDF viewer — TOKEN-ONLY frame stylesheet (protocol v1 §7).
  *
- * Every color/value is a CSS custom property bridged from the host (the frame
- * writes its own :root block from init.tokens). No bespoke hex. Matches the
- * mermaid/monaco frame convention so the viewer inherits the host palette.
+ * Every color/spacing/radius/font is a CSS custom property the HOST bridges in
+ * via init/themeChanged (dom.ts writes a :root{} block from params.tokens).
+ * Bespoke hex appears ONLY in the :root fallback block below — never in a rule
+ * — so the viewer inherits the host palette by construction in both light and
+ * dark schemes. There is deliberately NO prefers-color-scheme gating: theme is
+ * host-driven (the host re-resolves and re-sends tokens on a scheme flip).
  *
- * The canvas + text layer are absolutely positioned in a wrapper sized to the
- * rendered page; the text layer is overlaid for selectable text (transparent
- * text, just hit-testing), exactly like pdf.js's default viewer.
+ * Matches the mermaid/js/frame and monaco/js/frame token conventions.
  */
 
+/* ---- defaults applied only until the host bridges tokens ---- */
 :root {
-  /* Host-bridged tokens (written by viewer.js from init.tokens). These fallbacks
-     are only seen if the bridge has not yet applied tokens. */
-  --color-bg: #ffffff;
+  --color-background: #ffffff;
   --color-surface: #ffffff;
-  --color-text: #1a1a1a;
-  --color-muted: #6b7280;
-  --color-border: #d1d5db;
-  --color-accent: #2563eb;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-primary: #6366f1;
+  --color-primary-fg: #ffffff;
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --radii-sm: 6px;
+  --radii-md: 10px;
+  --font-size-sm: 0.85rem;
+  --font-size-xs: 0.75rem;
+  --shadow-page: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--color-bg);
+  height: 100%;
+  background: var(--color-background);
+}
+
+body {
+  font-family: var(--font-body);
   color: var(--color-text);
-  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* the viewer owns its own scroll regions */
 }
 
 #pdf-root {
-  padding: 16px;
+  height: 100%;
+}
+
+/* ---- app shell -------------------------------------------------------- */
+
+.pdf-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-background);
+}
+
+.pdf-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0; /* allow the scroll child to shrink within the flex row */
+  position: relative;
+}
+
+/* ---- toolbar ---------------------------------------------------------- */
+
+.pdf-toolbar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.pdf-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.pdf-tool-group[role="search"] {
+  margin-left: auto;
+}
+
+.pdf-btn {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  line-height: 1;
+  min-height: 32px;
+}
+
+.pdf-btn:hover {
+  background: var(--color-surface-soft);
+  border-color: var(--color-border-strong);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-icon-btn {
+  min-width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  padding: 0 var(--spacing-xs);
+}
+
+.pdf-zoom-label {
+  min-width: 5.5em;
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+.pdf-page-input {
+  font: inherit;
+  width: 3.5em;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs);
+  min-height: 32px;
+  /* hide the native number spinner — we have our own prev/next buttons */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pdf-page-input::-webkit-outer-spin-button,
+.pdf-page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pdf-page-count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.pdf-search-input {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 32px;
+  width: 11em;
+  max-width: 40vw;
+}
+
+.pdf-search-input:focus,
+.pdf-page-input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.pdf-match-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-width: 3.5em;
+  text-align: center;
+}
+
+/* visible focus ring for every keyboard-driven focus */
+.pdf-btn:focus-visible,
+.pdf-tab:focus-visible,
+.pdf-thumb:focus-visible,
+.pdf-outline-btn:focus-visible,
+.pdf-annot-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radii-sm);
+}
+
+/* ---- progress + status ----------------------------------------------- */
+
+.pdf-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-progress-bar {
+  flex: 1 1 auto;
+  max-width: 320px;
+  height: 6px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pdf-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-primary);
+  transition: width 120ms linear;
+}
+
+.pdf-progress-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-status {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-height: 1.25em;
+}
+
+.pdf-status[data-state="error"] {
+  color: var(--color-danger);
+}
+
+.pdf-status[data-state="ready"] {
+  color: var(--color-primary);
+}
+
+/* ---- sidebar ---------------------------------------------------------- */
+
+.pdf-sidebar {
+  flex: 0 0 auto;
+  width: 240px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pdf-sidebar[hidden] {
+  display: none;
+}
+
+.pdf-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pdf-tab {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.pdf-tab[aria-selected="true"] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+
+.pdf-tab[hidden] {
+  display: none;
+}
+
+.pdf-panel {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--spacing-sm);
+  min-height: 0;
+}
+
+.pdf-panel[hidden] {
+  display: none;
+}
+
+.pdf-panel:focus-visible {
+  outline: none;
+}
+
+/* outline tree */
+.pdf-outline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pdf-outline .pdf-outline {
+  padding-left: var(--spacing-md);
+}
+
+.pdf-outline-item {
+  margin: 0;
+}
+
+.pdf-outline-btn {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  display: block;
+  word-break: break-word;
+}
+
+.pdf-outline-btn:hover {
+  background: var(--color-surface-soft);
+}
+
+.pdf-outline-btn.is-external {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* thumbnails */
+.pdf-thumb-list {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
-.pdf-page-wrapper {
-  position: relative;
-  background: var(--color-surface);
+.pdf-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radii-sm);
+  cursor: pointer;
+}
+
+.pdf-thumb:hover {
+  background: var(--color-surface-soft);
+}
+
+.pdf-thumb.is-current {
+  border-color: var(--color-primary);
+}
+
+.pdf-thumb-placeholder {
+  background: var(--color-surface-soft);
   border: 1px solid var(--color-border);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: var(--radii-sm);
   line-height: 0;
+  overflow: hidden;
 }
 
-#pdf-canvas {
+.pdf-thumb-canvas {
   display: block;
 }
 
+.pdf-thumb-num {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- scroll region + pages ------------------------------------------- */
+
+.pdf-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  position: relative;
+  background: var(--color-surface-soft);
+  /* allow native one-finger pan in both axes; the viewer owns two-finger pinch */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pdf-scroll:focus-visible {
+  outline: none;
+}
+
+.pdf-pages {
+  /* height is set at runtime to the summed page heights */
+  padding: var(--spacing-lg) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.pdf-page {
+  position: relative;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-page);
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.pdf-page-inner {
+  position: relative;
+}
+
+.pdf-canvas {
+  display: block;
+}
+
+/* selectable transparent text overlay (the canvas shows the glyphs; this layer
+   provides hit-testing/selection + is the screen-reader surface) */
 .text-layer {
   position: absolute;
   inset: 0;
   overflow: hidden;
   line-height: 1;
-  /* The text layer is invisible-by-default overlay text: the canvas shows the
-     glyphs; this layer only provides selection hit-testing. */
   color: transparent;
   pointer-events: auto;
   -webkit-user-select: text;
   user-select: text;
+  opacity: 1;
 }
 
 .text-layer span {
   position: absolute;
   white-space: pre;
+  color: transparent;
   transform-origin: 0 0;
+}
+
+.text-layer ::selection {
+  background: var(--color-primary);
   color: transparent;
 }
 
-.pdf-status {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 13px;
+/* annotation overlays */
+.annot-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.pdf-status[data-state="error"] {
-  color: #b91c1c;
+.pdf-annot-link {
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+  border-radius: var(--radii-sm);
 }
 
-.pdf-status[data-state="ready"] {
-  color: var(--color-accent);
+.pdf-annot-link.is-internal {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.pdf-annot-link.is-external {
+  background: transparent;
+  outline: 1px dashed var(--color-border-strong);
+  cursor: not-allowed;
+}
+
+.pdf-annot-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* per-page placeholder shown until the canvas renders (or on decode failure) */
+.pdf-page-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  line-height: 1.4;
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.pdf-page-placeholder[hidden] {
+  display: none;
+}
+
+.pdf-page-placeholder.is-error {
+  color: var(--color-danger);
+}
+
+/* search highlight inside the text layer */
+.pdf-search-mark {
+  background: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  color: transparent;
+  border-radius: 2px;
+}
+
+.pdf-search-mark.is-current {
+  background: var(--color-primary);
+}
+
+/* ---- responsive / mobile --------------------------------------------- */
+
+@media (max-width: 640px) {
+  .pdf-toolbar {
+    padding: var(--spacing-xs);
+  }
+
+  .pdf-search-input {
+    width: 8em;
+  }
+
+  /* sidebar becomes an overlay on narrow viewports */
+  .pdf-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: 80%;
+    max-width: 280px;
+    box-shadow: var(--shadow-page);
+  }
+
+  .pdf-tool-group[role="search"] {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* coarse pointers (touch): enlarge tap targets to ≥44px */
+@media (pointer: coarse) {
+  .pdf-btn,
+  .pdf-icon-btn,
+  .pdf-tab,
+  .pdf-thumb {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .pdf-search-input,
+  .pdf-page-input {
+    min-height: 40px;
+  }
+}
+
+/* respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .pdf-progress-fill {
+    transition: none;
+  }
 }
