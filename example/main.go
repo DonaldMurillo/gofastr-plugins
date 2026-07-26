@@ -13,16 +13,20 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
+	"github.com/DonaldMurillo/gofastr-plugins/pdf"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
 	"github.com/DonaldMurillo/gofastr/framework"
@@ -94,6 +98,24 @@ func newApp() (*framework.App, error) {
 		geomap.WithGeocoder(demoGeocoder),
 	))
 
+	// The PDF viewer / editor / redactor — the fourth SANDBOXED heavy-JS plugin,
+	// and the one whose cage is the product rather than the tax. The frame has
+	// connect-src 'none', so a document opened for redaction structurally cannot
+	// be exfiltrated: the host pushes its bytes in over the bridge and takes the
+	// produced bytes back the same way. Demo at /pdf.
+	//
+	// The demo runs in the fullest mode so the gallery exercises the whole
+	// surface; a real app picks the narrowest mode that fits, because mode is a
+	// host decision enforced on both sides of the bridge (see docs/pdf.md).
+	// WithExportHandler is what grants pdf:export, and ModeRedact refuses to
+	// construct without it — so the demo has to say where produced bytes go.
+	app.RegisterPlugin(pdf.New(
+		pdf.WithDevGrantAll(),
+		pdf.WithDemoPage(),
+		pdf.WithMode(pdf.ModeRedact),
+		pdf.WithExportHandler(demoExport),
+	))
+
 	if err := app.InitPlugins(); err != nil {
 		return nil, err
 	}
@@ -102,6 +124,7 @@ func newApp() (*framework.App, error) {
 	// each plugin's demo. Registered after InitPlugins so it sits alongside the
 	// plugin routes on the same router.
 	registerShell(app.Router())
+	registerDemoExportRoute(app.Router())
 
 	return app, nil
 }
@@ -158,4 +181,51 @@ func main() {
 	if err := http.Serve(ln, app.Router()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// demoExport is the example app's pdf.WithExportHandler: it keeps the produced
+// bytes in memory and hands back a URL that serves them once. Two reasons not to
+// touch the filesystem — a demo that writes redacted documents to disk is a bad
+// example to copy, and the e2e journey only needs to read the bytes back to
+// assert the redacted string is gone.
+//
+// A real app persists to its document store and returns a durable URL.
+func demoExport(_ context.Context, req pdf.ExportRequest) (string, error) {
+	demoExports.mu.Lock()
+	defer demoExports.mu.Unlock()
+	if demoExports.byID == nil {
+		demoExports.byID = map[string][]byte{}
+	}
+	// Content-addressed so a repeated export is idempotent and the e2e suite can
+	// predict nothing — it reads the URL out of the exportResult it was given.
+	sum := sha256.Sum256(req.Bytes)
+	id := hex.EncodeToString(sum[:8])
+	demoExports.byID[id] = req.Bytes
+	return "/pdf/exported/" + id, nil
+}
+
+var demoExports struct {
+	mu   sync.Mutex
+	byID map[string][]byte
+}
+
+// registerDemoExportRoute serves what demoExport stored. Registered alongside
+// the gallery shell so it lives on the same router as the plugin routes. Takes
+// a structural interface for the same reason registerShell does — the example
+// needs one method, not the whole router type.
+func registerDemoExportRoute(rt interface {
+	Get(string, http.Handler)
+}) {
+	rt.Get("/pdf/exported/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		demoExports.mu.Lock()
+		b, ok := demoExports.byID[r.PathValue("id")]
+		demoExports.mu.Unlock()
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", "inline; filename=\"export.pdf\"")
+		_, _ = w.Write(b)
+	}))
 }

@@ -6,6 +6,78 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — pdf 0.1.0: viewer, editor and redactor (2026-07-26)
+
+The fourth sandboxed heavy-JS plugin, built on pdf.js (render) and pdf-lib
+(write). Route `/__gofastr/plugin/pdf`, schema `pdf-v1`, demo at `/pdf`.
+Bundle 2733 KB raw / 869 KB gzip.
+
+**The sandbox is the product here, not the tax.** The framed CSP gives the
+frame `connect-src 'none'`, no workers, no `blob:` and an opaque origin, so a
+frame holding a confidential PDF *cannot exfiltrate it*. The host pushes the
+document in over the bridge and takes produced bytes back the same way. This
+plugin therefore has **no trusted-mount opt-out**, unlike richtext. Three
+consequences fall out of it: download, print and clipboard-write are host
+capabilities (the CSP sandbox token grants none of them in-frame); `/doc/{id}`
+is fetched by the privileged host adapter, never the frame; and no code
+splitting is possible, because a dynamic `import()` is a CORS-mode fetch an
+opaque origin can never satisfy.
+
+**Redaction removes content.** Pages carrying a redaction are rasterized and
+embedded into a newly built document; untouched pages are `copyPages`'d
+losslessly. Six checks run in-frame *before any bytes are released*, and
+verification failure emits nothing. Two traps this catches that a naive
+implementation would not:
+
+- A raw substring scan is not a byte search. pdf-lib writes text as hex strings
+  and packs the Info dict into a compressed object stream as UTF-16BE hex, so
+  the bytes must be inflated and the tokens decoded first.
+- Absence is asserted **per rect**. The same string may legitimately appear
+  elsewhere, so a content-stream hit that text extraction places only on
+  non-redacted pages is a warning — but it fails closed: present in the bytes
+  yet extractable nowhere (invisible text) is a leak.
+
+`/Annots` was measured surviving `copyPages` with a planted secret, so redact
+mode strips annotations by default. A black-rectangle "redaction" is kept as a
+regression test, proven to still leak three ways with the verifier rejecting
+it, and the shipped pipeline's output was judged by an independent
+implementation of the same six checks.
+
+**Scanned documents would have rendered blank.** pdf.js decodes JPEG 2000 and
+JBIG2 — the codecs real scans use, and scans are what people redact — through
+WebAssembly, which cannot instantiate under the framed CSP at all; its pure-JS
+fallbacks are reached by a dynamic `import()` an opaque origin cannot satisfy
+either. Both paths dead meant a **blank white page with no error, no console
+message and no CSP violation**. `pdf/js/build.mjs` rewrites that one dynamic
+import into a static dispatcher over the inlined fallbacks, asserted at build
+time so a pdfjs-dist upgrade fails loudly rather than silently restoring blank
+scans. No gofastr core change was required.
+
+Mode (`view` / `annotate` / `redact`) is a host decision enforced on both sides
+of the bridge; `ModeRedact` requires the optional `pdf:export` capability and
+panics at construction without it. Capability denial answers 403 on every route
+— `protocol-v1.md` prose says 412, but `pluginhost.WriteCapabilityDenied`, which
+every shipped plugin calls, writes 403; logged as an upstream thread rather than
+split inside one plugin.
+
+### Fixed — the pdf annotation editor behaved nothing like an editor (2026-07-26)
+
+Found by driving the UI, not by reading tests — the suite was green throughout,
+because every annotation assertion checked `annotationCount` or exported bytes,
+never that an annotation lands where the user drew it. Position fidelity is now
+the acceptance criterion, checked across zoom and rotation.
+
+- Readiness lied: `__pdfRendered` fired ~500 ms before layout settled, with the
+  page slot at the raw PDF height and a 0×0 canvas.
+- Annotations painted at PDF coordinates — a drag from page-y 120 to 180 landed
+  at y=719, 41 px tall for a 60 px gesture. Now dx=0, dy=0 against the gesture.
+- Highlight never created anything; the stamp modal could not be closed with
+  Escape; the tool stayed armed after placing, so the click meant to select what
+  you just drew drew another one instead.
+
+Selection itself was never broken — it was unreachable, because nothing was
+where you left it.
+
 ### Changed — gofastr v0.38.1 → v0.46.0 (2026-07-26)
 
 - Eight framework releases in one step. No plugin code changed: build, vet, the

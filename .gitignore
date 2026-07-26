@@ -26,3 +26,7 @@ playwright-report/
 # Go workspace — local-only dev wiring to a sibling gofastr checkout
 go.work
 go.work.sum
+
+# Throwaway spike screenshots (probe artifacts, not deliverables)
+pdf/js/*.png
+pdf/js/*.pdf

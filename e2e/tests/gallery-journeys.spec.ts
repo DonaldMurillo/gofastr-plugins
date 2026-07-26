@@ -12,8 +12,12 @@ const navItem = (page: Page, slug: string) => page.locator(`.nav-item[data-slug=
 test("homepage shows the gallery: sidebar + a card per plugin, no demo framed yet", async ({ page }) => {
   await page.goto("/");
   await expect(sidebar(page)).toBeVisible();
-  await expect(page.locator(".nav-item")).toHaveCount(5); // richtext, mermaid, monaco, tour, map
-  await expect(page.locator(".home .card")).toHaveCount(5);
+  // richtext, mermaid, monaco, pdf, tour, map
+  await expect(page.locator(".nav-item")).toHaveCount(6);
+  await expect(page.locator(".home .card")).toHaveCount(6);
+  // Name them rather than only counting: a count alone passes if a card is
+  // renamed or duplicated, and this is the completeness canary for the gallery.
+  await expect(navItem(page, "pdf")).toBeVisible();
   await expect(home(page)).toBeVisible();
   await expect(frame(page)).not.toHaveClass(/show/); // nothing framed on the home view
 });

@@ -27,6 +27,9 @@ gofastr-plugins/
 │                 MountMarker, broker — distilled from the editor
 ├── richtext/      the ProseMirror block editor plugin (#1) + ssr/ read renderer
 ├── mermaid/      the Mermaid diagram plugin (#2, the completeness canary)
+├── pdf/          the PDF viewer/editor/redactor — the plugin whose cage IS
+│                 the product: connect-src 'none' means a document opened for
+│                 redaction cannot be exfiltrated by the frame that edits it
 ├── example/      ONE gofastr app that imports & mounts every plugin —
 │                 the integration host, visual/e2e surface, completeness canary
 ├── plugins.json  the curated registry index (convention, not a service) —

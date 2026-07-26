@@ -120,7 +120,128 @@ mounted — why the cage?"). Resolution, from the app owner:
   scoped wrapper (`ui.setOverlayParent`). The full e2e journey suite runs
   against BOTH mounts in WebKit + Chromium.
 
+## Decision: the PDF plugin — rasterize to redact, and never trust the frame
+## with the network (2026-07-26)
+
+The fourth sandboxed plugin is a PDF **viewer / editor / redactor**. A redactor
+is the first plugin here where getting it subtly wrong leaks user data rather
+than rendering something ugly, so the decisions below were made against measured
+evidence (two spikes) rather than judgement alone.
+
+**Packaging — one plugin, three host-selected modes.** `pdf.WithMode(ModeView |
+ModeAnnotate | ModeRedact)`, defaulting to `ModeView`. Mode is chosen by the
+host, never by the plugin or the user, and is enforced on *both* sides: the
+frame hides UI, and the Go handlers reject payloads the mode does not permit.
+UI-only gating would be authorization in the wrong layer.
+
+**No trusted mount for this plugin, ever.** richtext has one (see the 2026-07-13
+decision above). A redactor must not. The sandbox is not a tax here — it is the
+product's main security property, see below.
+
+**`connect-src 'none'` is the feature.** The framed CSP gives the frame no
+network of any kind. A frame holding a confidential PDF therefore *cannot
+exfiltrate it*: no fetch, no XHR, no WebSocket, no worker, no cookies, no
+storage, no host DOM. The host pushes document bytes in over the postMessage
+bridge and receives produced bytes back the same way. That forces the rest of
+the architecture, and it is worth more than the convenience it costs:
+
+- The canonical document is a small JSON **overlay** (`pdf-v1`), never the file
+  bytes; the PDF is an external resource the host resolves. All overlay geometry
+  is in **PDF user space** (points, bottom-left origin) plus the page's own
+  `/Rotate`, never CSS pixels, so it survives zoom, rotation and re-render and
+  maps 1:1 into pdf-lib at export.
+- `GET /doc/{id}` is called by the privileged host adapter, never by the frame.
+- **Download, print and clipboard-write do not work in the frame** (the framed
+  CSP's own `sandbox allow-scripts` token grants no `allow-downloads`,
+  `allow-modals` or `allow-popups`; clipboard-write was observed rejected in
+  both engines). All three become host capabilities over the bridge.
+- **Code splitting is impossible** — a dynamic `import()` is a CORS-mode module
+  fetch that an opaque origin can never satisfy. Everything ships in one bundle
+  per entry. This is not a bundler preference; it is a hard constraint.
+
+**Redaction engine — rasterize affected pages. MIT/Apache only.** Pages carrying
+a redaction are rendered at a chosen DPI, masked, and embedded as images into a
+**newly built** document; untouched pages are `copyPages`'d losslessly. The
+alternatives were measured and rejected:
+
+- **MuPDF-wasm** is the only turn-key true (text-preserving) redaction engine —
+  and it is AGPL-3.0 or a quote-based Artifex commercial licence, 4.7 MB gzip.
+- **PDFium-wasm** is licence-clean (BSD-3) but 2.0 MB gzip and exposes no
+  redaction API; you would hand-roll the geometry MuPDF already does.
+- **Rebuilding content streams from pdf.js `getOperatorList()`** is not
+  tractable: pdf.js has no write-back, so it means re-implementing a PDF
+  serializer, splitting `TJ` arrays mid-run and re-subsetting fonts.
+- And decisively: **no WebAssembly can execute in the frame at all.** Tested
+  directly — `WebAssembly.instantiate` throws `CompileError` under
+  `script-src <origin>`; it needs `'wasm-unsafe-eval'`, which is a gofastr *core*
+  policy change (and would still leave `eval()` blocked). So both wasm engines
+  were unavailable regardless of licence.
+
+The honest guarantee, which `docs/pdf.md` states plainly: content under a
+redaction rect is absent from the output and the plugin proves it before
+releasing the file; redacted pages become images and lose text searchability;
+untouched pages keep full fidelity.
+
+**Verification is client-side, gated in CI, and assumes nothing.** Six checks
+before any bytes leave the frame: byte search over **decompressed** streams,
+per-page text extraction, per-rect intersection ("covered but present"),
+metadata/XMP, annotation contents, and incremental-update residue. Verification
+failure emits **no file**. Two traps found by measurement:
+
+1. **A naive `strings | grep` misses the leak entirely.** pdf-lib writes text as
+   hex strings (`<546F6B656E3A…> Tj`) and packs the Info dict into a compressed
+   object stream as UTF-16BE hex. You must inflate and decode before searching,
+   or you ship a verifier that verifies nothing.
+2. **`/Annots` survives `copyPages`** — proven by planting a secret in an
+   annotation and watching it come through a fresh rebuild. An annotation's
+   `/Contents` is exactly where a second copy of a sensitive string hides, so
+   redact mode strips annotations by default. A fresh rebuild *does* drop XMP,
+   `/Outlines`, `/AcroForm`, `/EmbeddedFiles` and JS `/AA` for free; the Info
+   dict must be deleted explicitly because clearing its keys leaves stubs.
+
+Absence is asserted **per rect**, not globally — the same string may legitimately
+appear elsewhere un-redacted, and a global check would false-fail. Other
+occurrences are reported as a warning, which is also why the UI offers "redact
+the N other occurrences of this text": a user who redacts one instance and
+misses three is the likeliest real-world failure.
+
+The counter-example is a first-class regression test: a black rectangle drawn
+over text, asserted to STILL leak that text three ways (pdf.js extraction,
+decompressed-stream grep, real browser select-and-copy). It exists so we can
+never quietly regress into shipping cosmetic redaction.
+
+**The scanned-document trap (and why the plugin would otherwise have been
+useless for its main job).** pdf.js decodes JPEG 2000 and JBIG2 — the codecs
+real scans use, and scans are what people redact — through WebAssembly, which
+cannot instantiate here. pdf.js *does* ship pure-JS fallbacks for both, but
+reaches them with a **dynamic `import()`**, which an opaque origin can never
+satisfy either. The observed result was the worst possible failure mode: a
+scanned page rendered as a **blank white page with no error, no console message
+and no CSP violation** — a user would "redact" a blank page and believe it
+worked. (`verbosity: 0`, set to keep a console-noise gate green, had also
+silenced the one warning that hinted at it.)
+
+Fixed in `pdf/js/build.mjs`: an esbuild plugin rewrites that single dynamic
+import into a static dispatcher over the two inlined fallbacks, and
+`getDocument` passes `useWasm: false`. The rewrite is **asserted at build time**,
+so a pdfjs-dist upgrade that reshapes the expression fails the build loudly
+instead of silently restoring blank scans. Cost: ~156 KB gzip. Verified in
+WebKit against real fixtures (`pdf/testdata/scan-jpx.pdf` went from 0 to 181,053
+non-white pixels; `scan-jbig2.pdf` renders at 316,750), both kept as regression
+fixtures. **This is why we did not need to ask core for `'wasm-unsafe-eval'`.**
+
 ## Open threads
+
+- **Upstream: capability-denied status code disagrees with itself.**
+  `docs/plugin-platform.md` (and `design/protocol-v1.md` §5) state that a denied
+  capability is "HTTP 412 on the route side", but the platform's own
+  `pluginhost.WriteCapabilityDenied` — the helper every shipped plugin calls —
+  writes **403**. The `pdf` plugin follows the implementation (403 on all three
+  routes) because uniformity matters more to a host writing one error branch
+  than either code does on its own; splitting the difference *within* a plugin
+  would be the worst outcome. Core should pick one and make prose and code
+  agree. Found 2026-07-26.
+
 
 - **GPT-5.6-sol's crux take is PENDING** — its provider was rate-capped during
   the session (openai-codex 5h window). Add it when the window reopens; a genuine

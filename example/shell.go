@@ -26,6 +26,7 @@ var demoEntries = []demoEntry{
 	{"richtext", "Rich Text", "/richtext", "ProseMirror block editor — full Notion-class editing.", "sandboxed", "📝"},
 	{"mermaid", "Mermaid", "/mermaid", "Author diagrams and see them render live.", "sandboxed", "📊"},
 	{"monaco", "Monaco", "/monaco", "The VS Code editor — configurable, with a diff mode.", "sandboxed", "🖥️"},
+	{"pdf", "PDF", "/pdf", "View, annotate and truly redact PDFs — the frame has no network at all.", "sandboxed", "📄"},
 	{"tour", "Guided Tour", "/tour", "Appcues-style tour that spotlights real page elements.", "trusted", "🧭"},
 	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
 }

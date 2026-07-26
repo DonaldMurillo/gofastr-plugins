@@ -1,0 +1,1162 @@
+/*
+ * GoFastr PDF viewer — TOKEN-ONLY frame stylesheet (protocol v1 §7).
+ *
+ * Every color/spacing/radius/font is a CSS custom property the HOST bridges in
+ * via init/themeChanged (dom.ts writes a :root{} block from params.tokens).
+ * Bespoke hex appears ONLY in the :root fallback block below — never in a rule
+ * — so the viewer inherits the host palette by construction in both light and
+ * dark schemes. There is deliberately NO prefers-color-scheme gating: theme is
+ * host-driven (the host re-resolves and re-sends tokens on a scheme flip).
+ *
+ * Matches the mermaid/js/frame and monaco/js/frame token conventions.
+ */
+
+/* ---- defaults applied only until the host bridges tokens ---- */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-primary: #6366f1;
+  --color-primary-fg: #ffffff;
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --radii-sm: 6px;
+  --radii-md: 10px;
+  --font-size-sm: 0.85rem;
+  --font-size-xs: 0.75rem;
+  --shadow-page: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-background);
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* the viewer owns its own scroll regions */
+}
+
+#pdf-root {
+  height: 100%;
+}
+
+/* ---- app shell -------------------------------------------------------- */
+
+.pdf-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-background);
+}
+
+.pdf-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0; /* allow the scroll child to shrink within the flex row */
+  position: relative;
+}
+
+/* ---- toolbar ---------------------------------------------------------- */
+
+.pdf-toolbar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.pdf-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.pdf-tool-group[role="search"] {
+  margin-left: auto;
+}
+
+.pdf-btn {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  line-height: 1;
+  min-height: 32px;
+}
+
+.pdf-btn:hover {
+  background: var(--color-surface-soft);
+  border-color: var(--color-border-strong);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-icon-btn {
+  min-width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  padding: 0 var(--spacing-xs);
+}
+
+.pdf-zoom-label {
+  min-width: 5.5em;
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+.pdf-page-input {
+  font: inherit;
+  width: 3.5em;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs);
+  min-height: 32px;
+  /* hide the native number spinner — we have our own prev/next buttons */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pdf-page-input::-webkit-outer-spin-button,
+.pdf-page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pdf-page-count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.pdf-search-input {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 32px;
+  width: 11em;
+  max-width: 40vw;
+}
+
+.pdf-search-input:focus,
+.pdf-page-input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.pdf-match-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-width: 3.5em;
+  text-align: center;
+}
+
+/* visible focus ring for every keyboard-driven focus */
+.pdf-btn:focus-visible,
+.pdf-tab:focus-visible,
+.pdf-thumb:focus-visible,
+.pdf-outline-btn:focus-visible,
+.pdf-annot-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radii-sm);
+}
+
+/* ---- progress + status ----------------------------------------------- */
+
+.pdf-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-progress-bar {
+  flex: 1 1 auto;
+  max-width: 320px;
+  height: 6px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pdf-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-primary);
+  transition: width 120ms linear;
+}
+
+.pdf-progress-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-status {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-height: 1.25em;
+}
+
+.pdf-status[data-state="error"] {
+  color: var(--color-danger);
+}
+
+.pdf-status[data-state="ready"] {
+  color: var(--color-primary);
+}
+
+/* ---- sidebar ---------------------------------------------------------- */
+
+.pdf-sidebar {
+  flex: 0 0 auto;
+  width: 240px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pdf-sidebar[hidden] {
+  display: none;
+}
+
+.pdf-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pdf-tab {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.pdf-tab[aria-selected="true"] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+
+.pdf-tab[hidden] {
+  display: none;
+}
+
+.pdf-panel {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--spacing-sm);
+  min-height: 0;
+}
+
+.pdf-panel[hidden] {
+  display: none;
+}
+
+.pdf-panel:focus-visible {
+  outline: none;
+}
+
+/* outline tree */
+.pdf-outline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pdf-outline .pdf-outline {
+  padding-left: var(--spacing-md);
+}
+
+.pdf-outline-item {
+  margin: 0;
+}
+
+.pdf-outline-btn {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radii-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  display: block;
+  word-break: break-word;
+}
+
+.pdf-outline-btn:hover {
+  background: var(--color-surface-soft);
+}
+
+.pdf-outline-btn.is-external {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* thumbnails */
+.pdf-thumb-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.pdf-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radii-sm);
+  cursor: pointer;
+}
+
+.pdf-thumb:hover {
+  background: var(--color-surface-soft);
+}
+
+.pdf-thumb.is-current {
+  border-color: var(--color-primary);
+}
+
+.pdf-thumb-placeholder {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-sm);
+  line-height: 0;
+  overflow: hidden;
+}
+
+.pdf-thumb-canvas {
+  display: block;
+}
+
+.pdf-thumb-num {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- scroll region + pages ------------------------------------------- */
+
+.pdf-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  position: relative;
+  background: var(--color-surface-soft);
+  /* allow native one-finger pan in both axes; the viewer owns two-finger pinch */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pdf-scroll:focus-visible {
+  outline: none;
+}
+
+.pdf-pages {
+  /* height is set at runtime to the summed page heights */
+  padding: var(--spacing-lg) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.pdf-page {
+  position: relative;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-page);
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.pdf-page-inner {
+  position: relative;
+}
+
+.pdf-canvas {
+  display: block;
+}
+
+/* selectable transparent text overlay (the canvas shows the glyphs; this layer
+   provides hit-testing/selection + is the screen-reader surface) */
+.text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  color: transparent;
+  pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
+  opacity: 1;
+}
+
+.text-layer span {
+  position: absolute;
+  white-space: pre;
+  color: transparent;
+  transform-origin: 0 0;
+}
+
+.text-layer ::selection {
+  background: var(--color-primary);
+  color: transparent;
+}
+
+/* annotation overlays */
+.annot-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-annot-link {
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+  border-radius: var(--radii-sm);
+}
+
+.pdf-annot-link.is-internal {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.pdf-annot-link.is-external {
+  background: transparent;
+  outline: 1px dashed var(--color-border-strong);
+  cursor: not-allowed;
+}
+
+.pdf-annot-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* per-page placeholder shown until the canvas renders (or on decode failure) */
+.pdf-page-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  line-height: 1.4;
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.pdf-page-placeholder[hidden] {
+  display: none;
+}
+
+.pdf-page-placeholder.is-error {
+  color: var(--color-danger);
+}
+
+/* search highlight inside the text layer */
+.pdf-search-mark {
+  background: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  color: transparent;
+  border-radius: 2px;
+}
+
+.pdf-search-mark.is-current {
+  background: var(--color-primary);
+}
+
+/* ---- P2 edit surface -------------------------------------------------- */
+/*
+ * The edit layer is a SIBLING of annot-layer/text-layer/canvas inside each
+ * page slot. It has pointer-events: none so empty areas pass clicks through to
+ * the text layer (selection still works); the editor's hit-testing happens on
+ * the pages CONTAINER, not on this layer, so individual annotation nodes do
+ * not need to be pointer targets either.
+ */
+.edit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.pdf-ann {
+  pointer-events: none; /* hit-tested by coordinate, not by element */
+}
+
+/* ---- form fill layer -------------------------------------------------- */
+.form-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+.pdf-form-input {
+  pointer-events: auto;
+  position: absolute;
+  font: inherit;
+  border: 1px solid var(--color-primary, #6366F1);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, rgba(255,255,255,0.7));
+  color: var(--color-text, #111);
+  padding: 2px 4px;
+}
+.pdf-form-input:focus-visible {
+  outline: 2px solid var(--color-primary, #6366F1);
+  outline-offset: 1px;
+}
+.pdf-form-checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.pdf-highlight-quad {
+  pointer-events: none;
+}
+
+.pdf-selection {
+  position: absolute;
+  border: 1.5px dashed var(--color-primary, #6366F1);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.pdf-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--color-surface, #fff);
+  border: 1.5px solid var(--color-primary, #6366F1);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* note popup + text editor float above the page */
+.pdf-note-popup,
+.pdf-text-edit-wrap {
+  position: absolute;
+  z-index: 6;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radii-md, 8px);
+  padding: var(--spacing-xs, 4px);
+  box-shadow: var(--shadow-page, 0 2px 8px rgba(0,0,0,0.15));
+}
+
+.pdf-note-editor,
+.pdf-text-editor,
+.pdf-modal-input {
+  font: inherit;
+  width: 12em;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radii-sm, 4px);
+  padding: var(--spacing-xs, 4px);
+  background: var(--color-background, #fff);
+  color: var(--color-text, #111);
+}
+
+.pdf-text-ann {
+  pointer-events: none;
+  font-family: var(--font-body, system-ui, sans-serif);
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+.pdf-note {
+  border: 1px solid var(--color-border-strong, #999);
+  border-radius: var(--radii-sm, 4px);
+}
+
+.pdf-stamp img {
+  display: block;
+}
+
+/* ---- edit toolbar ----------------------------------------------------- */
+
+.pdf-edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm, 6px);
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #fff);
+}
+
+.pdf-edit-btn {
+  font: inherit;
+  min-height: 32px;
+  min-width: 32px;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radii-md, 8px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+  cursor: pointer;
+}
+
+.pdf-edit-btn:hover:not(:disabled) {
+  background: var(--color-surface-soft, #f3f4f6);
+}
+
+.pdf-edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-edit-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #6366F1);
+  outline-offset: 1px;
+}
+
+.pdf-tool-btn[aria-pressed="true"] {
+  background: var(--color-primary, #6366F1);
+  color: var(--color-primary-fg, #fff);
+  border-color: var(--color-primary, #6366F1);
+}
+
+.pdf-color-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-border, #d1d5db);
+}
+
+.pdf-width-btn {
+  font-weight: 600;
+}
+
+.pdf-export-btn {
+  background: var(--color-primary, #6366F1);
+  color: var(--color-primary-fg, #fff);
+  border-color: var(--color-primary, #6366F1);
+}
+
+.pdf-flatten-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-muted, #6b7280);
+}
+
+/* visually-hidden label text for AT (glyph is decorative) */
+.pdf-visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- stamp/signature modal ------------------------------------------- */
+
+.pdf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.pdf-modal-panel {
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+  border-radius: var(--radii-lg, 12px);
+  padding: var(--spacing-lg, 16px);
+  width: min(420px, 92vw);
+  box-shadow: var(--shadow-page, 0 8px 32px rgba(0,0,0,0.25));
+}
+
+.pdf-modal-title {
+  margin: 0 0 var(--spacing-sm, 8px);
+  font-size: var(--font-size-lg, 1.1rem);
+}
+
+.pdf-modal-tabs {
+  display: flex;
+  gap: var(--spacing-xs, 4px);
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.pdf-modal-tab {
+  flex: 1;
+  padding: var(--spacing-xs, 4px);
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+  cursor: pointer;
+  font: inherit;
+}
+
+.pdf-modal-tab[aria-selected="true"] {
+  background: var(--color-primary, #6366F1);
+  color: var(--color-primary-fg, #fff);
+  border-color: var(--color-primary, #6366F1);
+}
+
+.pdf-modal-pane[hidden] {
+  display: none;
+}
+
+.pdf-modal-body {
+  min-height: 140px;
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.pdf-modal-hint {
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-muted, #6b7280);
+  margin: var(--spacing-xs, 4px) 0;
+}
+
+.pdf-sig-canvas {
+  display: block;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radii-sm, 4px);
+  background: #fff;
+  touch-action: none;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+}
+
+.pdf-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-xs, 4px);
+}
+
+/* ---- redaction (mode === "redact") ---------------------------------- */
+
+/* The removal marker on the page: heavy black border + diagonal hatch over a
+ * flat fill, so it reads as "content excised" — never as a drawn rectangle
+ * (the footgun this plugin exists to prevent). Pointer-events enabled so the
+ * list's jump-to and the rect stay associated, but it is not selectable. */
+.pdf-redact-rect {
+  position: absolute;
+  border: 2px solid var(--color-text, #111);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--color-text, #111) 0,
+      var(--color-text, #111) 2px,
+      rgba(0, 0, 0, 0.55) 2px,
+      rgba(0, 0, 0, 0.55) 6px
+    );
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.pdf-redact-rect-label {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  max-width: calc(100% - 4px);
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--color-primary-fg, #fff);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The side panel: pending list + result. Sits under the edit toolbar. */
+.pdf-redact-panel {
+  background: var(--color-surface, #fff);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  color: var(--color-text, #111);
+  font-size: var(--font-size-sm, 0.85rem);
+}
+
+.pdf-redact-title {
+  margin: 0 0 var(--spacing-xs, 4px);
+  font-size: var(--font-size-md, 0.95rem);
+}
+
+.pdf-redact-hint {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-list {
+  list-style: none;
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.pdf-redact-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+}
+
+.pdf-redact-jump {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.pdf-redact-page {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-surface-soft, #f4f4f5);
+  border-radius: var(--radii-sm, 4px);
+  padding: 0 4px;
+}
+
+.pdf-redact-label {
+  color: var(--color-text, #111);
+}
+
+.pdf-redact-preview {
+  color: var(--color-text-subtle, #71717a);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+
+.pdf-redact-del {
+  flex: 0 0 auto;
+}
+
+.pdf-redact-empty {
+  color: var(--color-text-subtle, #71717a);
+  font-style: italic;
+}
+
+/* reason input + apply button live in the edit toolbar's redact group */
+.pdf-reason-input {
+  font: inherit;
+  min-height: 32px;
+  width: 14em;
+  max-width: 40vw;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radii-md, 8px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+}
+
+.pdf-reason-input:focus-visible {
+  outline: 2px solid var(--color-primary, #6366F1);
+  outline-offset: 1px;
+}
+
+.pdf-apply-redact-btn {
+  background: var(--color-danger, #dc2626);
+  color: var(--color-primary-fg, #fff);
+  border-color: var(--color-danger, #dc2626);
+  font-weight: 600;
+}
+
+.pdf-apply-redact-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* the confirm modal's consequence + occurrences assist */
+.pdf-redact-confirm {
+  width: min(520px, 94vw);
+}
+
+.pdf-redact-consequence {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text, #111);
+}
+
+.pdf-redact-meta {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-occ {
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px);
+  background: var(--color-surface-soft, #f4f4f5);
+  border-radius: var(--radii-md, 8px);
+}
+
+.pdf-redact-occ-title {
+  margin: 0 0 var(--spacing-xs, 4px);
+  font-weight: 600;
+}
+
+.pdf-redact-occ-list {
+  list-style: none;
+  margin: 0 0 var(--spacing-xs, 4px);
+  padding: 0;
+  max-height: 120px;
+  overflow: auto;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pdf-redact-add-occ {
+  margin-top: var(--spacing-xs, 4px);
+}
+
+/* progress bar during rasterization */
+.pdf-progress {
+  height: 10px;
+  width: 100%;
+  background: var(--color-surface-soft, #f4f4f5);
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-sm, 4px);
+  overflow: hidden;
+}
+
+.pdf-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-primary, #6366F1);
+  transition: width 0.15s ease-out;
+}
+
+.pdf-redact-progress-text {
+  margin: var(--spacing-xs, 4px) 0 0;
+  color: var(--color-text-muted, #6b7280);
+}
+
+/* result report */
+.pdf-redact-verdict {
+  margin: 0 0 var(--spacing-sm, 8px);
+}
+
+.pdf-redact-ok { color: var(--color-primary, #6366F1); }
+.pdf-redact-fail { color: var(--color-danger, #dc2626); }
+
+.pdf-redact-checks {
+  list-style: none;
+  margin: 0 0 var(--spacing-sm, 8px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+}
+
+.pdf-redact-check {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 6px);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface-soft, #f4f4f5);
+}
+
+.pdf-redact-check.ok .pdf-redact-check-name { color: var(--color-primary, #6366F1); }
+.pdf-redact-check.fail .pdf-redact-check-name { color: var(--color-danger, #dc2626); font-weight: 600; }
+.pdf-redact-check-detail {
+  color: var(--color-text-muted, #6b7280);
+  font-size: var(--font-size-xs, 0.75rem);
+  word-break: break-word;
+}
+
+.pdf-redact-warn {
+  margin: 0 0 var(--spacing-sm, 8px);
+  color: var(--color-warning, #b45309);
+}
+
+.pdf-redact-rasterized {
+  margin: 0;
+  color: var(--color-text-subtle, #71717a);
+}
+
+.pdf-redact-error {
+  margin: 0;
+  color: var(--color-danger, #dc2626);
+  word-break: break-word;
+}
+
+/* touch targets for the edit toolbar */
+@media (pointer: coarse) {
+  .pdf-edit-btn,
+  .pdf-modal-tab,
+  .pdf-apply-redact-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .pdf-reason-input {
+    min-height: 44px;
+  }
+}
+
+/* ---- responsive / mobile --------------------------------------------- */
+
+@media (max-width: 640px) {
+  .pdf-toolbar {
+    padding: var(--spacing-xs);
+  }
+
+  .pdf-search-input {
+    width: 8em;
+  }
+
+  /* sidebar becomes an overlay on narrow viewports */
+  .pdf-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: 80%;
+    max-width: 280px;
+    box-shadow: var(--shadow-page);
+  }
+
+  .pdf-tool-group[role="search"] {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* coarse pointers (touch): enlarge tap targets to ≥44px */
+@media (pointer: coarse) {
+  .pdf-btn,
+  .pdf-icon-btn,
+  .pdf-tab,
+  .pdf-thumb {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .pdf-search-input,
+  .pdf-page-input {
+    min-height: 40px;
+  }
+}
+
+/* ---- layout polish (token-only) --------------------------------------- */
+/* The toolbar progress wrap carries [hidden] until load begins, but the
+ * general .pdf-progress { display: flex } rule outranked the UA [hidden]
+ * default — so the empty progress track was ALWAYS visible and crowded the
+ * `1 / 2` page nav directly above it. Honour the hidden attribute. */
+.pdf-progress[hidden] { display: none; }
+
+/* Two stacked bars (edit toolbar above viewer toolbar) read as one
+ * undifferentiated band. Recess the authoring strip onto surface-soft with a
+ * stronger divider so the tool palette reads as a distinct strip above the
+ * viewer chrome; the buttons stay elevated on the page surface. */
+.pdf-edit-toolbar {
+  background: var(--color-surface-soft, #f4f4f5);
+  border-bottom: 1px solid var(--color-border-strong, #d4d4d8);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+}
+.pdf-edit-toolbar .pdf-edit-btn:not(.pdf-apply-redact-btn):not(.pdf-export-btn):not([aria-pressed="true"]) {
+  background: var(--color-surface, #fff);
+}
+
+/* A touch more vertical rhythm between the page-nav row and progress/status. */
+.pdf-toolbar { gap: var(--spacing-sm, 8px); }
+
+/* "Apply redaction": the enabled action must read unambiguously as a primary
+ * GO; the disabled state must read as "not ready" (neutral), not as a
+ * half-faded red that looked disabled even when armed. */
+.pdf-apply-redact-btn {
+  background: var(--color-danger, #dc2626);
+  color: var(--color-primary-fg, #fff);
+  border: 1px solid var(--color-danger, #dc2626);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.pdf-apply-redact-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.pdf-apply-redact-btn:disabled {
+  background: var(--color-surface-soft, #f4f4f5);
+  color: var(--color-text-subtle, #71717a);
+  border-color: var(--color-border, #e4e4e7);
+  opacity: 1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Anchor colour swatches to the same ≥44px touch target as the glyph buttons. */
+@media (pointer: coarse) {
+  .pdf-color-swatch { min-height: 44px; min-width: 44px; }
+}
+
+/* respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .pdf-progress-fill {
+    transition: none;
+  }
+}

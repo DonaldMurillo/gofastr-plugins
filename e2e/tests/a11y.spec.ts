@@ -31,6 +31,21 @@ test.beforeEach(async ({ request, baseURL }) => {
   await request.post(`${baseURL}/__gofastr/plugin/richtext/save`, { data: EMPTY_DOC });
 });
 
+test("a11y: pdf demo page (host chrome + mount)", async ({ page }) => {
+  await page.goto("/pdf");
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __pdfRendered?: boolean }) | null;
+      return !!f && f.__pdfRendered === true;
+    },
+    undefined,
+    { timeout: 25_000 }
+  );
+  // As with the other sandboxed plugins, axe cannot see into the opaque frame,
+  // so this audits the host page and the mount chrome around it.
+  await audit(page, "pdf demo");
+});
+
 test("a11y: framed demo page (host chrome)", async ({ page }) => {
   await page.goto("/richtext");
   await page.waitForFunction(() => {
