@@ -50,6 +50,18 @@ export interface EditorHost {
   redactDPI: number;
   setStatus(msg: string, kind: StatusKind): void;
   onExportBytes(bytes: Uint8Array, kind: "export" | "download" | "print" | "redact", filename: string, report?: unknown): void;
+  /** Announce a redaction state transition to the host IMMEDIATELY.
+   *
+   *  redactState used to reach the host only as a passenger on docChanged,
+   *  which is debounced 250ms, gated on document:write, and — the part that
+   *  actually broke — only emitted when the DOCUMENT changes. A terminal
+   *  transition to "done" therefore reached the host only if some unrelated
+   *  document mutation happened to be emitted after it. Whether one was is a
+   *  timing race, so a redaction could rasterize, verify and export correctly
+   *  while the host sat on a stale "working" forever, with nothing to show the
+   *  user and no error to report. A status mirror must not depend on an
+   *  unrelated event firing later. */
+  onRedactState(redactState: string, lastVerifyReport?: unknown): void;
   invalidateOverlays(): void;
 }
 
@@ -872,6 +884,16 @@ class EditorImpl implements Editor {
   }
 
   /** Add rects for every other occurrence of `needle` (the assist). */
+  /** Set the redaction state AND tell the host, in one step.
+   *
+   *  Every transition goes through here so none can be left unannounced. The
+   *  assignment and the announcement being separate statements is what let
+   *  "done" be set without ever reaching the host. */
+  private setRedactState(s: typeof state.redactState, report?: unknown): void {
+    state.redactState = s;
+    this.host.onRedactState(s, report);
+  }
+
   private addOccurrences(needle: string, occ: OtherOccurrence[]): void {
     const cmds = occ.map((o) => new AddRedactionCommand({
       id: cryptoId(), page: o.page, rect: o.rect.slice() as PdfRect, reason: needle ? `“${needle.slice(0, 40)}”` : "occurrence",
@@ -899,7 +921,7 @@ class EditorImpl implements Editor {
     if (!this.redactPanel) return;
 
     this.redactBusy = true;
-    state.redactState = "armed";
+    this.setRedactState("armed");
     this.host.setStatus("Capturing redaction targets…", "loading");
     this.redactPanel.clearBody();
 
@@ -910,7 +932,7 @@ class EditorImpl implements Editor {
       captured = await captureGroundTruth(model, redactions);
     } catch (e) {
       this.redactBusy = false;
-      state.redactState = "error";
+      this.setRedactState("error");
       this.host.setStatus("Capture failed: " + msg(e), "error");
       return;
     }
@@ -930,21 +952,38 @@ class EditorImpl implements Editor {
     const dpi = this.host.redactDPI || 200;
 
     // 3. Arm + confirm — the modal names the irreversible consequence.
-    await new Promise<void>((resolve) => {
+    //
+    // The promise resolves with WHICH way the modal closed. Inferring that from
+    // a mutated `redactBusy` flag was the earlier shape, and it hid two bugs:
+    // the cancel path never resolved at all (leaking a suspended async call per
+    // dismissal), and the occurrences-assist path resolved nothing while
+    // leaving redactBusy true — which made the `if (this.redactBusy) return`
+    // guard at the top of this method swallow every subsequent Apply, with no
+    // error anywhere. An explicit outcome makes each exit total.
+    const outcome = await new Promise<"confirm" | "cancel" | "added-occurrences">((resolve) => {
       this.redactPanel!.showConfirm({
         redactionCount: redactions.length,
         pages: affectedPages,
         dpi,
         occurrences,
         needle: primaryNeedle,
-        onConfirm: () => resolve(),
-        onCancel: () => { this.redactBusy = false; state.redactState = "idle"; this.host.setStatus("Redaction cancelled", "ready"); },
+        onConfirm: () => resolve("confirm"),
+        onCancel: () => resolve("cancel"),
+        onAddedOccurrences: () => resolve("added-occurrences"),
       });
     });
-    if (!this.redactBusy) return; // cancelled via onCancel
+    if (outcome !== "confirm") {
+      // Both non-confirm exits return the flow to rest so Apply works again.
+      // addOccurrences() already set its own status naming what it added, so
+      // only the true cancel writes one here.
+      this.redactBusy = false;
+      this.setRedactState("idle");
+      if (outcome === "cancel") this.host.setStatus("Redaction cancelled", "ready");
+      return;
+    }
 
     // 4. Rasterize affected pages only (main-thread work — yields to keep UI live).
-    state.redactState = "working";
+    this.setRedactState("working");
     this.host.setStatus(`Rasterizing ${affectedPages} page${affectedPages === 1 ? "" : "s"} at ${dpi} DPI…`, "loading");
     this.redactPanel.setProgress(0, redactions.length, 0);
     const tStart = performance.now();
@@ -968,7 +1007,7 @@ class EditorImpl implements Editor {
       });
     } catch (e) {
       this.redactBusy = false;
-      state.redactState = "error";
+      this.setRedactState("error");
       const m = msg(e);
       this.redactPanel.setError("Rasterization failed: " + m);
       this.host.setStatus("Redaction failed: " + m, "error");
@@ -985,7 +1024,7 @@ class EditorImpl implements Editor {
       report = await verifyRedaction(output.bytes, { needles, redactions: verifyRects });
     } catch (e) {
       this.redactBusy = false;
-      state.redactState = "error";
+      this.setRedactState("error");
       const m = msg(e);
       this.redactPanel.setError("Verification failed to run: " + m);
       this.host.setStatus("Verification failed: " + m, "error");
@@ -995,13 +1034,13 @@ class EditorImpl implements Editor {
 
     // 6. Emit only on success; surface failure with the full report.
     if (report.ok) {
-      state.redactState = "done";
       state.lastExportError = null;
+      this.setRedactState("done", summarizeReport(report));
       this.redactPanel.setResult(report);
       this.host.onExportBytes(output.bytes, "redact", "gofastr-redacted.pdf", summarizeReport(report));
       this.host.setStatus(`Redacted ${affectedPages} page${affectedPages === 1 ? "" : "s"} — verified, ${output.bytes.length} B`, "ready");
     } else {
-      state.redactState = "error";
+      this.setRedactState("error");
       state.lastExportError = "verification failed";
       this.redactPanel.setResult(report);
       this.host.setStatus("Verification FAILED — no file emitted", "error");

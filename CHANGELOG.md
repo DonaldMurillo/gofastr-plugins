@@ -6,6 +6,40 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Fixed — a finished redaction could look like it never finished (2026-07-26)
+
+`redactState` reached the host only as a passenger on `docChanged` — an event
+that is debounced 250 ms, gated on `document:write`, and emitted only when the
+**document** changes. A status transition is none of those things. So the
+terminal move to `done` arrived only if some unrelated document mutation
+happened to be emitted after it, and whether one was is a race. When it lost,
+the redaction had rasterized, verified and exported correctly while the host
+sat on a stale `working` forever: no error, no console message, a progress UI
+that never finished, and an export the user had no reason to believe existed.
+
+This is why `e2e (webkit)` was red on `main` — the same shape as the tour
+overlay bug below, engine timing deciding whether a later event rescued a state
+nobody had announced. Every transition now goes through one `setRedactState`
+that assigns **and** emits a dedicated `redactStateChanged`, undebounced and
+independent of write capability. The assignment and the announcement being two
+separate statements is precisely what let `done` be set without ever being sent.
+
+- **The occurrences assist wedged redaction permanently.** Its button closed the
+  confirm modal calling neither `onConfirm` nor `onCancel`, so the promise the
+  arm/confirm flow awaits never settled and `redactBusy` stayed `true` — and the
+  re-entrancy guard at the top of `armRedaction` then swallowed every later
+  Apply in silence. A user who took the assist's advice lost the ability to
+  redact for the rest of the session. `showConfirm` now resolves an explicit
+  outcome (`confirm` / `cancel` / `added-occurrences`) so each exit is total;
+  inferring it from a mutated flag is what hid this. The cancel path never
+  resolved either, leaking a suspended call per dismissal.
+- **The assist was unreachable from the demo, which is why nothing caught it.**
+  A needle is a whole text item, never clipped to the rect, and no line in
+  `sample.pdf` repeated — so the button never rendered. Page 2 now repeats page
+  1's title verbatim, and a journey drives the button and then requires a
+  subsequent redaction to actually complete. It fails against the previous
+  bundle.
+
 ### Added — pdf 0.1.0: viewer, editor and redactor (2026-07-26)
 
 The fourth sandboxed heavy-JS plugin, built on pdf.js (render) and pdf-lib

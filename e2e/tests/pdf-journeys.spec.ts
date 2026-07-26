@@ -213,6 +213,81 @@ test("redaction removes the content from the exported file, and proves it", asyn
   ).toBe(false);
 });
 
+// The occurrences assist is the answer to the likeliest real redaction mistake:
+// redacting one instance of a string and missing three. Its button shipped
+// closing the modal without resolving the arm/confirm promise, which left
+// `redactBusy` true forever — so every later "Apply redaction" hit the
+// re-entrancy guard and returned silently. The user took the assist's advice
+// and lost the ability to redact for the rest of the session, with no error
+// anywhere. Nothing caught it because no line in the sample document repeated,
+// so the button never rendered; page 2 now repeats page 1's title to make this
+// path reachable at all.
+//
+// The assertion is deliberately "the flow still works afterwards", not "the
+// button called a callback": what broke was the ability to finish the job.
+const REPEATED_LINE = "GoFastr PDF viewer — opaque-origin sandboxed iframe spike";
+// A rect over page 1's title line, in PDF user space (A4 = 595x842, y up).
+const TITLE_RECT = [50, 770, 460, 26];
+
+test("the occurrences assist adds rects and leaves redaction still usable", async ({ page }) => {
+  // Two rasterization passes over two pages at 200 DPI, on the main thread.
+  // The default 30s budget is not enough headroom for that on a loaded runner,
+  // and a wait longer than the test timeout can never actually be honoured.
+  test.slow();
+  const frame = page.frameLocator("iframe");
+  const inner = page.frames().find((f) => f !== page.mainFrame());
+  expect(inner, "pdf frame must be present").toBeTruthy();
+
+  await inner!.evaluate(
+    ([pg, rect, reason]) =>
+      (window as unknown as { __pdfAddRedaction: (p: number, r: number[], s: string) => void })
+        .__pdfAddRedaction(pg as number, rect as number[], reason as string),
+    [1, TITLE_RECT, "title"]
+  );
+  await frame.locator('button[aria-label="Apply redaction"]').click();
+
+  // The assist only renders when the needle genuinely occurs elsewhere. If this
+  // button is missing the sample document stopped repeating that line, and the
+  // rest of the test would silently assert nothing.
+  const addAll = frame.locator("button.pdf-redact-add-occ");
+  await expect(
+    addAll,
+    `the occurrences assist must appear — page 2 must still repeat "${REPEATED_LINE}"`
+  ).toBeVisible();
+  await addAll.click();
+
+  // The modal closes and the rects are added; the flow must be back at rest.
+  await expect(frame.locator(".pdf-redact-confirm-btn")).toHaveCount(0);
+  await expect(
+    frame.locator('button[aria-label="Apply redaction"]'),
+    "Apply must still be offered after taking the assist"
+  ).toBeVisible();
+
+  // The real proof: apply again and require the pipeline to actually finish.
+  // Before the fix this click was swallowed by the redactBusy guard and the
+  // state below never left "armed".
+  await frame.locator('button[aria-label="Apply redaction"]').click();
+  await frame.locator(".pdf-redact-confirm-btn").click();
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __pdfRedactState?: string }) | null;
+      return f?.__pdfRedactState === "done" || f?.__pdfRedactState === "error";
+    },
+    undefined,
+    { timeout: 60_000 }
+  );
+
+  const state = await page.evaluate(() => {
+    const f = document.querySelector("iframe") as HTMLIFrameElement & {
+      __pdfRedactState?: string;
+      __pdfLastExportError?: string;
+    };
+    return { state: f.__pdfRedactState, error: f.__pdfLastExportError };
+  });
+  expect(state.error ?? null, "redaction must not error").toBeNull();
+  expect(state.state, "redaction must complete after using the assist").toBe("done");
+});
+
 // containsDecoded searches PDF bytes the way the in-frame verifier does:
 // raw, then every inflated stream, then hex-string tokens decoded to text
 // (including UTF-16BE). Anything less misses hex-encoded text and compressed

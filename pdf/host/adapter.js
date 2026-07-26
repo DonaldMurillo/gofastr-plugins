@@ -299,6 +299,17 @@
           if (params.redactState !== undefined) frame.__pdfRedactState = params.redactState;
           if (params.lastVerifyReport !== undefined) frame.__pdfLastVerifyReport = params.lastVerifyReport;
           break;
+        case "redactStateChanged":
+          // The redaction state machine announces its own transitions. It used
+          // to ride along on docChanged, which is debounced and only fires when
+          // the DOCUMENT changes — so a redaction that rasterized, verified and
+          // exported correctly could leave this mirror stuck on "working"
+          // forever, because no document change happened to follow it. Nothing
+          // surfaced: no error, no console message, just a UI that never
+          // finished.
+          frame.__pdfRedactState = params.redactState;
+          if (params.lastVerifyReport !== undefined) frame.__pdfLastVerifyReport = params.lastVerifyReport;
+          break;
         case "requestExport":
           relayExport(api, params);
           break;

@@ -117,6 +117,16 @@ async function main() {
     { x: 56, y: H - 140, size: 12, font: regular, color: BLACK, lineHeight: 16 },
   );
   p2.drawImage(png, { x: 200, y: 320, width: 160, height: 160 });
+  // Repeats page 1's title VERBATIM. The redaction "other occurrences" assist
+  // only appears when a captured needle also occurs on some other line, and a
+  // needle is a whole text item (see capture.ts — it is never clipped to the
+  // rect). Every line in this document was unique, so that assist — and the
+  // arm/confirm path behind its button — could not be reached from the demo at
+  // all, which is why a wedging bug in it went unnoticed. Keep this line
+  // identical to the page 1 title.
+  p2.drawText("GoFastr PDF viewer — opaque-origin sandboxed iframe spike", {
+    x: 56, y: 200, size: 12, font: regular, color: BLACK,
+  });
 
   const bytes = await pdf.save();
   await writeFile(path.join(assetsDir, "sample.pdf"), bytes);
