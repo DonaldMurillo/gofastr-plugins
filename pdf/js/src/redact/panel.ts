@@ -79,7 +79,15 @@ export class RedactPanel {
     }
   }
 
-  /** Show the irreversible-consequence modal with the occurrences assist. */
+  /** Show the irreversible-consequence modal with the occurrences assist.
+   *
+   *  EVERY way this modal can close must invoke exactly one of the three
+   *  callbacks. The caller awaits a promise that only these resolve, so a
+   *  dismissal path that merely calls closeConfirm() strands that promise —
+   *  and with it the arm/confirm flow, which then holds `redactBusy` forever
+   *  and silently swallows every later Apply. That is precisely the bug the
+   *  occurrences button shipped with, so the rule is stated here rather than
+   *  left to be re-derived. */
   showConfirm(opts: {
     redactionCount: number;
     pages: number;
@@ -88,6 +96,9 @@ export class RedactPanel {
     needle: string;
     onConfirm: () => void;
     onCancel: () => void;
+    /** The occurrences assist added rects instead of applying. The flow must
+     *  unwind so the user can review them and press Apply again. */
+    onAddedOccurrences: () => void;
   }): void {
     this.closeConfirm();
     const overlay = el("div", { cls: "pdf-modal-overlay", role: "dialog", ariaModal: true, ariaLabel: "Confirm redaction" });
@@ -116,7 +127,7 @@ export class RedactPanel {
         cls: "pdf-edit-btn pdf-redact-add-occ",
         type: "button",
         text: `Redact all ${opts.occurrences.length} occurrence${opts.occurrences.length === 1 ? "" : "s"}`,
-        on: { click: () => { this.cb.onAddOccurrences(opts.needle, opts.occurrences); this.closeConfirm(); } },
+        on: { click: () => { this.cb.onAddOccurrences(opts.needle, opts.occurrences); this.closeConfirm(); opts.onAddedOccurrences(); } },
       }) as HTMLButtonElement;
       occ.appendChild(addBtn);
       panel.appendChild(occ);

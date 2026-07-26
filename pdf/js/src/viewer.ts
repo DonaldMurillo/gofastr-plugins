@@ -427,6 +427,14 @@ class PdfViewer {
       redactDPI: this.redactDPI,
       setStatus: (msg, kind) => this.toolbar.setStatus(msg, kind),
       onExportBytes: (bytes, kind, filename, report) => this.requestExport(bytes, kind, filename, report),
+      // Emitted on its own event, NOT folded into docChanged. docChanged is
+      // debounced, gated on document:write, and fires only when the document
+      // changes — none of which is true of a status transition. It is also sent
+      // undebounced: the host mirrors this to drive UI, and a 250ms lag on
+      // "done" is the difference between a progress bar that finishes and one
+      // that appears to hang.
+      onRedactState: (redactState, lastVerifyReport) =>
+        sendEvent("redactStateChanged", { redactState, lastVerifyReport }),
       invalidateOverlays: () => this.invalidateOverlayLayer(),
     });
     this.rootEl.insertBefore(this.editor.toolbar.root, this.rootEl.firstChild);
