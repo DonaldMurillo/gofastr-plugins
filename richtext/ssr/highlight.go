@@ -62,18 +62,18 @@ const hlCFamily = "true false null undefined void return if else for while do sw
 //
 // MAINTENANCE — this feature is hand-mirrored across Go and TS; a change is only
 // half-done until every site below is touched, or the parity/CSS tests fail:
-//   • Add a LANGUAGE: this map + LANGS in js/src/highlight.ts; add aliases to
+//   - Add a LANGUAGE: this map + LANGS in js/src/highlight.ts; add aliases to
 //     hlAliases + ALIASES; add it to CODE_LANGS in js/src/ui.ts so it appears in
 //     the editor's language dropdown (a test asserts every CODE_LANGS entry is
 //     supported); add a row to richtext/highlight-cases.json (both test suites
 //     then assert it).
-//   • Add a TOKEN CLASS: the hlTokenType consts above + the TokenType union in
+//   - Add a TOKEN CLASS: the hlTokenType consts above + the TokenType union in
 //     js/src/highlight.ts; a scanner branch in highlightCode + tokenize; a
 //     `--richtext-hl-<name>` token AND `.hl-<name>` rule in BOTH ssr/style.go and
 //     js/frame/editor.css (TestHighlightCSSTokensParity guards the token
 //     defaults, TestHighlightCSSRuleParity the rule bodies). The `hl-` prefix
 //     and Decoration/span emit sites are generic — no change.
-//   • After editing js/frame/editor.css, run `npm run build` in js/ — the editor
+//   - After editing js/frame/editor.css, run `npm run build` in js/ — the editor
 //     ships the GENERATED assets/editor.css, not the source, and the CSS parity
 //     tests read the source; a missed rebuild would pass CI but ship stale CSS.
 var hlLangs = map[string]langDef{
@@ -140,8 +140,8 @@ var hlAliases = map[string]string{
 	"js": "javascript", "jsx": "javascript", "mjs": "javascript", "node": "javascript",
 	"ts": "typescript", "tsx": "typescript",
 	"py": "python", "py3": "python",
-	"rs":     "rust",
-	"sh":     "bash", "shell": "bash", "zsh": "bash", "console": "bash",
+	"rs": "rust",
+	"sh": "bash", "shell": "bash", "zsh": "bash", "console": "bash",
 	"golang": "go",
 	"yml":    "json",
 	"htm":    "html",
