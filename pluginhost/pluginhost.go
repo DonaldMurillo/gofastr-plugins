@@ -37,9 +37,9 @@ type (
 
 // Function forwards.
 var (
-	RegisterBrokerRoute = pluginhost.RegisterBrokerRoute
-	UIHostOption        = pluginhost.UIHostOption
-	NewAssetServer      = pluginhost.NewAssetServer
+	RegisterBrokerRoute   = pluginhost.RegisterBrokerRoute
+	UIHostOption          = pluginhost.UIHostOption
+	NewAssetServer        = pluginhost.NewAssetServer
 	MountMarker           = pluginhost.MountMarker
 	Allow                 = pluginhost.Allow
 	Guard                 = pluginhost.Guard
