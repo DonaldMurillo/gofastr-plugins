@@ -31,6 +31,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Cheapest check, so it runs first. Scoped to TRACKED .go files rather
+      # than `gofmt -l .`, which would also walk the plugins' js/node_modules
+      # trees — vendored packages are not ours to reformat, and a stray .go
+      # fixture in one would fail this for something nobody here can fix.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then
+            echo "::error::not gofmt-clean; run: gofmt -w $unformatted"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: go build
         run: go build ./...
 
