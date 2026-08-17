@@ -6,6 +6,36 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Changed — gofastr v0.46.0 → v0.65.0 (2026-08-17)
+
+- Nineteen framework releases in one step. No plugin code changed: build, vet,
+  the full Go suite, the eject canary and the 302 WebKit + Chromium journeys all
+  pass untouched.
+
+- **The `go` directive moves to 1.26.6**, because gofastr v0.65.0 requires it. A
+  `go.mod` asking for less fails as a toolchain resolution error naming a
+  transitive gofastr package, which is the trap `docs/eject.md` already
+  describes. CI reads `go-version-file: go.mod`, so the job follows the bump
+  without an edit.
+
+- **New indirect dependencies, all from one upstream swap.** gofastr v0.56.0
+  made `modernc.org/sqlite` the `sqlite3` driver, so `modernc.org/{sqlite,libc,
+  mathutil,memory}` and four smaller transitives are now in the graph. It is a
+  pure-Go driver, so nothing here needs cgo. The edge reaches this repo only
+  through `recipes/blogapp`; no plugin imports `gofastr/sqlite`. The bump needed
+  a `go mod tidy` for the new `go.sum` entries — `go get` alone left the build
+  red.
+
+- `frameworkCompat` stays at `>=0.28.0`, verified rather than carried forward:
+  all six registry plugins still build against v0.28.0. `recipes/blogapp` does
+  not (it uses `ui.TextField`, which landed later), but recipes are whole apps
+  rather than registry entries and make no compat claim.
+
+- `docs/eject.md` now shows v0.65.0 and `go 1.26.6` in its install examples. The
+  CLI's own install block needed no change: it parses both numbers out of the
+  embedded `go.mod` at init (`GoFastrVersion`, `GoVersion` in `source.go`), so
+  `gofastr-plugin add` printed the new floor as soon as the require moved.
+
 ### Added — recipes: two complete blogs (2026-07-28)
 
 `recipes/` holds whole apps rather than plugin demos. `example/` exists to mount
