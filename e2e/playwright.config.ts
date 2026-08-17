@@ -3,6 +3,7 @@
 // project has hit (opaque-origin CSP 'self' resolution, selection loss on
 // click) was invisible to Chrome-based harnesses.
 import { defineConfig, devices } from "@playwright/test";
+import { BLOGAPP_PORT, BLOGSITE_PORT } from "./tests/recipes";
 
 const PORT = 8123;
 
@@ -26,14 +27,39 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: {
-    command: "go run ./example",
-    cwd: "..",
-    port: PORT,
-    env: { PORT: String(PORT) },
-    reuseExistingServer: false,
-    timeout: 60_000,
-  },
+  // Three servers, one per app under test. baseURL points at the plugin gallery
+  // because that is what most of the suite drives; the recipe journeys use the
+  // absolute URLs exported from tests/recipes.ts instead. Playwright starts all
+  // three before any test runs and tears them down at the end.
+  webServer: [
+    {
+      command: "go run ./example",
+      cwd: "..",
+      port: PORT,
+      env: { PORT: String(PORT) },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: "go run ./recipes/blogsite",
+      cwd: "..",
+      port: BLOGSITE_PORT,
+      env: { PORT: String(BLOGSITE_PORT) },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      // In-memory DB (BLOG_DB unset) so each run starts from the same seed and
+      // the authoring journeys below cannot inherit a post an earlier run left
+      // behind.
+      command: "go run ./recipes/blogapp",
+      cwd: "..",
+      port: BLOGAPP_PORT,
+      env: { PORT: String(BLOGAPP_PORT) },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+  ],
   projects: [
     // Shots run in their own chromium-based project, present ONLY under SHOTS=1
     // (npm run shots). Keeping them out of the default projects is what makes the
