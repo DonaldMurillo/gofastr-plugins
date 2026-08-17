@@ -10,13 +10,13 @@ import (
 	"github.com/DonaldMurillo/gofastr/core/render"
 )
 
-// demoEntry is one plugin in the gallery sidebar + home grid.
+// demoEntry is one item in the gallery sidebar + home grid.
 type demoEntry struct {
 	Slug  string // hash id, e.g. "monaco"
 	Label string // sidebar/card title
-	Path  string // demo URL loaded into the content iframe
+	Path  string // URL loaded into the content iframe
 	Blurb string // one-line description
-	Badge string // isolation posture: "sandboxed" | "trusted"
+	Badge string // isolation posture: "sandboxed" | "trusted" | "recipe"
 	Icon  string // inline emoji glyph
 }
 
@@ -29,6 +29,23 @@ var demoEntries = []demoEntry{
 	{"pdf", "PDF", "/pdf", "View, annotate and truly redact PDFs — the frame has no network at all.", "sandboxed", "📄"},
 	{"tour", "Guided Tour", "/tour", "Appcues-style tour that spotlights real page elements.", "trusted", "🧭"},
 	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
+}
+
+// recipeEntries are the whole-app recipes. They get their own sidebar section
+// and their own row on the home grid, because they answer a different question
+// than a plugin demo does: not "what does this component do" but "what does an
+// app that uses one look like".
+//
+// Each Path is a LANDING PAGE served by this app (see recipes.go), not the
+// running recipe. A recipe is its own GoFastr app on its own port — two UIHosts
+// cannot share a router, since each claims the whole /__gofastr/* namespace —
+// and uihost ships `frame-ancestors 'none'` by default, so a recipe cannot be
+// embedded in this shell even cross-origin. The landing page explains the
+// recipe, links to the implementation on GitHub, and gives the one command that
+// runs it.
+var recipeEntries = []demoEntry{
+	{"blogsite", "Markdown blog", "/recipes/blogsite", "Posts are markdown files that ship with the app.", "recipe", "📁"},
+	{"blogapp", "Authored blog", "/recipes/blogapp", "Write posts in the browser. The app stores them in SQLite and sends readers server-rendered HTML.", "recipe", "✍️"},
 }
 
 // registerShell mounts the gallery shell at "/". The plugin demos keep their own
@@ -48,24 +65,39 @@ func registerShell(rt interface {
 }
 
 func shellHTML() string {
-	var nav, cards strings.Builder
-	for _, d := range demoEntries {
-		nav.WriteString(fmt.Sprintf(
+	navItem := func(b *strings.Builder, d demoEntry) {
+		b.WriteString(fmt.Sprintf(
 			`<a class="nav-item" href="#/%s" data-slug="%s"><span class="nav-ico">%s</span><span class="nav-label">%s</span></a>`,
 			d.Slug, d.Slug, d.Icon, html.EscapeString(d.Label)))
-		cards.WriteString(fmt.Sprintf(
-			`<a class="card" href="#/%s"><div class="card-top"><span class="card-ico">%s</span><span class="badge badge-%s">%s</span></div>`+
-				`<h3>%s</h3><p>%s</p><span class="card-open">Open demo →</span></a>`,
-			d.Slug, d.Icon, d.Badge, d.Badge, html.EscapeString(d.Label), html.EscapeString(d.Blurb)))
 	}
+	card := func(b *strings.Builder, d demoEntry, cta string) {
+		b.WriteString(fmt.Sprintf(
+			`<a class="card" href="#/%s"><div class="card-top"><span class="card-ico">%s</span><span class="badge badge-%s">%s</span></div>`+
+				`<h3>%s</h3><p>%s</p><span class="card-open">%s</span></a>`,
+			d.Slug, d.Icon, d.Badge, d.Badge, html.EscapeString(d.Label),
+			html.EscapeString(d.Blurb), cta))
+	}
+
+	var nav, cards, recipeNav, recipeCards strings.Builder
+	for _, d := range demoEntries {
+		navItem(&nav, d)
+		card(&cards, d, "Open demo →")
+	}
+	for _, d := range recipeEntries {
+		navItem(&recipeNav, d)
+		card(&recipeCards, d, "Read about it →")
+	}
+
 	// The client script needs {slug,label,path} to switch the content iframe.
+	// Plugins and recipes share one map — the shell treats both the same way.
 	type jsDemo struct {
 		Slug  string `json:"slug"`
 		Label string `json:"label"`
 		Path  string `json:"path"`
 	}
-	js := make([]jsDemo, len(demoEntries))
-	for i, d := range demoEntries {
+	all := append(append([]demoEntry{}, demoEntries...), recipeEntries...)
+	js := make([]jsDemo, len(all))
+	for i, d := range all {
 		js[i] = jsDemo{d.Slug, d.Label, d.Path}
 	}
 	demosJSON, _ := json.Marshal(js)
@@ -75,6 +107,8 @@ func shellHTML() string {
 	return strings.NewReplacer(
 		"{{NAV}}", nav.String(),
 		"{{CARDS}}", cards.String(),
+		"{{RECIPE_NAV}}", recipeNav.String(),
+		"{{RECIPE_CARDS}}", recipeCards.String(),
 		"{{DEMOS}}", string(demosJSON),
 	).Replace(shellTemplate)
 }
@@ -138,6 +172,10 @@ const shellTemplate = `<!doctype html>
   .badge-sandboxed{background:color-mix(in srgb,var(--primary) 16%,transparent);color:var(--primary)}
   .badge-trusted{background:color-mix(in srgb,#d97706 18%,transparent);color:#b45309}
   html[data-theme="dark"] .badge-trusted{color:#fbbf24}
+  .badge-recipe{background:color-mix(in srgb,#0d9488 18%,transparent);color:#0f766e}
+  html[data-theme="dark"] .badge-recipe{color:#2dd4bf}
+  .hero-sec{margin-top:48px}
+  .hero-sec h2{font-size:22px;margin:0 0 8px}
 
   /* Mobile: drawer */
   .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35}
@@ -156,6 +194,8 @@ const shellTemplate = `<!doctype html>
       <a class="nav-home" href="#/home"><span class="nav-ico">🏠</span><span class="nav-label">Home</span></a>
       <div class="nav-sec">Plugins</div>
       {{NAV}}
+      <div class="nav-sec">Recipes</div>
+      {{RECIPE_NAV}}
     </nav>
     <div class="rail-foot"><button class="theme-btn" id="theme">Toggle theme</button></div>
   </aside>
@@ -173,6 +213,12 @@ const shellTemplate = `<!doctype html>
           <p>Heavy-JavaScript plugins for the GoFastr framework. Most run isolated in an opaque-origin sandboxed iframe; the guided tour runs as a trusted host-page script. Pick one to try it live.</p>
         </div>
         <div class="grid">{{CARDS}}</div>
+
+        <div class="hero hero-sec">
+          <h2>Recipes</h2>
+          <p>These are complete apps you can run locally. They build the same blog two ways: one reads markdown files, while the other stores posts written in a browser.</p>
+        </div>
+        <div class="grid">{{RECIPE_CARDS}}</div>
       </section>
       <iframe id="frame" title="Plugin demo"></iframe>
     </div>

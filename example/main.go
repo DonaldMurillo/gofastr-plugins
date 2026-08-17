@@ -124,6 +124,7 @@ func newApp() (*framework.App, error) {
 	// each plugin's demo. Registered after InitPlugins so it sits alongside the
 	// plugin routes on the same router.
 	registerShell(app.Router())
+	registerRecipePages(app.Router())
 	registerDemoExportRoute(app.Router())
 
 	return app, nil

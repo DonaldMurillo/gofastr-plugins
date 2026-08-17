@@ -61,7 +61,7 @@ func TestEjectEveryPluginBuilds(t *testing.T) {
 	goMod := strings.Join([]string{
 		"module ejecttest",
 		"",
-		"go 1.26.5",
+		"go 1.26.6",
 		"",
 		"require github.com/DonaldMurillo/gofastr " + gofastrVersion,
 		"",

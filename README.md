@@ -32,6 +32,8 @@ gofastr-plugins/
 │                 redaction cannot be exfiltrated by the frame that edits it
 ├── example/      ONE gofastr app that imports & mounts every plugin —
 │                 the integration host, visual/e2e surface, completeness canary
+├── recipes/      whole apps rather than demos: blogsite (markdown files, no
+│                 plugin) and blogapp (SQLite + the richtext editor)
 ├── cmd/          gofastr-plugin, the eject CLI: vendor a plugin into your own
 │                 repo and own it, shadcn-style; see "Own it" below
 ├── plugins.json  the curated registry index (convention, not a service) —
@@ -81,6 +83,45 @@ reach the structs in the same change rather than being silently dropped. Those
 guards run again inside the release workflow, so a broken index cannot reach a
 host. Bump `registryVersion` on a breaking field change, since vendored copies
 are then stale.
+
+## Recipes
+
+`example/` mounts every plugin so each one can be poked at. `recipes/` answers
+the next question: what does a whole app that uses one look like?
+
+Two complete blogs, same domain and the same reading experience, differing in
+where the content lives:
+
+- **[`recipes/blogsite`](recipes/blogsite/)** — markdown files with frontmatter,
+  parsed once at boot and `go:embed`'d into the binary. Tags, archive,
+  pagination, search, RSS, JSON Feed, sitemap, drafts, scheduled posts. Uses no
+  plugin from this repo, deliberately: it is the baseline the other is measured
+  against.
+- **[`recipes/blogapp`](recipes/blogapp/)** — posts in SQLite, written in the
+  browser with `richtext`. The stored ProseMirror document is rendered
+  server-side by `richtext/ssr`, so readers get plain HTML and the editor bundle
+  loads on one route, behind a login.
+
+`blogapp` is where the platform's sharpest edge is written down: **the plugin
+capability gate is not an authentication gate.** `pluginhost.Allow` ends in
+`auth.HasScope(ctx, cap)`, which returns true when the context carries no token
+scopes — so an anonymous POST to a plugin's save endpoint passes it. It answers
+"does this plugin hold this capability", not "may this caller use it". Hosts
+granting a write capability add their own check; `blogapp` does, in its save and
+upload handlers, with a test asserting an anonymous save changes nothing.
+
+```sh
+go run ./recipes/blogsite
+go run ./recipes/blogapp    # sign in at /admin/login, password "demo"
+```
+
+Run `go run ./example` and the gallery lists both under **Recipes**, with a
+landing page for each explaining the basics and linking to the source. The
+recipes themselves run separately — each is its own GoFastr app, and two UIHost
+apps cannot share a router.
+
+Both are covered by `go test ./recipes/...` and by Playwright journeys in WebKit
+and Chromium. See [`docs/recipes.md`](docs/recipes.md).
 
 ## Own it: eject a plugin into your repo
 

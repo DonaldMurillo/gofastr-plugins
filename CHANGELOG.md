@@ -6,6 +6,116 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Changed — gofastr v0.46.0 → v0.65.0 (2026-08-17)
+
+- Nineteen framework releases in one step. No plugin code changed: build, vet,
+  the full Go suite, the eject canary and the 302 WebKit + Chromium journeys all
+  pass untouched.
+
+- **The `go` directive moves to 1.26.6**, because gofastr v0.65.0 requires it. A
+  `go.mod` asking for less fails as a toolchain resolution error naming a
+  transitive gofastr package, which is the trap `docs/eject.md` already
+  describes. CI reads `go-version-file: go.mod`, so the job follows the bump
+  without an edit.
+
+- **New indirect dependencies, all from one upstream swap.** gofastr v0.56.0
+  made `modernc.org/sqlite` the `sqlite3` driver, so `modernc.org/{sqlite,libc,
+  mathutil,memory}` and four smaller transitives are now in the graph. It is a
+  pure-Go driver, so nothing here needs cgo. The edge reaches this repo only
+  through `recipes/blogapp`; no plugin imports `gofastr/sqlite`. The bump needed
+  a `go mod tidy` for the new `go.sum` entries — `go get` alone left the build
+  red.
+
+- `frameworkCompat` stays at `>=0.28.0`, verified rather than carried forward:
+  all six registry plugins still build against v0.28.0. `recipes/blogapp` does
+  not (it uses `ui.TextField`, which landed later), but recipes are whole apps
+  rather than registry entries and make no compat claim.
+
+- `docs/eject.md` now shows v0.65.0 and `go 1.26.6` in its install examples. The
+  CLI's own install block needed no change: it parses both numbers out of the
+  embedded `go.mod` at init (`GoFastrVersion`, `GoVersion` in `source.go`), so
+  `gofastr-plugin add` printed the new floor as soon as the require moved.
+
+### Added — recipes: two complete blogs (2026-07-28)
+
+`recipes/` holds whole apps rather than plugin demos. `example/` exists to mount
+every plugin at once; a recipe exists to answer what an app that uses one
+actually looks like, including the parts a demo skips — auth, persistence,
+feeds, 404s.
+
+The first two are a matched pair. Same domain, same reading experience, opposite
+answers to "where does the content live?":
+
+- **[`recipes/blogsite`](recipes/blogsite/)** — markdown files with frontmatter.
+  `content.go` parses them once at boot and builds the ordering, tag facets,
+  prev/next links, and search index in memory; a request never touches the
+  filesystem. The content is `go:embed`'d, so a build is one binary with no
+  assets directory beside it. Tag pages, a year-grouped archive, pagination,
+  substring search, RSS 2.0, JSON Feed 1.1, sitemap, `robots.txt`, drafts, and
+  future-dated posts that publish themselves on the next boot. It uses **no
+  plugin from this repo** — that is the point: it is the baseline `blogapp` is
+  measured against, and it exercises the GoFastr core UI path end to end with no
+  CSS of its own.
+- **[`recipes/blogapp`](recipes/blogapp/)** — posts in SQLite (GoFastr's pure-Go
+  engine, so no cgo and **no new module dependency**), written in the browser
+  with the `richtext` plugin. The canonical document is ProseMirror JSON;
+  `richtext/ssr` renders it server-side, so readers get plain HTML and the
+  ~600 KB editor bundle loads on exactly one route, behind a login.
+
+**The capability gate is not an authentication gate.** This is the finding
+`blogapp` was worth building for. `pluginhost.Allow(ctx, granted, cap)` is
+`auth.ScopeMatch(granted, cap) && auth.HasScope(ctx, cap)`, and `HasScope`
+returns **true** when the context carries no token scopes — sessions and JWTs
+are unscoped by design. So an anonymous `POST /__gofastr/plugin/richtext/save`
+passes it. The gate answers "does this plugin hold this capability", a question
+about the plugin's authority, not the caller's identity. Every host that grants
+a write capability has to add the second check itself. `blogapp` does, inside
+its save and upload handlers, reading the admin session off the request context
+that app-wide middleware annotated; `TestAnonymousPluginSaveCannotOverwriteAPost`
+asserts an anonymous save leaves the stored body untouched. It also does **not**
+set `richtext.WithDevGrantAll()`, which `example/` uses only because its demos
+are unauthenticated.
+
+**Soft 404s.** A database-backed app needs dynamic routes, and `/posts/:slug`
+matches slugs that name nothing. Serving a not-found body at HTTP 200 is the
+failure crawlers index and monitoring never notices. `blogapp` resolves the slug
+in middleware before the host routes and rewrites a miss to its 404 screen with
+the real status. `blogsite` avoids the problem entirely by registering one route
+per post — its corpus is fixed at boot, which also makes the route table the
+sitemap.
+
+Two bugs the tests caught while building these, both now guarded:
+
+- `ui.SiteHeader` renders its `Actions` slot **twice** (desktop bar + mobile
+  drawer), so a form control with a fixed `id` there lands in the DOM twice — a
+  duplicate-id a11y violation. Both recipes moved site search from `Actions` to
+  a nav link, and both suites now walk every page asserting no duplicate ids.
+- A slug rule that only checked draft status discarded a hand-typed slug on the
+  save that published it, and a slug that `uniqueSlug` had suffixed
+  (`untitled-post-2`, from a second new post) never followed its title. The rule
+  is now: a hand-typed value wins; otherwise a derived slug follows the title
+  while the post is a draft; publishing freezes it.
+
+Both recipes are covered by `go test ./recipes/...` (37 tests: routing, feed and
+sitemap shape, draft exclusion, the admin gate, the authoring round trip, the
+anonymous-save refusal) and by Playwright journeys in **WebKit and Chromium**
+(46 tests, including the editor mounting in its opaque-origin frame, typing
+reaching the database over the bridge, and the reader getting no plugin).
+`e2e/playwright.config.ts` now starts three servers; the recipe ports live in
+[`e2e/tests/recipes.ts`](e2e/tests/recipes.ts).
+
+**In the gallery.** `example/` now carries a **Recipes** section in its sidebar
+and on its home grid, with a landing page per recipe
+([`example/recipes.go`](example/recipes.go)) explaining the basics, giving the
+one command that runs it, and linking to the implementation on GitHub. The
+landing pages are served by the gallery itself, so they load in the same content
+iframe and the sidebar persists — a recipe cannot be framed directly, because
+two UIHost apps cannot share a router (each claims the whole `/__gofastr/*`
+namespace) and uihost ships `frame-ancestors 'none'` by default.
+
+See [`docs/recipes.md`](docs/recipes.md) and
+[`recipes/README.md`](recipes/README.md).
+
 ### Added — gofastr-plugin: eject a plugin into your own repo (2026-07-26)
 
 `cmd/gofastr-plugin` is the eject CLI. It copies a plugin's source into a

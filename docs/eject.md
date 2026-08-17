@@ -74,8 +74,8 @@ go run github.com/DonaldMurillo/gofastr-plugins/cmd/gofastr-plugin@latest list
 go run github.com/DonaldMurillo/gofastr-plugins/cmd/gofastr-plugin@latest add mermaid
 
 # 3. Resolve the dependencies yourself. The CLI does not do this for you.
-#    Your go.mod needs `go 1.26.5` or newer; see the note below.
-go get github.com/DonaldMurillo/gofastr@v0.46.0
+#    Your go.mod needs `go 1.26.6` or newer; see the note below.
+go get github.com/DonaldMurillo/gofastr@v0.65.0
 go mod tidy
 
 # 4. Build your app; the vendored package is now yours.
@@ -105,7 +105,7 @@ built from are in that lockfile.
 After ejecting a plugin with its `js/` sources, the full set is:
 
 ```sh
-go get github.com/DonaldMurillo/gofastr@v0.46.0   # if not already required
+go get github.com/DonaldMurillo/gofastr@v0.65.0   # if not already required
 go mod tidy
 cd internal/plugins/mermaid/js && npm ci          # only if you intend to rebuild the bundle
 ```
@@ -116,13 +116,13 @@ toolchain at all.
 
 ### Raise your `go` directive first
 
-Ejected plugins need `go 1.26.5` or newer, and a `go.mod` asking for less fails
+Ejected plugins need `go 1.26.6` or newer, and a `go.mod` asking for less fails
 in a way that does not name itself. You get a toolchain resolution error about a
 transitive gofastr package:
 
 ```
 go: toolchain upgrade needed to resolve github.com/DonaldMurillo/gofastr/core-ui/style
-go: github.com/DonaldMurillo/gofastr@v0.46.0 requires go >= 1.26.5 (running go 1.24.2)
+go: github.com/DonaldMurillo/gofastr@v0.65.0 requires go >= 1.26.6 (running go 1.24.2)
 ```
 
 That reads like a broken dependency; it is a `go` directive that is too old. Go
@@ -169,7 +169,7 @@ Before (importing mermaid):
 
 ```
 require (
-	github.com/DonaldMurillo/gofastr v0.46.0
+	github.com/DonaldMurillo/gofastr v0.65.0
 	github.com/DonaldMurillo/gofastr-plugins v0.3.0
 )
 ```
@@ -177,7 +177,7 @@ require (
 After ejecting mermaid:
 
 ```
-require github.com/DonaldMurillo/gofastr v0.46.0
+require github.com/DonaldMurillo/gofastr v0.65.0
 ```
 
 The versions above are illustrative — pin the gofastr release you actually run
