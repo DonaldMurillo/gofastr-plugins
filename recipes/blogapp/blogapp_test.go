@@ -15,17 +15,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DonaldMurillo/gofastr/sqlite"
+	"database/sql"
+
+	_ "github.com/DonaldMurillo/gofastr/sqlite/stdlib"
 )
 
 // testApp boots the app against a fresh in-memory database and returns a server
 // plus the app handle so tests can reach the store directly.
 func testApp(t *testing.T) (*httptest.Server, *app) {
 	t.Helper()
-	db, err := sqlite.Open()
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	db.SetMaxOpenConns(1) // pooled conns each get a private :memory: db
 	t.Cleanup(func() { db.Close() })
 
 	fw, a, err := newApp(db)

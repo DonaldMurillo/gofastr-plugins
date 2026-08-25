@@ -41,7 +41,7 @@ import (
 	"github.com/DonaldMurillo/gofastr/framework"
 	uitheme "github.com/DonaldMurillo/gofastr/framework/ui/theme"
 	"github.com/DonaldMurillo/gofastr/framework/uihost"
-	"github.com/DonaldMurillo/gofastr/sqlite"
+	_ "github.com/DonaldMurillo/gofastr/sqlite/stdlib"
 
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext/ssr"
@@ -53,14 +53,21 @@ type app struct {
 	sessions *sessions
 }
 
-// openDB opens the database. GoFastr's own pure-Go SQLite engine, so this
-// recipe adds no module dependency and needs no cgo toolchain — `go build`
-// works with CGO_ENABLED=0 on a machine with no C compiler.
+// openDB opens the database through gofastr's sqlite/stdlib driver
+// (modernc, pure Go — no cgo toolchain needed, CGO_ENABLED=0 builds).
+// The in-memory default caps the pool at one connection: each pooled
+// connection would otherwise get its own private database and the
+// second connection would see an empty schema.
 func openDB() (*sql.DB, error) {
 	if path := os.Getenv("BLOG_DB"); path != "" {
-		return sqlite.OpenFile(path)
+		return sql.Open("sqlite3", path)
 	}
-	return sqlite.Open()
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	return db, nil
 }
 
 // newApp builds the whole application ready to serve. Shared by main and the

@@ -32,6 +32,9 @@ gofastr-plugins/
 │                 redaction cannot be exfiltrated by the frame that edits it
 ├── example/      ONE gofastr app that imports & mounts every plugin —
 │                 the integration host, visual/e2e surface, completeness canary
+├── posthog/      the packaged PostHog integration — NOT a sandboxed
+│                 iframe plugin: posthog-js runs in the host page, kept
+│                 first-party by battery/relay, not by the plugin cage
 ├── recipes/      whole apps rather than demos: blogsite (markdown files, no
 │                 plugin) and blogapp (SQLite + the richtext editor)
 ├── cmd/          gofastr-plugin, the eject CLI: vendor a plugin into your own
@@ -122,6 +125,18 @@ apps cannot share a router.
 
 Both are covered by `go test ./recipes/...` and by Playwright journeys in WebKit
 and Chromium. See [`docs/recipes.md`](docs/recipes.md).
+
+## Integrations
+
+`posthog/` is a different kind of package from the rest of this repo:
+not a sandboxed plugin at all, but a **packaged integration** — the
+PostHog recipe from gofastr's analytics-recipes doc (relay table +
+bootstrap + identity endpoint) behind one `New` call. posthog-js
+instruments the whole host document, so it cannot run in an opaque-
+origin cage; what stays first-party is the wire. The visitor's browser
+talks only to your origin through `battery/relay`, the strict default
+CSP needs no exceptions, and no vendor cookie lands on your domain.
+See [`posthog/`](posthog/).
 
 ## Own it: eject a plugin into your repo
 
