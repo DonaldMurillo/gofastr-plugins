@@ -109,3 +109,30 @@ Playwright/chromedp test that drives your app will load the SDK, fetch
 config, and capture nothing. For such tests launch the browser with
 `--disable-blink-features=AutomationControlled` and a regular user
 agent — real visitors are unaffected either way.
+
+## A/B testing
+
+Experiments ride the same relay: posthog-js fetches flag definitions
+through the relayed `/flags` call, so variants, exposures, and goal
+metrics all work first-party with no extra configuration. Branch on the
+variant client-side:
+
+```js
+// in your own page script (serve it like the bootstrap: ScriptHandler
+// + RegisterExternalScript — external, first-party, CSP-clean)
+posthog.onFeatureFlags(function () {
+  var v = posthog.getFeatureFlag('hero-copy-test');
+  if (v === 'punchy') {
+    document.querySelector('h1').textContent = 'The punchy version';
+  }
+  // getFeatureFlag records the $feature_flag_called exposure PostHog's
+  // experiment analysis keys on; no manual capture needed.
+});
+```
+
+Assignments are sticky per visitor (anonymous device id, merged into
+the person on identify), and PostHog's experiment UI computes
+significance on whatever goal metric you capture. Server-side boolean
+gates go through `featureflag.Store` (see gofastr's analytics-recipes
+doc); server-side VARIANTS need posthog-go in the host app, pointed at
+`Base()`.
