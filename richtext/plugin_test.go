@@ -136,8 +136,8 @@ func TestDemoPageContainsTokensMarkerAndBroker(t *testing.T) {
 		t.Errorf("demo Content-Type=%q", ct)
 	}
 	for _, want := range []string{
-		"--color-",                                   // bridged theme tokens
-		`data-fui-plugin="richtext"`,                 // generic mount marker (dispatches to richtext adapter)
+		"--color-",                   // bridged theme tokens
+		`data-fui-plugin="richtext"`, // generic mount marker (dispatches to richtext adapter)
 		`data-fui-plugin-for="body_json,body_md"`,    // richtext-specific hidden-field wiring
 		`<script src="` + pluginhost.BrokerScriptURL, // generic platform broker (loaded first)
 		`<script src="` + BrokerScriptURL,            // richtext adapter (loaded second)
