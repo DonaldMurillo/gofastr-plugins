@@ -6,6 +6,54 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — posthog: first-party PostHog in one call (2026-08-25)
+
+[`posthog/`](posthog/) packages the PostHog recipe from gofastr's
+analytics-recipes doc — the two-route relay table, the page bootstrap,
+the whoami identity endpoint — behind `posthog.New(Config{Key, Region})`
++ `app.RegisterPlugin` + `host.RegisterExternalScript(p.ScriptURL())`
+(or `p.Attach(host)`).
+
+It is deliberately **not** one of this repo's sandboxed iframe plugins,
+and the README's new "Integrations" section says so: posthog-js
+instruments the whole host document, so it runs in the host page and
+cannot be fenced. What stays first-party is the wire — the browser
+talks only to your origin through `battery/relay`, the strict default
+CSP needs no `script-src`/`connect-src` exceptions, and no vendor
+cookie lands on your domain.
+
+Three decisions worth writing down:
+
+- **The config is baked into the served bytes, not script attributes.**
+  `RegisterExternalScript` emits a bare `<script src>` tag, so the
+  key, mount, region UI host and DNT flag are rendered into boot.js at
+  `New` via `encoding/json`. That is load-bearing twice: the bootstrap
+  is one file with no globals to race, and Go's JSON encoder
+  HTML-escapes `<`/`>`/`&`, so a key containing `</script>` stays
+  inert — pinned by a test that feeds exactly that key and asserts the
+  escaped form (mutation-proven: appending the raw key to the served
+  bytes fails the suite).
+- **Secret key shapes panic at construction.** `phx_` (personal) and
+  `sk_` (server) keys are secrets, and this package puts the key in
+  bytes served to every visitor. `New` refuses them rather than ship
+  one; `phc_` (public project) is the only shape that belongs
+  client-side.
+- **No `ExtraIngestPaths` knob.** PostHog has moved endpoints before
+  (the `-assets` split), and when it happens again the escape hatch is
+  a hand-declared `relay.New` alongside — a knob whose upstream is
+  implied rather than named is how an open proxy starts. The package
+  README documents the pattern instead.
+
+Unit-tested with zero vendor account and zero egress: an unexported
+`newWithUpstreams` seam lets the suite point both relay upstreams at
+loopback httptest servers, so the region table, tail/query forwarding,
+404/405 posture, the 8 MiB → 64 MiB session-replay body cap and the
+rendered bootstrap are all asserted against real HTTP. The deep relay
+matrix (hostile tails, credential stripping) stays in battery/relay's
+own suite; five mutations (secret-key guard, region table, replay cap,
+raw-key leak, Stringer arm) each fail their test.
+
+
 ### Changed — gofastr v0.46.0 → v0.65.0 (2026-08-17)
 
 - Nineteen framework releases in one step. No plugin code changed: build, vet,
