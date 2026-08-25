@@ -1,8 +1,11 @@
 // gofastr-plugins/posthog — the page bootstrap.
 //
-// Rendered once per app at construction (posthog.go): the
-// __GOFASTR_POSTHOG_CONFIG__ token below is replaced by the
-// encoding/json encoding of this instance's config. Go's JSON encoder
+// Rendered once per app at construction (posthog.go): the config
+// token below (the CFG assignment) is replaced by the encoding/json
+// encoding of this instance's config. The token's name must appear
+// NOWHERE else in this file: rendering replaces the first occurrence
+// only, and a mention in a comment would swallow the replacement —
+// which is exactly the bug the first live run of this file had. Go's JSON encoder
 // HTML-escapes <, > and &, which is what keeps a hostile value inside
 // the config inert in any HTML context.
 //

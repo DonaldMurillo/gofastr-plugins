@@ -100,3 +100,12 @@ covers the egress-cost model, ad-block honesty (first-party origin
 defeats domain-based lists only; path-based rules still match), the CSRF
 exemption your app-wide middleware may need for the beacon routes, and
 the credential-stripping contract that makes the exemption safe.
+
+## Testing with browser automation
+
+posthog-js ships bot detection: it silently drops every capture when
+`navigator.webdriver` is set or the user agent looks headless. A
+Playwright/chromedp test that drives your app will load the SDK, fetch
+config, and capture nothing. For such tests launch the browser with
+`--disable-blink-features=AutomationControlled` and a regular user
+agent — real visitors are unaffected either way.

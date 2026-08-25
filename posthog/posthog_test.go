@@ -578,3 +578,13 @@ func TestSelfHostExcludesRegion(t *testing.T) {
 	}()
 	New(Config{Key: "phc_x", SelfHost: "http://127.0.0.1:8000", Region: "eu"})
 }
+
+func TestServedBootHasNoPlaceholder(t *testing.T) {
+	p := New(testConfig())
+	if bytes.Contains(p.js, []byte(configPlaceholder)) {
+		t.Fatal("served boot.js still contains the config placeholder")
+	}
+	if !bytes.Contains(p.js, []byte(`var CFG = {"apiKey"`)) {
+		t.Fatal("config JSON did not land at the code position (var CFG = ...)")
+	}
+}
