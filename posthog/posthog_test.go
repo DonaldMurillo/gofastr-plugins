@@ -545,3 +545,36 @@ func TestAttachRegistersAndPropagates(t *testing.T) {
 		t.Fatalf("Attach error = %v, want %v", err, boom)
 	}
 }
+
+func TestSelfHostRoutesEverything(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("self:" + r.URL.Path))
+	}))
+	t.Cleanup(up.Close)
+
+	p, srv := bootApp(t, Config{Key: "phc_x", SelfHost: up.URL}, "", "")
+
+	for _, tail := range []string{"/ph/e/batch", "/ph-assets/static/array.js"} {
+		res, err := http.Get(srv.URL + p.Base() + tail)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "self:") {
+			t.Fatalf("%s: code=%d body=%q, want proxied to self-host", tail, res.StatusCode, body)
+		}
+	}
+	if !strings.Contains(string(p.js), up.URL) {
+		t.Fatal("bootstrap does not carry the self-host origin as ui_host")
+	}
+}
+
+func TestSelfHostExcludesRegion(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("SelfHost+Region did not panic")
+		}
+	}()
+	New(Config{Key: "phc_x", SelfHost: "http://127.0.0.1:8000", Region: "eu"})
+}

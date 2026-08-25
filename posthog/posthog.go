@@ -51,6 +51,13 @@ type Config struct {
 	// configures. Anything else panics at New.
 	Region string
 
+	// SelfHost points every route — assets, ingestion, and the
+	// bootstrap's ui_host — at one self-hosted PostHog origin
+	// (e.g. "http://localhost:8000" for the docker hobby deploy;
+	// loopback http is the only http the relay accepts). Mutually
+	// exclusive with Region: a self-hosted instance has no region.
+	SelfHost string
+
 	// Path overrides the relay mount. Default relay.DefaultPath
 	// ("/__gofastr/t"). Every route this package serves — ph/, ph-assets/,
 	// boot.js, whoami — lives under it; relay.New validates it.
@@ -136,6 +143,9 @@ func newWithUpstreams(cfg Config, assetsUpstream, ingestUpstream string) *Plugin
 		panic("posthog: Config.Key looks like a personal (phx_) or server (sk_) key: " +
 			"those are secrets and would ship in the served bootstrap; use the public project API key (phc_...)")
 	}
+	if cfg.SelfHost != "" && cfg.Region != "" {
+		panic("posthog: Config.SelfHost and Config.Region are mutually exclusive: a self-hosted instance has no region")
+	}
 	region := cfg.Region
 	if region == "" {
 		region = "us"
@@ -143,6 +153,11 @@ func newWithUpstreams(cfg Config, assetsUpstream, ingestUpstream string) *Plugin
 	h, ok := regionHosts(region)
 	if !ok {
 		panic(fmt.Sprintf("posthog: Config.Region %q is invalid: use \"us\" or \"eu\"", cfg.Region))
+	}
+	if cfg.SelfHost != "" {
+		// One origin serves everything on a self-hosted deploy,
+		// including the UI the toolbar and replay player open.
+		h = hosts{assets: cfg.SelfHost, ingest: cfg.SelfHost, ui: cfg.SelfHost}
 	}
 	assets, ingest := h.assets, h.ingest
 	if assetsUpstream != "" {

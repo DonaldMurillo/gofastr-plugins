@@ -57,6 +57,7 @@ counting there records visits that never happened).
 |---|---|---|
 | `Key` | — (required) | Project API key, `phc_...`. **Panics** on the secret shapes: `phx_` (personal) and `sk_` (server) would ship to every visitor in the served bootstrap. |
 | `Region` | `"us"` | `"us"` or `"eu"`. Picks both relay upstreams and the `ui_host`. Anything else panics at `New`. |
+| `SelfHost` | Point every route (assets, ingestion, ui_host) at one self-hosted PostHog origin, e.g. the docker hobby deploy at `http://localhost:8000`. Mutually exclusive with `Region`. |
 | `Path` | `relay.DefaultPath` (`/__gofastr/t`) | Relay mount; every route this package serves lives under it. Validated by `relay.New`. |
 | `SessionReplay` | `false` | Raises the ingestion route's body cap from the relay's 8 MiB default to 64 MiB, what replay uploads reach. Read it as an egress number: every accepted byte is billed to your bandwidth. |
 | `RespectDNT` | `false` | Visitors whose browser reports Do-Not-Track get nothing: no SDK script, no beacons. |
