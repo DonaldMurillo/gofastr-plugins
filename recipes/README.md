@@ -1,11 +1,11 @@
 # Recipes
 
-Two complete blogs, built the two different ways GoFastr supports. Both are
-runnable — `go run ./recipes/<name>` — and both are covered by the repo's Go
-suite and its Playwright journeys, so they stay honest as the plugins move.
+Whole runnable apps — `go run ./recipes/<name>` — covered by the repo's
+Go suite, so they stay honest as the plugins move.
 
-They are a matched pair. Same domain, same reading experience, opposite
-answers to one question: where does the content live?
+The first two are a matched pair of blogs. Same domain, same reading
+experience, opposite answers to one question: where does the content
+live?
 
 | | [`blogsite`](blogsite/) | [`blogapp`](blogapp/) |
 |---|---|---|
@@ -60,21 +60,39 @@ Two things in it are worth reading even if you never want a blog:
 
 → [`recipes/blogapp`](blogapp/)
 
+## `relayboard` — the measured product
+
+The analytics recipe, and the runnable half of [`posthog/`](../posthog/):
+a three-screen app whose funnel runs end to end through the integration
+against a self-hosted PostHog. Campaign attribution from a UTM-tagged
+landing page through client-side navigation to the `purchase` event;
+identified users from real `battery/auth` accounts; an A/B hero on the
+`hero-copy-test` flag; and a server-side `/beta` gate whose
+`featureflag.Store` adapter POSTs `{host}/flags/?v=2` with stdlib HTTP
+(`/decide` is 403 on current self-hosted PostHog). Without
+`POSTHOG_KEY` the same app runs with analytics off and `/beta`
+invite-only.
+
+→ [`recipes/relayboard`](relayboard/)
+
 ## Running them
 
 ```sh
 go run ./recipes/blogsite   # prints its URL
 go run ./recipes/blogapp    # prints its URL; sign in at /admin/login, password "demo"
+go run ./recipes/relayboard # http://localhost:8099; analytics need a self-hosted PostHog, the app runs without one
 ```
 
-Both bind a random free port unless `PORT` is set.
+The blogs bind a random free port unless `PORT` is set; relayboard
+listens on `:8099` unless `ADDR` is set.
 
 ## Tests
 
 ```sh
-go test ./recipes/...              # both suites
+go test ./recipes/...              # the three suites
 cd e2e && npm test                 # includes the recipe journeys, WebKit + Chromium
 ```
 
-The e2e config starts each recipe on its own port alongside the plugin gallery;
-the ports live in [`e2e/tests/recipes.ts`](../e2e/tests/recipes.ts).
+The e2e config starts the two blog recipes on their own ports alongside
+the plugin gallery; the ports live in
+[`e2e/tests/recipes.ts`](../e2e/tests/recipes.ts).
