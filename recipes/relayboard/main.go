@@ -21,6 +21,10 @@
 //     same: no plugin, no flag store, /beta answers invite-only, and
 //     the A/B script no-ops because window.posthog never appears.
 //
+// Every visible surface composes framework/ui and core-ui/app: the app
+// ships zero CSS and zero hand-rolled structural markup. Identity comes
+// from theme tokens (ui/theme Overrides), never from local styles.
+//
 // Run with:
 //
 //	go run ./recipes/relayboard
@@ -35,7 +39,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -108,84 +111,205 @@ func openDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// ─── screens ───────────────────────────────────────────────────────
+// ─── chrome: header + footer ───────────────────────────────────────
 
-type landing struct{}
+// siteHeader is the ctx-aware page header: the nav is the same for
+// everyone, the action cluster switches between "Sign in" and sign-out
+// on the session that auth.SessionMiddleware put in the context.
+func siteHeader(ctx context.Context) render.HTML {
+	nav := []ui.SiteHeaderLink{
+		{Label: "Pricing", Href: "/pricing"},
+		{Label: "Beta", Href: "/beta"},
+	}
+	var actions render.HTML
+	if u, ok := handler.GetUser(ctx); ok && u != nil {
+		nav = append(nav, ui.SiteHeaderLink{Label: "Account", Href: "/account"})
+		actions = ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter, NoWrap: true},
+			ui.SignOut(ui.SignOutConfig{Next: "/", Ctx: ctx}),
+			ui.ThemeToggle(ui.ThemeToggleConfig{Variant: ui.ThemeToggleIcon}),
+		)
+	} else {
+		actions = ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter, NoWrap: true},
+			ui.LinkButton(ui.LinkButtonConfig{Label: "Sign in", Href: "/account", Variant: ui.ButtonSecondary, Size: ui.ButtonSizeSmall}),
+			ui.ThemeToggle(ui.ThemeToggleConfig{Variant: ui.ThemeToggleIcon}),
+		)
+	}
+	return ui.SiteHeader(ui.SiteHeaderConfig{
+		Brand:    ui.Link(ui.LinkConfig{Href: "/", Text: "RelayBoard"}),
+		NavItems: nav,
+		Drawer:   ui.SiteHeaderDrawerSheet,
+		Actions:  actions,
+		Ctx:      ctx,
+	})
+}
 
-func (landing) ScreenTitle() string { return "" }
-func (landing) Render() render.HTML {
-	return ui.Hero(ui.HeroConfig{
-		// The A/B script below swaps this heading per variant of the
-		// hero-copy-test flag; this is the control copy.
-		Title:    "RelayBoard",
-		Subtitle: "Dashboards that never leak a byte to a third party.",
-		Actions: []render.HTML{
-			ui.LinkButton(ui.LinkButtonConfig{Label: "See pricing", Href: "/pricing"}),
-			ui.LinkButton(ui.LinkButtonConfig{Label: "Sign up", Href: "/account", Variant: ui.ButtonSecondary}),
+func siteFooter() render.HTML {
+	return ui.SiteFooter(ui.SiteFooterConfig{
+		Lead: ui.Link(ui.LinkConfig{Href: "/", Text: "RelayBoard"}),
+		Columns: []ui.SiteFooterColumn{
+			{Title: "Product", Links: []ui.SiteFooterLink{
+				{Label: "Pricing", Href: "/pricing"},
+				{Label: "Beta", Href: "/beta"},
+			}},
+			{Title: "Account", Links: []ui.SiteFooterLink{
+				{Label: "Sign in", Href: "/account"},
+			}},
 		},
 	})
 }
 
-type pricing struct{}
+// ─── screens ───────────────────────────────────────────────────────
 
-func (pricing) ScreenTitle() string { return "Pricing" }
-func (pricing) Render() render.HTML {
+type landing struct{}
+
+func (*landing) ScreenTitle() string { return "" }
+func (*landing) Render() render.HTML {
 	return render.Join(
-		ui.PageHeader(ui.PageHeaderConfig{Title: "Pricing"}),
-		ui.Card(ui.CardConfig{Heading: "Free", Description: "Relay one vendor. Forever free."}),
-		// data-buy and data-price are what the A/B script reads when a
-		// visitor converts; the attributes are the whole contract.
-		ui.Card(ui.CardConfig{Heading: "Pro — $19/mo", Description: "Unlimited vendors, session replay, priority relay.",
-			Footer: ui.Button(ui.ButtonConfig{Label: "Buy Pro", ExtraAttrs: html.Attrs{"data-buy": "pro", "data-price": "19"}})}),
-		ui.Card(ui.CardConfig{Heading: "Team — $49/mo", Description: "Everything in Pro, five seats.",
-			Footer: ui.Button(ui.ButtonConfig{Label: "Buy Team", ExtraAttrs: html.Attrs{"data-buy": "team", "data-price": "49"}})}),
+		ui.Hero(ui.HeroConfig{
+			// The A/B script below swaps this heading per variant of the
+			// hero-copy-test flag; this is the control copy.
+			Title:    "RelayBoard",
+			Subtitle: "Dashboards that never leak a byte to a third party.",
+			Actions: []render.HTML{
+				ui.LinkButton(ui.LinkButtonConfig{Label: "See pricing", Href: "/pricing"}),
+				ui.LinkButton(ui.LinkButtonConfig{Label: "Sign up", Href: "/account", Variant: ui.ButtonSecondary}),
+			},
+		}),
+		ui.Section(ui.SectionConfig{Heading: "Why RelayBoard"},
+			ui.Grid(ui.GridConfig{Min: "14rem"},
+				ui.Card(ui.CardConfig{Heading: "First-party wire",
+					Description: "Analytics scripts and beacons ride your own origin through the relay. The strict CSP stays exactly as shipped."}),
+				ui.Card(ui.CardConfig{Heading: "Real identity",
+					Description: "Sign-ups merge the anonymous visitor into the person your vendor already tracked. No manual stitching."}),
+				ui.Card(ui.CardConfig{Heading: "Server-side gates",
+					Description: "Feature flags answer before the page renders, through a forty-line stdlib adapter. No flash of the wrong page."}),
+			),
+		),
 	)
 }
 
+type pricing struct{}
+
+func (*pricing) ScreenTitle() string { return "Pricing" }
+func (*pricing) Render() render.HTML {
+	return render.Join(
+		ui.PageHeader(ui.PageHeaderConfig{
+			Title:    "Pricing",
+			Subtitle: "Every plan keeps your traffic on your origin.",
+		}),
+		// data-buy and data-price are what the A/B script reads when a
+		// visitor converts; the attributes are the whole contract. Plan
+		// copy rides the card BODY (not Description) so the body's
+		// flex-stretch pins every footer to the card's bottom edge and
+		// the three buy rows align across the grid.
+		ui.Grid(ui.GridConfig{Min: "15rem"},
+			ui.Card(ui.CardConfig{Heading: "Free", HeadingLevel: 2},
+				html.Paragraph(html.TextConfig{}, render.Text("Relay one vendor. Forever free."))),
+			ui.Card(ui.CardConfig{Heading: "Pro — $19/mo", HeadingLevel: 2,
+				Footer: ui.Button(ui.ButtonConfig{Label: "Buy Pro", ExtraAttrs: html.Attrs{"data-buy": "pro", "data-price": "19"}})},
+				html.Paragraph(html.TextConfig{}, render.Text("Unlimited vendors, session replay, priority relay."))),
+			ui.Card(ui.CardConfig{Heading: "Team — $49/mo", HeadingLevel: 2,
+				Footer: ui.Button(ui.ButtonConfig{Label: "Buy Team", ExtraAttrs: html.Attrs{"data-buy": "team", "data-price": "49"}})},
+				html.Paragraph(html.TextConfig{}, render.Text("Everything in Pro, five seats."))),
+		),
+	)
+}
+
+// account renders per request: the signed-in view shows who the session
+// belongs to (the same identity the whoami endpoint hands posthog-js),
+// the anonymous view offers the two battery/auth forms. Both forms POST
+// to the core plugin's routes and work before any script loads; the
+// register/login handlers auto-login and redirect (303) with the
+// session cookie set.
 type account struct{}
 
-func (account) ScreenTitle() string { return "Account" }
-func (account) Render() render.HTML {
-	// Plain forms posting to battery/auth's core plugin routes. No
-	// JavaScript: the page works before any script loads, and the
-	// register/login forms auto-login and redirect (303) with the
-	// session cookie set.
+func (*account) ScreenTitle() string { return "Account" }
+func (a *account) Render() render.HTML {
+	return a.RenderCtx(context.Background())
+}
+func (*account) RenderCtx(ctx context.Context) render.HTML {
+	if u, ok := handler.GetUser(ctx); ok && u != nil {
+		items := []ui.DetailItem{}
+		if eu, ok := u.(interface{ GetEmail() string }); ok {
+			items = append(items, ui.DetailItem{Label: "Email", Value: render.Text(eu.GetEmail())})
+		}
+		if iu, ok := u.(interface{ GetID() string }); ok {
+			items = append(items, ui.DetailItem{Label: "User id", Value: render.Text(iu.GetID())})
+		}
+		return render.Join(
+			ui.PageHeader(ui.PageHeaderConfig{Title: "Account",
+				Subtitle: "This is the identity PostHog sees: the whoami endpoint returns the same id."}),
+			ui.Card(ui.CardConfig{Heading: "Signed in", HeadingLevel: 2,
+				Footer: ui.SignOut(ui.SignOutConfig{Next: "/", Ctx: ctx})},
+				ui.DetailList(ui.DetailListConfig{Items: items}),
+			),
+		)
+	}
+	emailField := func(id, autocomplete string) render.HTML {
+		return ui.FormField(ui.FormFieldConfig{Label: "Email", For: id, Required: true,
+			Input: html.Input(html.InputConfig{Type: "email", Name: "email", ID: id,
+				ExtraAttrs: html.Attrs{"required": "", "autocomplete": autocomplete}})})
+	}
+	passwordField := func(id, autocomplete string) render.HTML {
+		return ui.FormField(ui.FormFieldConfig{Label: "Password", For: id, Required: true,
+			Input: html.Input(html.InputConfig{Type: "password", Name: "password", ID: id,
+				ExtraAttrs: html.Attrs{"required": "", "autocomplete": autocomplete}})})
+	}
 	return render.Join(
-		ui.PageHeader(ui.PageHeaderConfig{Title: "Account"}),
-		render.HTML(`<div data-account-panel>
-<form action="/auth/register" method="POST" class="ui-stack">
-  <h2>Sign up</h2>
-  <label>Email <input name="email" type="email" required></label>
-  <label>Password <input name="password" type="password" required></label>
-  <button type="submit">Create account</button>
-</form>
-<form action="/auth/login" method="POST" class="ui-stack">
-  <h2>Log in</h2>
-  <label>Email <input name="email" type="email" required></label>
-  <label>Password <input name="password" type="password" required></label>
-  <button type="submit">Log in</button>
-</form>
-<form action="/auth/logout" method="POST"><button type="submit">Log out</button></form>
-</div>`),
+		ui.PageHeader(ui.PageHeaderConfig{Title: "Account",
+			Subtitle: "Registering merges your anonymous analytics profile into a real person."}),
+		ui.Grid(ui.GridConfig{Min: "18rem"},
+			ui.Card(ui.CardConfig{Heading: "Create an account", HeadingLevel: 2},
+				ui.Form(ui.FormConfig{Action: "/auth/register", SubmitLabel: "Create account", Ctx: ctx},
+					emailField("reg-email", "email"),
+					passwordField("reg-password", "new-password"),
+				),
+			),
+			ui.Card(ui.CardConfig{Heading: "Log in", HeadingLevel: 2},
+				ui.Form(ui.FormConfig{Action: "/auth/login", SubmitLabel: "Log in", Ctx: ctx},
+					emailField("login-email", "email"),
+					passwordField("login-password", "current-password"),
+				),
+			),
+		),
 	)
 }
 
 // ─── the server-side gate ──────────────────────────────────────────
 
-// The /beta page is a plain handler, not a screen. A screen renders the
-// same HTML for every request, and the whole point of this page is that
-// the server decides per request, from the flag store, which branch to
-// send. The markup stays minimal: the interesting part is which half
-// renders, and that is PostHog's call.
-const betaInviteOnly = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Beta</title></head>
-<body><h1 data-beta="no">Beta is invite-only</h1>
-<p>The beta-access flag decided this server-side, before the page rendered.</p></body></html>`
+// beta is the gated screen. Screens render server-side on every
+// request, so RenderCtx asks the flag store — through the enabled
+// closure newApp fills in once the framework app exists — and only the
+// winning branch ever reaches the browser. The data-beta marker is the
+// contract the tests and the README's curl examples read.
+type beta struct {
+	enabled func(ctx context.Context) bool
+}
 
-const betaWelcome = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Beta</title></head>
-<body><h1 data-beta="yes">Welcome to the beta</h1>
-<p>PostHog said yes to this user: the render was gated server-side.</p></body></html>`
+func (*beta) ScreenTitle() string { return "Beta" }
+func (b *beta) Render() render.HTML {
+	return b.RenderCtx(context.Background())
+}
+func (b *beta) RenderCtx(ctx context.Context) render.HTML {
+	if b.enabled != nil && b.enabled(ctx) {
+		return render.Join(
+			ui.PageHeader(ui.PageHeaderConfig{Title: "Welcome to the beta", Eyebrow: "Beta"}),
+			html.Div(html.DivConfig{ExtraAttrs: html.Attrs{"data-beta": "yes"}},
+				ui.Callout(ui.CalloutConfig{Title: "You're in", Variant: ui.StatusSuccess},
+					render.Text("PostHog said yes to this user: the render was gated server-side, before any HTML left the process."),
+				),
+			),
+		)
+	}
+	return render.Join(
+		ui.PageHeader(ui.PageHeaderConfig{Title: "Beta is invite-only", Eyebrow: "Beta"}),
+		html.Div(html.DivConfig{ExtraAttrs: html.Attrs{"data-beta": "no"}},
+			ui.Callout(ui.CalloutConfig{Title: "Not yet", Variant: ui.StatusNeutral},
+				render.Text("The beta-access flag decided this server-side, before the page rendered. Sign in and ask PostHog nicely."),
+			),
+		),
+	)
+}
 
 // phFlagStore is the featureflag.Store adapter from gofastr's
 // analytics-recipes doc, running for real. It answers "is this flag on
@@ -249,8 +373,8 @@ func (s phFlagStore) Get(ctx context.Context, key string) (*featureflag.Flag, er
 // flagContextMiddleware annotates every request with the EvalContext
 // the flag store reads: the authenticated user's id when there is one,
 // empty otherwise. It must run after auth.SessionMiddleware, whose
-// annotation it reads — the store and /beta then agree on the subject
-// because both look at the same context value.
+// annotation it reads — the store and the beta screen then agree on the
+// subject because both look at the same context value.
 func flagContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var ec featureflag.EvalContext
@@ -287,7 +411,7 @@ var abJS = []byte(`(function () {
     if (!ph || !ph.getFeatureFlag) return;
     var v = ph.getFeatureFlag('hero-copy-test');
     if (!v || location.pathname !== '/') return;
-    var h1 = document.querySelector('h1');
+    var h1 = document.querySelector('.ui-hero__title');
     if (!h1) return;
     h1.textContent = v === 'punchy' ? 'Ship analytics without leaving your origin' : 'RelayBoard';
     h1.setAttribute('data-ab-variant', v);
@@ -328,16 +452,25 @@ type relayboard struct {
 // are the same app either way.
 func newApp(db *sql.DB, cfg config) (*framework.App, *relayboard, error) {
 	uiApp := appui.NewApp("RelayBoard")
-	uiApp.WithTheme(uitheme.Default())
-	layout := appui.NewLayout("site").WithContainer()
+	// Identity lives in theme tokens, never in CSS the app would ship.
+	uiApp.WithTheme(uitheme.Default(uitheme.Overrides{
+		Primary:    "#0F766E",
+		DarkColors: map[string]string{"primary": "#5EEAD4"},
+	}))
+	layout := appui.NewLayout("site").
+		WithContainer().
+		WithHeader(appui.NewContextComponent(siteHeader)).
+		WithFooter(appui.NewStaticComponent(siteFooter()))
 	uiApp.SetDefaultLayout(layout)
 	// Screens register as pointers (&screen{}): the host resolves them
 	// through dependency injection, and a value screen fails that
 	// resolution — every page then falls through to the host's
 	// not-found, which looks like a routing bug and isn't.
+	gate := &beta{}
 	uiApp.Register("/", &landing{}, layout)
 	uiApp.Register("/pricing", &pricing{}, layout)
 	uiApp.Register("/account", &account{}, layout)
+	uiApp.Register("/beta", gate, layout)
 
 	host := uihost.New(uiApp)
 	fw := framework.NewUIHostApp(host,
@@ -364,8 +497,8 @@ func newApp(db *sql.DB, cfg config) (*framework.App, *relayboard, error) {
 
 	// Order matters. SessionMiddleware only annotates the context with
 	// the logged-in user; flagContextMiddleware reads that annotation
-	// one link later and adds the flag subject; /beta and the whoami
-	// endpoint read both.
+	// one link later and adds the flag subject; the beta screen and the
+	// whoami endpoint read both.
 	fw.Use(auth.SessionMiddleware(mgr), flagContextMiddleware)
 
 	rb := &relayboard{}
@@ -389,14 +522,11 @@ func newApp(db *sql.DB, cfg config) (*framework.App, *relayboard, error) {
 	// lazily wires the framework's empty in-memory default, every key
 	// answers false, and /beta renders invite-only. No panic path.
 
-	fw.Router().Get("/beta", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if fw.IsEnabled(r.Context(), "beta-access") {
-			fmt.Fprint(w, betaWelcome)
-			return
-		}
-		fmt.Fprint(w, betaInviteOnly)
-	}))
+	// The screen was registered before fw existed; requests only start
+	// after Start, so filling the closure here is not a race.
+	gate.enabled = func(ctx context.Context) bool {
+		return fw.IsEnabled(ctx, "beta-access")
+	}
 
 	fw.Router().Get("/__site/ab.js", uihost.ScriptHandler(abJS))
 	if err := host.RegisterExternalScript(uihost.ScriptURL("/__site/ab.js", abJS)); err != nil {

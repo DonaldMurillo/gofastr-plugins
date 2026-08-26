@@ -42,7 +42,9 @@ the `data-buy` / `data-price` attributes off the pricing buttons.
 
 ## Identity is real
 
-`/account` holds plain register / login / logout forms posting to
+`/account` renders register / login forms (framework/ui `Form` +
+`FormField` in cards; a signed-in session sees its identity and a
+sign-out instead), all posting to
 [`battery/auth`](https://github.com/DonaldMurillo/gofastr/tree/main/battery/auth)'s
 core plugin routes, backed by durable sqlite entity stores. The posthog
 integration's `whoami` endpoint answers from that session: anonymous
