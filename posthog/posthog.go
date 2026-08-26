@@ -273,6 +273,11 @@ func (p *Plugin) whoami(w http.ResponseWriter, r *http.Request) {
 		switch v := u.(type) {
 		case string:
 			id = v
+		case interface{ GetID() string }:
+			// battery/auth principals (*auth.BasicUser and friends)
+			// carry their identity here — checked before Stringer so a
+			// type with both never leaks a display string as its id.
+			id = v.GetID()
 		case fmt.Stringer:
 			id = v.String()
 		}

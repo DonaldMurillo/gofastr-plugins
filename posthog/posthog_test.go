@@ -588,3 +588,36 @@ func TestServedBootHasNoPlaceholder(t *testing.T) {
 		t.Fatal("config JSON did not land at the code position (var CFG = ...)")
 	}
 }
+
+type idPrincipal struct{ id string }
+
+func (p idPrincipal) GetID() string { return p.id }
+
+type idAndStringer struct{ idPrincipal }
+
+func (idAndStringer) String() string { return "display-name-not-an-id" }
+
+func TestWhoamiGetIDPrincipals(t *testing.T) {
+	// battery/auth's session middleware installs *auth.BasicUser, which
+	// implements GetID() string and NOT fmt.Stringer — the shape the
+	// default identity must serve first.
+	p, srv := bootApp(t, testConfig(), "", "")
+	for name, tc := range map[string]struct {
+		user any
+		want string
+	}{
+		"getid":             {idPrincipal{id: "u-42"}, `{"id":"u-42"}`},
+		"getid_over_string": {idAndStringer{idPrincipal{id: "u-7"}}, `{"id":"u-7"}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodGet, srv.URL+p.Base()+"/whoami", nil)
+			req = req.WithContext(handler.SetUser(req.Context(), tc.user))
+			rec := httptest.NewRecorder()
+			// Drive the handler directly: the stdlib client would drop the ctx.
+			p.whoami(rec, req)
+			if got := strings.TrimSpace(rec.Body.String()); got != tc.want {
+				t.Fatalf("whoami = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
