@@ -74,6 +74,14 @@ type Config struct {
 	// reports Do-Not-Track: no SDK script loads, no beacon fires.
 	RespectDNT bool
 
+	// PersonProfiles sets posthog-js's person_profiles init option:
+	// "" (the default) omits it and the SDK uses its own default
+	// ("identified_only"), or one of "identified_only", "always",
+	// "never". Anything else panics at New. Read it as a billing
+	// question: "always" creates a person for every anonymous visitor,
+	// which is exactly what "never" is for avoiding.
+	PersonProfiles string
+
 	// Identify resolves the visitor's identity for the whoami endpoint.
 	// Default: handler.GetUser with the recipes' normalization — a
 	// string principal passes through, a fmt.Stringer is String()ed,
@@ -139,6 +147,12 @@ func newWithUpstreams(cfg Config, assetsUpstream, ingestUpstream string) *Plugin
 	if cfg.Key == "" {
 		panic("posthog: Config.Key is required: the project API key (phc_...)")
 	}
+
+	switch cfg.PersonProfiles {
+	case "", "identified_only", "always", "never":
+	default:
+		panic(fmt.Sprintf("posthog: Config.PersonProfiles %q is invalid: use \"identified_only\", \"always\", or \"never\" (empty for the posthog-js default)", cfg.PersonProfiles))
+	}
 	if strings.HasPrefix(cfg.Key, "phx_") || strings.HasPrefix(cfg.Key, "sk_") {
 		panic("posthog: Config.Key looks like a personal (phx_) or server (sk_) key: " +
 			"those are secrets and would ship in the served bootstrap; use the public project API key (phc_...)")
@@ -195,10 +209,11 @@ func newWithUpstreams(cfg Config, assetsUpstream, ingestUpstream string) *Plugin
 	})
 
 	cfgJSON, err := json.Marshal(bootConfig{
-		APIKey:     cfg.Key,
-		Mount:      p.Base(),
-		UIHost:     h.ui,
-		RespectDNT: cfg.RespectDNT,
+		APIKey:         cfg.Key,
+		Mount:          p.Base(),
+		UIHost:         h.ui,
+		RespectDNT:     cfg.RespectDNT,
+		PersonProfiles: cfg.PersonProfiles,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("posthog: encoding boot config: %v", err)) // string/bool fields; unreachable
@@ -219,10 +234,11 @@ func newWithUpstreams(cfg Config, assetsUpstream, ingestUpstream string) *Plugin
 // is load-bearing: it is what keeps a hostile Key value inert in the
 // served bytes.
 type bootConfig struct {
-	APIKey     string `json:"apiKey"`
-	Mount      string `json:"mount"`
-	UIHost     string `json:"uiHost"`
-	RespectDNT bool   `json:"respectDNT"`
+	APIKey         string `json:"apiKey"`
+	Mount          string `json:"mount"`
+	UIHost         string `json:"uiHost"`
+	RespectDNT     bool   `json:"respectDNT"`
+	PersonProfiles string `json:"personProfiles,omitempty"`
 }
 
 // Name implements framework.Plugin. It shadows the embedded relay's
@@ -273,6 +289,11 @@ func (p *Plugin) whoami(w http.ResponseWriter, r *http.Request) {
 		switch v := u.(type) {
 		case string:
 			id = v
+		case interface{ GetID() string }:
+			// battery/auth principals (*auth.BasicUser and friends)
+			// carry their identity here — checked before Stringer so a
+			// type with both never leaks a display string as its id.
+			id = v.GetID()
 		case fmt.Stringer:
 			id = v.String()
 		}

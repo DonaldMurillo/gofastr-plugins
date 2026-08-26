@@ -36,13 +36,18 @@
     var ph = window.posthog;
     if (!ph) return;
 
-    ph.init(CFG.apiKey, {
+    var initCfg = {
       api_host: location.origin + INGEST,
       asset_host: location.origin + ASSETS,
       ui_host: CFG.uiHost,     // the real region UI (toolbar, replay player)
       capture_pageview: false, // pageviews are ours, below
       capture_pageleave: false // GoFastr navigations are not leaves
-    });
+    };
+    // PersonProfiles: only pass it when the host set one — an undefined
+    // value would override the SDK's own default resolution, and the
+    // valid values are exactly the three PostHog documents.
+    if (CFG.personProfiles) initCfg.person_profiles = CFG.personProfiles;
+    ph.init(CFG.apiKey, initCfg);
 
     // Identity: anonymous until whoami says otherwise. The generation
     // counter makes a stale response unable to overwrite a newer
