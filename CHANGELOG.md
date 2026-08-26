@@ -6,6 +6,14 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Changed — gofastr v0.71.1 → v0.71.2 (2026-08-26)
+
+Picks up the upstream `ui.Card` footer fix this repo's relayboard
+recipe surfaced: footers pin to the card's bottom edge in stretch
+contexts (plain and linked cards), so config-only cards in a `ui.Grid`
+row no longer float their footers mid-card. Also carries the upstream
+fix for `App.Shutdown` racing `App.Start`'s pre-listen phases.
+
 ### Added — recipes/relayboard: the measured funnel (2026-08-26)
 
 [`recipes/relayboard/`](recipes/relayboard/) is the analytics recipe: a
