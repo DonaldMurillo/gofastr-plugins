@@ -61,6 +61,7 @@ counting there records visits that never happened).
 | `Path` | `relay.DefaultPath` (`/__gofastr/t`) | Relay mount; every route this package serves lives under it. Validated by `relay.New`. |
 | `SessionReplay` | `false` | Raises the ingestion route's body cap from the relay's 8 MiB default to 64 MiB, what replay uploads reach. Read it as an egress number: every accepted byte is billed to your bandwidth. |
 | `RespectDNT` | `false` | Visitors whose browser reports Do-Not-Track get nothing: no SDK script, no beacons. |
+| `PersonProfiles` | `""` (SDK default: `identified_only`) | Sets posthog-js's `person_profiles` init option: `"identified_only"`, `"always"`, or `"never"`; anything else panics at `New`. A billing knob: `"always"` creates a person for every anonymous visitor. |
 | `Identify` | `handler.GetUser` + recipes' normalization | Resolves the whoami answer. A `string` principal passes through, a `fmt.Stringer` is `String()`ed, anything else is anonymous; return `ok=false` to force anonymous. |
 
 `New` renders the bootstrap once — the config (including the key) is
@@ -68,6 +69,23 @@ counting there records visits that never happened).
 attributes are needed and a hostile key value stays inert: Go's JSON
 encoder HTML-escapes `<`, `>`, `&`, and a test pins that a key
 containing `</script>` never appears raw.
+
+## Attribution
+
+Event- and session-level UTM attribution works for anonymous visitors
+out of the box: posthog-js registers `utm_*`, `gclid`, and friends from
+the first URL it sees and attaches them to every subsequent capture —
+including after client-side navigation drops them from the address bar.
+The e2e suite pins this (`TestAttributionSurvivesSPAToPurchase`): land
+on `/?utm_source=twitter&gclid=G123`, navigate to `/pricing`, click
+buy — the `purchase` event still carries `utm_source=twitter` and
+`gclid=G123`.
+
+Person-level `$initial_*` first-touch properties are a different layer:
+they are written onto the person, so they require an `identify()`
+(which this package fires on login via whoami) or
+`PersonProfiles: "always"` for anonymous visitors. With the default
+`identified_only`, anonymous traffic stays event-attributed only.
 
 ## When PostHog moves an endpoint
 

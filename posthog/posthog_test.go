@@ -145,6 +145,41 @@ func TestNewPanicsOnBadRegion(t *testing.T) {
 	}
 }
 
+// PersonProfiles: every valid value renders into the bootstrap config;
+// the garbage value panics with the "posthog:" prefix.
+func TestPersonProfilesRenderedInBoot(t *testing.T) {
+	for _, v := range []string{"identified_only", "always", "never"} {
+		p := newPlugin(t, Config{Key: "phc_k000000000000000000000", PersonProfiles: v})
+		if want := `"personProfiles":"` + v + `"`; !strings.Contains(string(p.js), want) {
+			t.Errorf("PersonProfiles %q: rendered bootstrap missing config %s", v, want)
+		}
+		// The bootstrap passes the value through as posthog-js's
+		// person_profiles init option (conditionally, so the SDK's own
+		// default survives an unset config).
+		if !strings.Contains(string(p.js), "initCfg.person_profiles = CFG.personProfiles") {
+			t.Errorf("PersonProfiles %q: bootstrap lost the person_profiles assignment", v)
+		}
+	}
+}
+
+// The zero value must not leak an empty person_profiles into the init
+// config: posthog-js would treat "" as a fourth (invalid) mode.
+func TestPersonProfilesOmittedWhenEmpty(t *testing.T) {
+	p := newPlugin(t, testConfig())
+	if bytes.Contains(p.js, []byte(`"personProfiles"`)) {
+		t.Fatal("empty PersonProfiles rendered a personProfiles key into the config")
+	}
+}
+
+func TestPersonProfilesPanicsOnGarbage(t *testing.T) {
+	for _, v := range []string{"sometimes", "identified", "Always"} {
+		t.Run(v, func(t *testing.T) {
+			defer mustPanic(t, "posthog:")
+			_ = New(Config{Key: "phc_k000000000000000000000", PersonProfiles: v})
+		})
+	}
+}
+
 // --- identity / naming surface ------------------------------------------
 
 // Name must be "posthog" (the embedded relay would answer "relay"),
