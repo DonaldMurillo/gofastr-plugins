@@ -6,6 +6,27 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — recipes/relayboard: the measured funnel (2026-08-26)
+
+[`recipes/relayboard/`](recipes/relayboard/) is the analytics recipe: a
+three-screen product whose funnel runs end to end through the `posthog`
+integration against a self-hosted PostHog — campaign attribution from a
+UTM-tagged landing page through client-side navigation to the
+`purchase` event, identified users from real `battery/auth` accounts
+(whoami answers from the session, so login merges the anonymous person
+into the identified one), an A/B hero branched client-side on the
+`hero-copy-test` variant, and a server-side `/beta` gate backed by
+`phFlagStore`: a `featureflag.Store` of forty lines of stdlib HTTP
+POSTing `{host}/flags/?v=2` (`/decide` is 403 on current self-hosted
+PostHog; the flags endpoint is the replacement). Unknown keys return
+`(nil, nil)` so `BoolDefault` semantics survive, and errors fail closed.
+With `POSTHOG_KEY` unset the same app degrades cleanly: no plugin, no
+store, `/beta` invite-only, the A/B script a no-op, one log line. HTTP
+smoke tests (no browser — posthog-js bot detection would drop every
+capture) pin the routes, the gate against a fake PostHog, and the
+register→whoami identity chain.
+
+
 ### Added — posthog: first-party PostHog in one call (2026-08-25)
 
 [`posthog/`](posthog/) packages the PostHog recipe from gofastr's
