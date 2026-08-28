@@ -34,6 +34,28 @@ rule). Demo at `/imageedit` shows the operation list as live JSON and the
 server-rendered result beside the in-frame preview with a sampled-pixel
 agreement counter; docs in [`docs/imageedit.md`](docs/imageedit.md).
 
+
+### Added — formbuilder: author forms the server enforces (2026-08-28)
+
+The `formbuilder` plugin is the first here that authors the framework
+itself rather than content: its output is a form schema the server consumes
+and enforces. The canonical doc ([`formbuilder/`](formbuilder/),
+schema `formbuilder-v1`) is **data only** — `{version, fields[]}`, never
+markup; Go validates every save and refuses bad schemas with specific `400`
+codes (unknown type, duplicate/empty/invalid name, malformed rule, unknown
+version, `E_MARKUP` for a label containing `<`), persisting nothing on
+refusal. The demo closes the loop the plugin exists to make: design a form
+in the opaque-origin sandbox (a drag-to-reorder field list + property panel,
+deliberately no vendor library — ~13 KB bundle), then `/formbuilder/live`
+renders the SAVED schema as a real working form through GoFastr's own
+`ui.Form` and re-derives every rule server-side on POST. The live inputs
+carry no native constraint attributes on purpose — submit garbage from a
+browser or a bare `curl` and the same Go validator answers `422` with field
+errors; select membership is enforced even on optional fields. Versioned
+from the first commit (unknown doc versions are refused, not degraded).
+Docs in [`docs/formbuilder.md`](docs/formbuilder.md); e2e in both webkit and
+chromium drives the design → save → live → reject/accept round trip.
+
 ### Added — logstream: a live log tail pushed across the sandbox (2026-08-28)
 
 The `logstream` plugin is the first whose traffic is not turn-based. Every
