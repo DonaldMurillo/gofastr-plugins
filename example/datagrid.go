@@ -66,13 +66,13 @@ func demoGridDoc() datagrid.Doc {
 	return datagrid.Doc{
 		SchemaVersion: datagrid.SchemaVersion,
 		Columns: []datagrid.Column{
-		{Field: "id", Header: "ID", Width: 128, Sortable: true},
-		{Field: "name", Header: "Name", Width: 160, Sortable: true, Editable: true},
-		{Field: "email", Header: "Email", Width: 210},
-		{Field: "company", Header: "Company", Width: 150, Sortable: true},
-		{Field: "city", Header: "City", Width: 112, Sortable: true},
-		{Field: "amount", Header: "Amount", Width: 96, Type: "number", Sortable: true},
-		{Field: "status", Header: "Status", Width: 104, Editable: true},
+			{Field: "id", Header: "ID", Width: 128, Sortable: true},
+			{Field: "name", Header: "Name", Width: 160, Sortable: true, Editable: true},
+			{Field: "email", Header: "Email", Width: 210},
+			{Field: "company", Header: "Company", Width: 150, Sortable: true},
+			{Field: "city", Header: "City", Width: 112, Sortable: true},
+			{Field: "amount", Header: "Amount", Width: 96, Type: "number", Sortable: true},
+			{Field: "status", Header: "Status", Width: 104, Editable: true},
 		},
 		PageSize: 100,
 	}
