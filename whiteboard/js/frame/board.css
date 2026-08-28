@@ -1,0 +1,115 @@
+/*
+  GoFastr whiteboard — token-only frame stylesheet.
+  Every color/radius/font/spacing comes from a bridged host token with an
+  inline fallback for pre-init legibility; zero bespoke palette. The one
+  exception is stroke/cursor COLOR DATA, which arrives from the host as
+  participant colors (canvas fill, not CSS) and never appears here.
+*/
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-body, system-ui, sans-serif);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #18181B);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+.wb-root, #wb-root { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100vh; }
+
+/* Toolbar: one row, wraps on narrow frames. */
+.wb-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm, 4px);
+  padding: var(--spacing-sm, 4px) var(--spacing-md, 8px);
+  border-bottom: 1px solid var(--color-border, #E4E4E7);
+  background: var(--color-surface-soft, #F4F4F5);
+  flex: none;
+}
+.wb-participant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, .75rem);
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-muted, #52525B);
+  padding: 2px 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.wb-participant-swatch {
+  width: 12px; height: 12px; flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--color-surface, #fff);
+  box-shadow: 0 0 0 1px var(--color-border-strong, #A1A1AA);
+  background: var(--color-border-strong, #A1A1AA); /* replaced by the host-assigned color */
+}
+.wb-sep { width: 1px; height: 18px; background: var(--color-border, #E4E4E7); margin: 0 2px; flex: none; }
+.wb-btn {
+  font: inherit;
+  font-size: var(--text-xs, .75rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border, #E4E4E7);
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #52525B);
+  cursor: pointer;
+  line-height: 1;
+}
+.wb-btn:hover { border-color: var(--color-border-strong, #A1A1AA); color: var(--color-text, #18181B); }
+.wb-btn-on {
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 14%, var(--color-surface, #fff));
+  border-color: color-mix(in srgb, var(--color-primary, #e0a040) 55%, var(--color-border, #E4E4E7));
+  color: var(--color-text, #18181B);
+}
+.wb-btn-label { display: inline; }
+@media (max-width: 420px) { .wb-btn-label { display: none; } }
+.wb-dot { border-radius: 50%; background: currentColor; display: inline-block; }
+.wb-dot-s { width: 4px; height: 4px; }
+.wb-dot-m { width: 7px; height: 7px; }
+.wb-dot-l { width: 11px; height: 11px; }
+
+/* Connection status: the honest live answer to "is my pen synced yet".
+   Offline is NOT an error state — drawing continues locally and merges. */
+.wb-status {
+  margin-left: auto;
+  font-size: var(--text-xs, .75rem);
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-subtle, #71717A);
+  border: 1px solid var(--color-border, #E4E4E7);
+  border-radius: var(--radii-full, 9999px);
+  padding: 3px 10px;
+  background: var(--color-surface, #fff);
+  white-space: nowrap;
+}
+.wb-status.wb-online { color: var(--color-success, #166534); border-color: color-mix(in srgb, var(--color-success, #166534) 40%, var(--color-border, #E4E4E7)); }
+.wb-status.wb-offline { color: var(--color-warning, #854D0E); border-color: color-mix(in srgb, var(--color-warning, #854D0E) 45%, var(--color-border, #E4E4E7)); background: color-mix(in srgb, var(--color-warning, #854D0E) 8%, var(--color-surface, #fff)); }
+
+/* Canvas area: the drawing surface plus the remote-cursor overlay. */
+.wb-canvas-wrap { position: relative; flex: 1; min-height: 0; background: var(--color-surface, #fff); }
+#wb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.wb-cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+/* Remote cursor: a colored ring + dot. Deliberately NO label — presence
+   carries an opaque participant id and a colour, never a name. */
+.wb-cursor {
+  position: absolute;
+  width: 18px; height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2.5px solid var(--cursor-color, var(--color-primary, #e0a040));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-surface, #fff) 80%, transparent), 0 1px 4px rgba(0,0,0,.25);
+  background: color-mix(in srgb, var(--cursor-color, var(--color-primary, #e0a040)) 30%, transparent);
+  transition: transform 80ms linear;
+  will-change: transform;
+}
+.wb-cursor.wb-cursor-down { transform: scale(0.72); }
+@media (prefers-reduced-motion: reduce) { .wb-cursor { transition: none; } }

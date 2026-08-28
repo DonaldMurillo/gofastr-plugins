@@ -35,6 +35,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/pdf"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
+	"github.com/DonaldMurillo/gofastr-plugins/whiteboard"
 	"github.com/DonaldMurillo/gofastr/framework"
 )
 
@@ -215,6 +216,20 @@ func newApp() (*framework.App, error) {
 		calendar.WithDemoPage(),
 		calendar.WithEventsSource(demoCalendarEvents),
 		calendar.WithDemoDoc(demoCalendarDoc()),
+	))
+
+	// The whiteboard — the tenth sandboxed plugin, and the answer to "surely
+	// collaboration needs a socket in the frame". It does not: strokes are
+	// Yjs CRDT updates, opaque binary blobs that cross the postMessage
+	// bridge, and the ROOM HUB below owns the only network leg (SSE fan-out
+	// to other browsers, replay for late joiners). The frame keeps
+	// connect-src 'none'. Identity is assigned hub-side: an opaque pid and a
+	// colour, never a name. Demo at /whiteboard — open it in two windows.
+	wbHub := newWhiteboardHub()
+	app.RegisterPlugin(whiteboard.New(
+		whiteboard.WithDevGrantAll(),
+		whiteboard.WithDemoPage(),
+		whiteboard.WithRoomHub(wbHub.Subscribe, wbHub.Publish),
 	))
 
 	if err := app.InitPlugins(); err != nil {
