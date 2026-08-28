@@ -163,7 +163,10 @@ async function canvasGeom(page: Page) {
     });
   const measure = async () => {
     const iframeBox = await page.locator("iframe").boundingBox();
-    const r = await canvas.evaluate((el) => {
+    // Typed as HTMLCanvasElement: locator.evaluate hands back HTMLElement |
+    // SVGElement, which has no width/height, and the CI typecheck rejects it.
+    // bw/bh are the BACKING store (output space), distinct from the CSS box.
+    const r = await canvas.evaluate((el: HTMLCanvasElement) => {
       const b = el.getBoundingClientRect();
       return { left: b.left, top: b.top, width: b.width, height: b.height, bw: el.width, bh: el.height };
     });
