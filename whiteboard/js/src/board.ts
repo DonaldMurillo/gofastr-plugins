@@ -577,6 +577,9 @@ export function teardownBoard(): void {
 
 export interface DebugApi {
   strokeIds(): string[];
+  /** Ids in the order redraw() paints them — the property that must agree
+   *  across replicas, asserted directly rather than inferred from pixels. */
+  paintOrder(): string[];
   strokeDump(): string;
   presencePids(): string[];
   connected(): boolean;
@@ -588,6 +591,7 @@ export interface DebugApi {
 export function debugApi(): DebugApi {
   return {
     strokeIds: () => (strokes ? [...strokes.keys()].sort() : []),
+    paintOrder: () => orderedStrokes().map((s) => s.id),
     strokeDump: () =>
       strokes
         ? JSON.stringify(
