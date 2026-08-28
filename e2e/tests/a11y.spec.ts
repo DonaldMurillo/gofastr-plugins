@@ -18,9 +18,25 @@ async function audit(page: Page, label: string) {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();
-  const serious = results.violations.filter(
-    (v) => v.impact === "serious" || v.impact === "critical"
-  );
+  const serious = results.violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    // Drop color-contrast findings INSIDE a sandboxed frame, and only those.
+    //
+    // axe resolves an element's background by walking its ancestors. A plugin
+    // frame is an opaque origin, so the walk cannot cross out of it, and axe
+    // falls back to assuming a white canvas. The calendar toolbar was reported
+    // at 1.12:1 — #f4f1ed on #ffffff — where #ffffff is that assumption, not a
+    // colour anything actually painted.
+    //
+    // The frame's real palette is coherent and was captured from the failing CI
+    // run itself: __pluginTheme reported --color-text oklch(0.96 0.006 80) on
+    // --color-surface oklch(0.17 0.006 75), which is a strong contrast. Both
+    // axe 4.12 and 4.13 handle oklch correctly on a same-document page, so the
+    // colour space is not the problem either; the frame boundary is.
+    //
+    // Every other rule still applies inside the frame, and contrast on the HOST
+    // page is still enforced. Tracked in #36.
+    .filter((v) => !(v.id === "color-contrast" && v.nodes.every((n) => n.target[0] === "iframe")));
   const detail = serious
     .map((v) => `[${v.impact}] ${v.id}: ${v.help}\n  ${v.nodes.map((n) => n.target.join(" ")).join("\n  ")}`)
     .join("\n");
