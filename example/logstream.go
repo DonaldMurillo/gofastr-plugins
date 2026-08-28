@@ -144,17 +144,49 @@ func (g *demoLogGenerator) source(ctx context.Context, after uint64, yield func(
 		return err
 	}
 	for {
-		rate := g.rateNow()
-		interval := time.Second / time.Duration(rate)
+		batch, interval := mintSchedule(g.rateNow())
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(interval):
-			if err := yield(g.next()); err != nil {
-				return err
+			for range batch {
+				if err := yield(g.next()); err != nil {
+					return err
+				}
 			}
 		}
 	}
+}
+
+// mintSchedule converts a lines-per-second rate into a (batch, interval) pair
+// that a real machine can actually keep.
+//
+// Minting one line per tick looks right and is not: the flood rate of 6,000
+// lines/s works out to a 166µs timer, and no scheduler wakes a goroutine that
+// often under load. A GitHub runner achieved a small fraction of the nominal
+// rate, which meant the producer never outran the frame's render loop, nothing
+// was ever dropped, and the e2e overflow journey timed out waiting for a drop
+// that could not happen. The demo page's own claim — switch to Flood and watch
+// the counter climb — was false on the same machines for the same reason.
+//
+// Ticking no faster than every 5ms and minting a batch per tick keeps the
+// achieved rate equal to the nominal one on fast and slow machines alike:
+// 6,000 lines/s becomes 30 lines every 5ms, which is arithmetic rather than a
+// race against the scheduler.
+func mintSchedule(rate int) (batch int, interval time.Duration) {
+	if rate < 1 {
+		rate = 1
+	}
+	const minInterval = 5 * time.Millisecond
+	interval = time.Second / time.Duration(rate)
+	if interval >= minInterval {
+		return 1, interval
+	}
+	batch = int(minInterval / interval)
+	if batch < 1 {
+		batch = 1
+	}
+	return batch, minInterval
 }
 
 // registerDemoLogControlRoute mounts the rate switch: POST {"rate":"calm"|"fast"}.
