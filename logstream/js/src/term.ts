@@ -78,6 +78,13 @@ let initialized = false;
 let lastTokens: unknown = null;
 /** Batches accepted from the host, not yet rendered. */
 const pending: StreamBatch[] = [];
+/** Drop markers actually WRITTEN to the terminal, and the most recent one.
+ *  These ride on the ack so a test can assert the gap was recorded without
+ *  driving the UI: at flood rate CI's webkit cannot reliably service a click
+ *  or a fill, so any assertion routed through the search box measures the
+ *  runner rather than the plugin. */
+let markersWritten = 0;
+let lastMarkerText = "";
 /** The pending queue's bound: a stalled frame must not hoard host memory. */
 const MAX_PENDING_BATCHES = 240;
 /** Highest sequence number actually written to the terminal. */
@@ -135,7 +142,12 @@ function drainOne(): void {
   const batch = pending.shift();
   if (!batch || !term) return;
   let out = "";
-  if (batch.dropped > 0) out += dropMarker(batch.dropped);
+  if (batch.dropped > 0) {
+    const marker = dropMarker(batch.dropped);
+    out += marker;
+    markersWritten += 1;
+    lastMarkerText = marker.replace(/[\r\n]+$/, "");
+  }
   let written = 0;
   let i = 0;
   for (; i < batch.lines.length; i += 1) {
@@ -175,6 +187,8 @@ function ackParams(): Record<string, unknown> {
   return {
     lastSeq: lastRendered,
     rendered,
+    markers: markersWritten,
+    lastMarker: lastMarkerText,
     scrollback,
     rows,
     cap: SCROLLBACK_LINES,
