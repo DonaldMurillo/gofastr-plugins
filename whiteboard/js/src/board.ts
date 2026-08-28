@@ -151,10 +151,20 @@ function strokeColor(): string {
 function scheduleRedraw(): void {
   if (redrawQueued || !canvas) return;
   redrawQueued = true;
-  requestAnimationFrame(() => {
+  // Whichever of the two fires first wins; the other becomes a no-op.
+  const run = () => {
+    if (!redrawQueued) return;
     redrawQueued = false;
     redraw();
-  });
+  };
+  requestAnimationFrame(run);
+  // requestAnimationFrame does NOT fire in a page that is not painting — a
+  // backgrounded tab, or one that has not produced its first frame yet. With
+  // rAF alone the queued flag latches true and never clears, so the board stays
+  // blank AND every later stroke is swallowed by the `redrawQueued` guard. A
+  // joiner whose replay landed before its first frame would sit on an empty
+  // board forever. The timer is the floor that guarantees a paint.
+  setTimeout(run, 100);
 }
 
 /** Strokes in a replica-independent paint order: creation time, then id. */
