@@ -85,6 +85,15 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed pdf/js/src
 //go:embed pdf/js/frame
 //go:embed pdf/js/scripts
+//go:embed datagrid/*.go
+//go:embed datagrid/assets
+//go:embed datagrid/host
+//go:embed datagrid/js/build.mjs
+//go:embed datagrid/js/package.json
+//go:embed datagrid/js/package-lock.json
+//go:embed datagrid/js/tsconfig.json
+//go:embed datagrid/js/src
+//go:embed datagrid/js/frame
 //go:embed tour/*.go
 //go:embed tour/assets
 //go:embed tour/js/build.mjs

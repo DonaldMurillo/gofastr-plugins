@@ -97,6 +97,30 @@
       "docs": "docs/pdf.md"
     },
     {
+      "name": "datagrid",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/datagrid",
+      "version": "0.1.0",
+      "description": "Data grid over AG Grid Community's infinite row model — the fifth sandboxed heavy-JS plugin, and the first whose traffic is pages rather than one document. The framed CSP's connect-src 'none' means the frame can never fetch its own rows: every page crosses the postMessage bridge as a correlated requestRows/rowsResult event pair (the richtext requestUpload pattern), and sorting, filtering and paging all run in the host's Go rows source behind POST /rows. Canonical doc is VIEW STATE ONLY ({columns[], sort, filter, pageSize}, schema datagrid-v1) — rows are never part of it. Cell editing (requestCellWrite → POST /cell) and view-state saves gate on optional data:write; host-side CSV export (requestExport → POST /export, the download starts in the host page) gates on optional data:export — each granted exactly when the host wires the matching handler option, like pdf:export.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "data:read",
+        "theme:read"
+      ],
+      "optionalCapabilities": [
+        "data:write",
+        "data:export"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/datagrid",
+      "entry": "/__gofastr/plugin/datagrid/grid.html",
+      "schema": "datagrid-v1",
+      "minHeight": "480px",
+      "docs": "docs/datagrid.md"
+    },
+    {
       "name": "tour",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/tour",
       "version": "0.1.0",

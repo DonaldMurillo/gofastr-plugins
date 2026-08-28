@@ -6,6 +6,71 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — datagrid: 100,000 rows over the bridge (2026-08-26)
+
+
+[`datagrid/`](datagrid/) is the data-grid plugin: AG Grid Community's
+infinite row model in the same opaque-origin sandboxed iframe as every
+other heavy-JS plugin, talking to the host over the same versioned
+postMessage bridge — but with a different traffic profile. Where the
+other plugins move one small document, a grid moves rows by the
+thousand, and the framed CSP's `connect-src 'none'` means the frame can
+never fetch its own rows. So every page arrives from the host as a
+correlated `requestRows` → `rowsResult` event pair (the richtext
+`requestUpload` pattern; no protocol change), and **sorting, filtering
+and paging run in the host's Go rows source** behind `POST /rows`. The
+canonical doc (schema `datagrid-v1`) is view state only —
+`{columns[], sort, filter, pageSize}` — rows are never part of it.
+
+Capabilities: `data:read` + `theme:read` always; `data:write` (cell
+edits via `POST /cell`, view-state saves) and `data:export` (CSV) are
+optional, granted exactly when the host wires `WithCellWriteHandler` /
+`WithExportHandler` — the pdf `pdf:export` pattern, complete with the
+construction-time panic when a capability outlives its handler. Grants
+match with the framework's scope grammar, so the panic fires for wildcard
+grants too (`data:*`, `*:*`, `*:write` all imply `data:write`), and every
+route fails closed with a clear error if its handler is somehow unwired —
+`WithDevGrantAll` bypasses the gate, never the nil check. CSV export runs
+host-side (a sandboxed frame cannot start a download), paged through the
+rows source in 5,000-row chunks that spill to a temp file, so peak memory
+is one chunk whatever the table size; the host adapter clicks the download
+link in the privileged host page. A 500-row page ceiling on `/rows` is
+the integrity behind the volume claim: one request can never pull the
+whole table, `/rows` projects each page to the requested columns, and the
+request envelopes are exactly one JSON value — 64 KiB cap, trailing data
+rejected. The docs say the load-bearing thing about authorization too:
+`pluginhost.Allow` is a capability gate, not authentication —
+`WithCellWriteHandler` is where a production host checks the session.
+
+Retention is bounded to match delivery: AG Grid's default block cache is
+unlimited, so the frame caps it at ⌈2,500 / pageSize⌉ blocks — 25 blocks
+/ 2,500 resident rows at the default 100-row page — with older blocks
+evicted as new ones load. On the write side, `/save` persists the doc it
+validated (columns normalised, pageSize clamped, sort/filter bounds
+applied — the same bounds `/rows` enforces), and exported CSV fields —
+headers included — are formula-sanitised (a leading `=`, `+`, `-`, `@`,
+tab or CR is quoted) so spreadsheet clients render them as text.
+
+The demo (`/datagrid` in the example gallery) serves 100,000 rows
+generated deterministically in Go (`example/datagrid.go`, fixed
+formulas, no database), with a cell-edit overlay so edits survive
+reloads; its export store keeps at most 8 files, FIFO-evicted. The demo
+page itself is built to `docs/demo-page-design.md` — the richtext shell
+(window chrome around the mount, hero, fact chips, feature cards) plus a
+live bridge-telemetry strip that reads the adapter mirrors and AG Grid's
+own cache state, so the volume claim is on the page, not just in the
+tests. The e2e journey recomputes the same formulas in TypeScript and
+asserts exact cells at row 50,000, proves a sort click refetches the
+first page from the server, pins the CSV (100,001 lines), reads the
+`__datagridRowsDelivered` / `__datagridMaxRowsDelivered` mirrors to
+assert a deep-scroll session delivered only a few hundred rows and no
+single response exceeded the page cap, and reads AG Grid's own
+`getCacheBlockState()` inside the frame to assert the resident block
+count stays at or below the cap. Console/page errors are captured from
+before navigation, so boot errors are visible to the assertions. Theming
+uses AG Grid's Theming API mapped from the bridged tokens — verified in
+WebKit, not assumed.
+
 ### Changed — gofastr v0.71.1 → v0.71.2 (2026-08-26)
 
 Picks up the upstream `ui.Card` footer fix this repo's relayboard

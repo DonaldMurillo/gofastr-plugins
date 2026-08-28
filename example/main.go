@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
@@ -116,9 +117,31 @@ func newApp() (*framework.App, error) {
 		pdf.WithExportHandler(demoExport),
 	))
 
+	// The data grid — the fifth SANDBOXED heavy-JS plugin, and the one whose
+	// traffic profile differs from every other plugin here: not one document
+	// but 100,000 rows, crossing the bridge one page at a time. The frame
+	// has connect-src 'none' and can never fetch its own rows; sorting,
+	// filtering and paging all run in the Go rows source below (see
+	// example/datagrid.go — the dataset is deterministic so the e2e journey
+	// can assert exact cells at row 50,000). Demo at /datagrid.
+	//
+	// WithCellWriteHandler / WithExportHandler grant the optional
+	// data:write / data:export capabilities so the gallery exercises the
+	// whole surface; a real app picks the narrowest set it needs.
+	app.RegisterPlugin(datagrid.New(
+		datagrid.WithDevGrantAll(),
+		datagrid.WithDemoPage(),
+		datagrid.WithRowsSource(demoGridDataset.rows),
+		datagrid.WithCellWriteHandler(demoGridDataset.writeCell),
+		datagrid.WithExportHandler(demoGridExport),
+		datagrid.WithDemoDoc(demoGridDoc()),
+	))
+
 	if err := app.InitPlugins(); err != nil {
 		return nil, err
 	}
+
+	registerDemoGridExportRoute(app.Router())
 
 	// The gallery shell owns "/": a homepage + persistent sidebar that frames
 	// each plugin's demo. Registered after InitPlugins so it sits alongside the

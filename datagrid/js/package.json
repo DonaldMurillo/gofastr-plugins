@@ -1,0 +1,18 @@
+{
+  "name": "@gofastr/datagrid-grid-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame data grid bundle for the GoFastr datagrid plugin. Builds a single IIFE (AG Grid Community, infinite row model) that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage: every page of rows arrives as a correlated requestRows/rowsResult pair.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ag-grid-community": "36.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}

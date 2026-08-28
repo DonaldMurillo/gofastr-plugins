@@ -12,10 +12,10 @@ const navItem = (page: Page, slug: string) => page.locator(`.nav-item[data-slug=
 test("homepage shows the gallery: sidebar + a card per plugin, no demo framed yet", async ({ page }) => {
   await page.goto("/");
   await expect(sidebar(page)).toBeVisible();
-  // Six plugins (richtext, mermaid, monaco, pdf, tour, map) plus two recipes
-  // (blogsite, blogapp), which share the nav-item/card markup.
-  await expect(page.locator(".nav-item")).toHaveCount(8);
-  await expect(page.locator(".home .card")).toHaveCount(8);
+  // Seven plugins (richtext, mermaid, monaco, datagrid, pdf, tour, map) plus
+  // two recipes (blogsite, blogapp), which share the nav-item/card markup.
+  await expect(page.locator(".nav-item")).toHaveCount(9);
+  await expect(page.locator(".home .card")).toHaveCount(9);
   // Name them rather than only counting: a count alone passes if a card is
   // renamed or duplicated, and this is the completeness canary for the gallery.
   await expect(navItem(page, "pdf")).toBeVisible();
