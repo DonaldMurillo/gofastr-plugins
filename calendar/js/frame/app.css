@@ -1,3 +1,31 @@
+/* A COMPLETE light palette as the starting point.
+ *
+ * Every rule below reads its colour through var(--token, fallback). Those
+ * per-property fallbacks were individually sensible and collectively wrong: a
+ * partially-applied theme could pair a bridged DARK --color-text with an
+ * unbridged --color-surface falling back to #fff, which is near-white text on
+ * white — 1.12:1, invisible. CI's axe caught exactly that pairing on the
+ * toolbar buttons.
+ *
+ * Declaring the whole set here means the frame is always internally coherent:
+ * before the host bridges anything it is a readable light theme, and the
+ * bridged set replaces all of it together rather than a property at a time.
+ */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-border-strong: #a1a1aa;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-primary: #e0a040;
+  --color-primary-fg: #18181b;
+  --color-danger: #d1242f;
+  --color-warning: #b45309;
+}
+
 /* GoFastr calendar — token-only frame stylesheet.
  *
  * Every color/font/radius reads a bridged --* custom property with an inline
