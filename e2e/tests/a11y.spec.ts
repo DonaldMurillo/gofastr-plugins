@@ -50,8 +50,18 @@ test("a11y: calendar demo page (host chrome + mount)", async ({ page }) => {
   await page.goto("/calendar");
   await page.waitForFunction(
     () => {
-      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __calendarReady?: boolean }) | null;
-      return !!f && f.__calendarReady === true;
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & {
+        __calendarReady?: boolean;
+        __calendarTheme?: { scheme?: string };
+      }) | null;
+      // Wait for the THEME to be applied, not merely for the frame to be
+      // ready. The host bridges token values as a snapshot and re-sends them
+      // when the color-scheme bootstrap resolves, so a page audited between
+      // the two carries a torn palette — CI caught the frame with dark-theme
+      // text on a light-theme surface, 1.12:1, which neither theme produces on
+      // its own. __calendarTheme is set on themeApplied, after the frame has
+      // written the bridged block.
+      return !!f && f.__calendarReady === true && !!f.__calendarTheme?.scheme;
     },
     undefined,
     { timeout: 25_000 }
