@@ -79,6 +79,13 @@ The mechanism, end to end:
    `⋯ N lines dropped — producer outran the render loop ⋯` — never a silent
    gap.
 
+   Rendering is capped per tick as well as per batch: at most 24 lines are
+   written to the terminal in a 16ms tick, and the rest wait for the next one.
+   One batch per tick bounds how much ARRIVES; without a line ceiling the
+   frame could still spend a whole tick parsing a hundred lines and starve its
+   own controls, which it did — the Pause button stopped responding under
+   flood on a small machine.
+
    The marker is a line in the stream, not a banner. At flood rate it scrolls
    out of the viewport in milliseconds like anything else, so it is read the
    way a person reads a fast log: pause, or scroll back, and the gap is there
