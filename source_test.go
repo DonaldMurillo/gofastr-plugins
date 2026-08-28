@@ -2,8 +2,11 @@ package gofastrplugins
 
 import (
 	"io/fs"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -153,5 +156,57 @@ func TestSourceEmbedsEveryTrackedJSSubdir(t *testing.T) {
 	}
 	if len(seen) == 0 {
 		t.Fatal("found no tracked <plugin>/js/<subdir> paths at all; the guard is not testing anything")
+	}
+}
+
+// TestCIBundleMatrixCoversEveryPlugin stops the CI bundle guard from silently
+// falling behind the repo.
+//
+// The per-plugin "bundle is up to date" job rebuilds <plugin>/js and fails if
+// <plugin>/assets moves. It is what prevents a plugin shipping JS that no
+// longer matches its sources — and it enumerates plugins by hand, so a plugin
+// added without touching the matrix is simply unguarded. pdf was missing from
+// it from the day it shipped until #27, and datagrid, chart, logstream,
+// imageedit, formbuilder, calendar and whiteboard each had to be remembered.
+//
+// Every directory with a js/ subdir is a plugin that builds a bundle, so that
+// is the set the matrix must cover.
+func TestCIBundleMatrixCoversEveryPlugin(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("reading ci.yml: %v", err)
+	}
+	m := regexp.MustCompile(`(?m)^\s*plugin:\s*\[([^\]]*)\]`).FindSubmatch(workflow)
+	if m == nil {
+		t.Fatal("no `plugin: [...]` matrix found in ci.yml; if the bundle job was " +
+			"restructured, update this guard to match")
+	}
+	inMatrix := map[string]bool{}
+	for _, name := range strings.Split(string(m[1]), ",") {
+		if n := strings.TrimSpace(name); n != "" {
+			inMatrix[n] = true
+		}
+	}
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("reading repo root: %v", err)
+	}
+	var checked int
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(e.Name(), "js", "package.json")); err != nil {
+			continue // not a bundle-building plugin
+		}
+		checked++
+		if !inMatrix[e.Name()] {
+			t.Errorf("%s builds a bundle (%s/js/package.json) but is not in the ci.yml "+
+				"bundle matrix, so nothing would catch its assets going stale", e.Name(), e.Name())
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no <plugin>/js/package.json at all; the guard is not testing anything")
 	}
 }
