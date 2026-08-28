@@ -1,0 +1,15 @@
+{
+  "name": "@gofastr/imageedit-editor-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame image editor bundle for the GoFastr imageedit plugin. Builds a single dependency-free IIFE that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage: the source bytes arrive as an ArrayBuffer over the bridge (connect-src 'none' — the frame never fetches), the editor previews the operation list with the same integer pipeline the Go server runs, and export sends ONLY the doc.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}

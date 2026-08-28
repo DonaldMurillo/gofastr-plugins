@@ -4,7 +4,35 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
-## [Unreleased]
+
+### Added — imageedit: crop, annotate, redact; the server decides what's true (2026-08-28)
+
+[`imageedit/`](imageedit/) is the image crop / annotate / redact plugin, and
+the proof that the pdf plugin's bytes-over-the-bridge design generalizes
+beyond one file format. The frame (dependency-free, ~7 KB gzip) runs under
+`connect-src 'none'` and receives the image as an `ArrayBuffer` over
+postMessage — decoded with `createImageBitmap`, no CSP-covered fetch. The
+canonical doc (schema `imageedit-v1`) is an OPERATION LIST —
+`{src, crop, rotate, annotations[], redactions[]}` in source-image pixels,
+never the bitmap — with a FIXED operation order (crop → rotate → annotate →
+redact) documented and enforced on both sides. Every export is re-rendered
+by Go from that list using only the standard library: EXIF stripped by full
+re-encode (and scanned for, not assumed), 16 MiB / 24 MP / 8192px caps
+enforced at the header stage before `image.Decode` allocates, and redactions
+VERIFIED against the produced bytes — every pixel in every redaction rect
+must equal the fill or the export fails closed with `E_REDACT_VERIFY`
+(regression test: an unleaked compose must be rejected by the verifier).
+Preview and server share one integer-exact pipeline (fillRect borders,
+Bresenham arrows, a 5×7 bitmap font mirrored byte-for-byte between
+`render.go` and `js/src/font.ts`), so a PNG composes to identical pixels in
+the canvas and in Go — asserted by a Go golden test and an e2e journey that
+diffs the frame's own 1:1 render against the exported bytes at deterministic
+sample points. Capabilities: `document:read`/`document:write`/`theme:read`
+always; optional `upload:images` granted only when
+`WithUploadHandler` is wired (wildcard-safe construction panics, datagrid
+rule). Demo at `/imageedit` shows the operation list as live JSON and the
+server-rendered result beside the in-frame preview with a sampled-pixel
+agreement counter; docs in [`docs/imageedit.md`](docs/imageedit.md).
 
 ### Added — logstream: a live log tail pushed across the sandbox (2026-08-28)
 

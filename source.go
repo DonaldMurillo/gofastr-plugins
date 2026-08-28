@@ -127,6 +127,15 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed logstream/js/src
 //go:embed logstream/js/frame
 //go:embed chart/ssr
+//go:embed imageedit/*.go
+//go:embed imageedit/assets
+//go:embed imageedit/host
+//go:embed imageedit/js/build.mjs
+//go:embed imageedit/js/package.json
+//go:embed imageedit/js/package-lock.json
+//go:embed imageedit/js/tsconfig.json
+//go:embed imageedit/js/src
+//go:embed imageedit/js/frame
 var bundled embed.FS
 
 //go:embed plugins.json

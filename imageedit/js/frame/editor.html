@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  GoFastr image editor — opaque-origin sandboxed frame document (protocol v1).
+
+  Served same-origin at /__gofastr/plugin/imageedit/editor.html and loaded
+  inside an <iframe sandbox="allow-scripts"> (NO allow-same-origin). Under
+  that sandbox:
+    - the frame is an opaque origin; document.cookie / localStorage /
+      sessionStorage throw, and window.parent.document is unreachable.
+    - the framed CSP sets connect-src 'none': the frame can NEVER fetch the
+      image it is editing. The bytes arrive over the postMessage bridge
+      (requestImage → imageResult) and are decoded with createImageBitmap —
+      no CSP-covered fetch involved — which is the point of this plugin.
+  Sub-resources are referenced by RELATIVE path so they resolve under the
+  plugin asset route prefix regardless of the host-appended ?v= cache-buster.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Image editor</title>
+    <link rel="stylesheet" href="./editor.css" />
+  </head>
+  <body>
+    <div id="imageedit-root" role="region" aria-label="Image editor">
+      <div class="ie-toolbar" role="toolbar" aria-label="Editing tools">
+        <div class="ie-group" role="group" aria-label="Draw">
+          <button type="button" class="ie-tool" data-tool="select" aria-pressed="true" title="Select (no draw)">✛</button>
+          <button type="button" class="ie-tool" data-tool="crop" aria-pressed="false" title="Drag a crop region">⛶ Crop</button>
+          <button type="button" class="ie-tool" data-tool="rect" aria-pressed="false" title="Draw a rectangle">▭ Rect</button>
+          <button type="button" class="ie-tool" data-tool="arrow" aria-pressed="false" title="Draw an arrow">➜ Arrow</button>
+          <button type="button" class="ie-tool" data-tool="text" aria-pressed="false" title="Place text at a click">T Text</button>
+          <button type="button" class="ie-tool ie-tool-redact" data-tool="redact" aria-pressed="false" title="Redact a region — removed on export, verified by the server">▮ Redact</button>
+        </div>
+        <div class="ie-group" role="group" aria-label="Transform">
+          <button type="button" id="ie-rotate-l" title="Rotate 90° counter-clockwise">↺</button>
+          <button type="button" id="ie-rotate-r" title="Rotate 90° clockwise">↻</button>
+        </div>
+        <div class="ie-group ie-swatches" role="group" aria-label="Annotation color">
+          <button type="button" class="ie-swatch is-active" data-color="#D0342C" style="--ie-swatch:#D0342C" aria-label="Red"></button>
+          <button type="button" class="ie-swatch" data-color="#F5A623" style="--ie-swatch:#F5A623" aria-label="Amber"></button>
+          <button type="button" class="ie-swatch" data-color="#2F9E44" style="--ie-swatch:#2F9E44" aria-label="Green"></button>
+          <button type="button" class="ie-swatch" data-color="#1C7ED6" style="--ie-swatch:#1C7ED6" aria-label="Blue"></button>
+          <button type="button" class="ie-swatch" data-color="#111111" style="--ie-swatch:#111111" aria-label="Black"></button>
+          <button type="button" class="ie-swatch" data-color="#FFFFFF" style="--ie-swatch:#FFFFFF" aria-label="White"></button>
+        </div>
+        <div class="ie-group" role="group" aria-label="Stroke and text size">
+          <label class="ie-label" for="ie-width">stroke</label>
+          <select id="ie-width" class="ie-select">
+            <option value="2">2 px</option>
+            <option value="4" selected>4 px</option>
+            <option value="8">8 px</option>
+            <option value="12">12 px</option>
+          </select>
+          <label class="ie-label" for="ie-size">text</label>
+          <select id="ie-size" class="ie-select">
+            <option value="2">2×</option>
+            <option value="4" selected>4×</option>
+            <option value="6">6×</option>
+            <option value="8">8×</option>
+          </select>
+        </div>
+        <div class="ie-group ie-grow" role="group" aria-label="Text content">
+          <input id="ie-text" class="ie-text-input" type="text" maxlength="64"
+            placeholder="Text to place (A-Z 0-9 - _ . : / + #)" aria-label="Text to place" />
+        </div>
+        <div class="ie-group" role="group" aria-label="Document actions">
+          <button type="button" id="ie-undo" title="Undo the last operation">↶ Undo</button>
+          <button type="button" id="ie-reset" title="Clear crop, rotation, annotations and redactions">Clear</button>
+          <button type="button" id="ie-load" class="ie-hidden" title="Load a local image — bytes cross the bridge, never the network">Load image…</button>
+          <button type="button" id="ie-export" class="ie-export" title="The server re-renders the operation list and verifies the redactions">Export</button>
+          <input id="ie-file" type="file" accept="image/png,image/jpeg" hidden />
+        </div>
+      </div>
+      <div class="ie-stage">
+        <canvas id="ie-canvas" role="img" aria-label="Image preview — composed locally from the operation list"></canvas>
+      </div>
+      <p id="ie-status" class="ie-status" aria-live="polite">Requesting image over the bridge…</p>
+    </div>
+    <!--
+      The ?v= on the iframe SRC is a host-appended cache-buster for
+      editor.html; sub-resource references stay relative and do not depend
+      on its value. The bundle is the ONLY script: no inline JS (CSP
+      script-src 'self').
+    -->
+    <script src="./editor.js"></script>
+  </body>
+</html>

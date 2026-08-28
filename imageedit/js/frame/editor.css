@@ -1,0 +1,170 @@
+/*
+ * GoFastr image editor — token-only frame stylesheet.
+ *
+ * Every color/spacing/font comes from a bridged design token with an inline
+ * fallback (var(--color-surface, #fff)), so the frame is legible before
+ * init and re-themes with the host palette by construction. The only
+ * literals here are layout sizes and the swatch/content colors, which are
+ * IMAGE CONTENT (drawn into the bitmap), not chrome.
+ */
+
+* { box-sizing: border-box; }
+
+#imageedit-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  height: 100%;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1c2024);
+  font-family: var(--font-body, system-ui, -apple-system, sans-serif);
+}
+
+.ie-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border, #e3e6ea);
+  background: var(--color-surface-soft, #f4f4f5);
+}
+
+.ie-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ie-grow { flex: 1 1 160px; min-width: 140px; }
+
+.ie-toolbar button {
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  padding: 5px 9px;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1c2024);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.ie-toolbar button:hover {
+  border-color: var(--color-border-strong, #a1a1aa);
+}
+
+.ie-toolbar button.is-active {
+  background: var(--color-primary, #e0a040);
+  border-color: transparent;
+  color: var(--color-primary-fg, #141414);
+  font-weight: 600;
+}
+
+.ie-tool-redact {
+  color: var(--color-danger, #c02e22);
+  border-color: color-mix(in srgb, var(--color-danger, #c02e22) 45%, var(--color-border, #e3e6ea));
+}
+
+.ie-tool-redact.is-active {
+  background: var(--color-danger, #c02e22);
+  color: #fff;
+}
+
+.ie-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--ie-swatch, #888);
+  border: 2px solid var(--color-surface, #fff);
+  box-shadow: 0 0 0 1px var(--color-border, #e3e6ea);
+}
+
+.ie-swatch.is-active {
+  box-shadow: 0 0 0 2px var(--color-primary, #e0a040);
+}
+
+.ie-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+}
+
+.ie-select {
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  padding: 4px 6px;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1c2024);
+}
+
+.ie-text-input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  font-family: var(--font-mono, monospace);
+  padding: 5px 8px;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: var(--radii-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1c2024);
+}
+
+.ie-text-input:focus-visible,
+.ie-select:focus-visible,
+.ie-toolbar button:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+.ie-export {
+  font-weight: 600;
+  background: var(--color-primary, #e0a040);
+  color: var(--color-primary-fg, #141414);
+  border-color: transparent;
+}
+
+.ie-hidden { display: none !important; }
+
+.ie-stage {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: auto;
+  background:
+    color-mix(in srgb, var(--color-text-subtle, #71717a) 6%, transparent);
+  /* checkerboard hint that this is a bitmap stage, in both schemes */
+  background-image:
+    linear-gradient(45deg, color-mix(in srgb, var(--color-text-subtle, #71717a) 8%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--color-text-subtle, #71717a) 8%, transparent) 75%),
+    linear-gradient(45deg, color-mix(in srgb, var(--color-text-subtle, #71717a) 8%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--color-text-subtle, #71717a) 8%, transparent) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+#ie-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  border: 1px solid var(--color-border, #e3e6ea);
+  border-radius: var(--radii-sm, 4px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1));
+  touch-action: none;
+  background: var(--color-surface, #fff);
+}
+
+.ie-status {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-muted, #5b6470);
+  border-top: 1px solid var(--color-border, #e3e6ea);
+  min-height: 28px;
+}
+
+@media (pointer: coarse) {
+  .ie-toolbar button { padding: 8px 12px; }
+}

@@ -26,6 +26,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
+	"github.com/DonaldMurillo/gofastr-plugins/imageedit"
 	"github.com/DonaldMurillo/gofastr-plugins/logstream"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
@@ -167,11 +168,32 @@ func newApp() (*framework.App, error) {
 		logstream.WithDemoControlURL(demoLogControlPath),
 	))
 
+	// The image editor — the pdf plugin's design applied to a second file
+	// format: the cage is the product, not the tax. The frame has
+	// connect-src 'none' and receives the image bytes over the bridge; the
+	// canonical doc is an OPERATION LIST (crop/rotate/annotate/redact), and
+	// every export is re-rendered by Go from that list — EXIF stripped,
+	// caps enforced, redactions verified against the produced bytes. Demo
+	// at /imageedit.
+	//
+	// WithUploadHandler grants the optional upload:images capability so the
+	// demo can load a local image (the bytes cross the bridge, never the
+	// network); the uploads land in the in-memory store below and become
+	// addressable ids the demo source resolves.
+	app.RegisterPlugin(imageedit.New(
+		imageedit.WithDevGrantAll(),
+		imageedit.WithDemoPage(),
+		imageedit.WithSource(demoImageeditSource),
+		imageedit.WithUploadHandler(demoImageeditUpload),
+		imageedit.WithExportHandler(demoImageeditExport),
+	))
 	if err := app.InitPlugins(); err != nil {
 		return nil, err
 	}
 
 	registerDemoGridExportRoute(app.Router())
+
+	registerDemoImageeditExportRoute(app.Router())
 
 	// The gallery shell owns "/": a homepage + persistent sidebar that frames
 	// each plugin's demo. Registered after InitPlugins so it sits alongside the
