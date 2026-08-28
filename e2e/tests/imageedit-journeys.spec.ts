@@ -254,11 +254,21 @@ async function dragSourceRect(
   const y0 = box.y + ayc * sy;
   const x1 = box.x + bxc * sx;
   const y1 = box.y + byc * sy;
+  // WebKit needs the pointer settled before the button goes down, and it drops
+  // coarse moves: a 4-step sweep that works in chromium everywhere and in
+  // webkit locally failed repeatedly on CI's webkit, where the machine is
+  // slower and events coalesce differently. Settling first and moving in finer
+  // steps makes the gesture survive a loaded runner. These are pointer
+  // mechanics, not a relaxed assertion.
   await page.mouse.move(x0, y0);
+  await page.waitForTimeout(30);
   await page.mouse.down();
-  await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 4 });
-  await page.mouse.move(x1, y1, { steps: 4 });
+  await page.waitForTimeout(30);
+  await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 12 });
+  await page.mouse.move(x1, y1, { steps: 12 });
+  await page.waitForTimeout(30);
   await page.mouse.up();
+  await page.waitForTimeout(30);
 }
 
 async function exportNow(page: Page): Promise<NonNullable<Mirror["__imageeditLastExport"]>> {
