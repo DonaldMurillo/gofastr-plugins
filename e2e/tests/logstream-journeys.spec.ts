@@ -116,6 +116,18 @@ async function frameState(page: Page): Promise<FrameState> {
   return handle.jsonValue() as Promise<FrameState>;
 }
 
+// The flood journey deliberately drives the producer faster than the frame can
+// render and then polls frame state while ~6,000 lines/s cross the bridge. That
+// is real work, and on CI's webkit — the slowest engine here, running last in a
+// suite that now covers eleven plugins — it does not fit the suite's 30s
+// default. It fails as a page.evaluate timeout while the frame is busy, not as
+// a missing drop.
+//
+// The budget is raised for the work. Every assertion still runs: the counter
+// moves, the marker renders, scrollback stays under its bound, and in-flight
+// batches stay within the ack window.
+test.describe.configure({ timeout: 90_000 });
+
 // The producer keeps a 1,024-line replay ring and re-serves it on connect
 // (?after=0), so every fresh page first absorbs a ~1k-line burst at the
 // frame's full render rate before settling into the live calm rate. Tests
