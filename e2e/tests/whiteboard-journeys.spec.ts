@@ -290,7 +290,31 @@ test("a joiner arriving after the drawing gets the existing board, not an empty 
     // And the replay renders — the joiner's canvas is not blank.
     const imgB = await canvasDataUrl(pageB);
     const imgA = await canvasDataUrl(pageA);
-    expect(imgB).toBe(imgA);
+    if (imgB !== imgA) {
+      // This comparison has failed on CI's webkit while the documents matched,
+      // which is how the CRDT paint-order bug and the latched-rAF bug were both
+      // found. A bare base64 diff says nothing about which one it is, so report
+      // what the two frames think they hold.
+      const detail = async (p: Page, label: string) => {
+        const ids = await p
+          .frameLocator("iframe")
+          .locator("body")
+          .evaluate(() => {
+            const api = (window as unknown as { __wbDebug?: { strokeIds?: () => string[] } }).__wbDebug;
+            return api?.strokeIds?.() ?? "no __wbDebug.strokeIds";
+          })
+          .catch((e) => `unreachable: ${String(e)}`);
+        return `${label}: ids=${JSON.stringify(ids)} canvasBytes=${(await canvasDataUrl(p)).length}`;
+      };
+      throw new Error(
+        [
+          "late joiner rendered different pixels from the originator",
+          `dumps equal: ${dumpB === dumpA}`,
+          await detail(pageA, "A"),
+          await detail(pageB, "B"),
+        ].join("\n")
+      );
+    }
     expect(imgB.length).toBeGreaterThan(1000);
 
     expectNoConsoleErrors([pageA, pageB]);
