@@ -52,6 +52,14 @@ background. If the plugin's own area is short, the frame grows or the cards
 move up. The datagrid demo shipped with 400px of dead white space under a
 430px grid; that is what this rule exists to stop.
 
+**Declare the whole palette on `:root` in the frame stylesheet.** Per-property
+`var(--token, fallback)` fallbacks are fine as a second line, never as the only
+definition. The host bridges the theme after the frame first paints, so a
+partial bridge can pair a dark `--color-text` with a `--color-surface` falling
+back to `#fff`: near-white text on white, 1.12:1, invisible. Every fallback in
+that frame was individually sensible; together they were not. A complete
+`:root` palette makes the frame coherent before any token arrives.
+
 **Tokens only.** No hardcoded colors. The accent is the amber already in the
 design system, not whatever the plugin's upstream library defaults to. The pdf
 demo's purple Export button came straight from a vendor stylesheet and it looks

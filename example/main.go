@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DonaldMurillo/gofastr-plugins/calendar"
 	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/formbuilder"
@@ -198,6 +199,22 @@ func newApp() (*framework.App, error) {
 	app.RegisterPlugin(formbuilder.New(
 		formbuilder.WithDevGrantAll(),
 		formbuilder.WithDemoPage(),
+	))
+
+	// The calendar — the plugin with no calendar library. Month/week/day
+	// views are hand-written inside the sandboxed frame; RRULE expansion,
+	// timezone conversion and conflict detection all run in the Go events
+	// source below (see example/calendar.go — the seed contains every hard
+	// case: a gap-spanner on the 2026 spring-forward, a weekly series
+	// straddling both transitions, a conflict pair, all-day and
+	// midnight-spanning events). The frame sends move INTENTS; the server
+	// decides what a drag across a DST boundary actually means. Demo at
+	// /calendar, with jump buttons straight to both 2026 DST weekends.
+	app.RegisterPlugin(calendar.New(
+		calendar.WithDevGrantAll(),
+		calendar.WithDemoPage(),
+		calendar.WithEventsSource(demoCalendarEvents),
+		calendar.WithDemoDoc(demoCalendarDoc()),
 	))
 
 	if err := app.InitPlugins(); err != nil {

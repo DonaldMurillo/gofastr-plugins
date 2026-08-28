@@ -1,0 +1,568 @@
+/* A COMPLETE light palette as the starting point.
+ *
+ * Every rule below reads its colour through var(--token, fallback). Those
+ * per-property fallbacks were individually sensible and collectively wrong: a
+ * partially-applied theme could pair a bridged DARK --color-text with an
+ * unbridged --color-surface falling back to #fff, which is near-white text on
+ * white — 1.12:1, invisible. CI's axe caught exactly that pairing on the
+ * toolbar buttons.
+ *
+ * Declaring the whole set here means the frame is always internally coherent:
+ * before the host bridges anything it is a readable light theme, and the
+ * bridged set replaces all of it together rather than a property at a time.
+ */
+:root {
+  --color-background: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-border-strong: #a1a1aa;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-subtle: #71717a;
+  --color-primary: #e0a040;
+  --color-primary-fg: #18181b;
+  --color-danger: #d1242f;
+  --color-warning: #b45309;
+}
+
+/* GoFastr calendar — token-only frame stylesheet.
+ *
+ * Every color/font/radius reads a bridged --* custom property with an inline
+ * fallback, so the frame is legible before init and matches the host palette
+ * after it (protocol-v1.md §7). Zero bespoke hex; both schemes derive from
+ * the same tokens.
+ *
+ * The toolbar controls mirror the host's house classes (fui-btn & friends)
+ * rebuilt from tokens: the class names cannot cross the iframe boundary, but
+ * their shape can. A browser-default control inside the frame would read as
+ * a different product.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body, system-ui, -apple-system, sans-serif);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text, #18181b);
+  background: var(--color-background, #fafafa);
+  -webkit-font-smoothing: antialiased;
+}
+
+#cal-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 320px;
+}
+
+/* --- toolbar ---------------------------------------------------------- */
+
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 8px);
+  padding: var(--spacing-md, 8px) var(--spacing-lg, 16px);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  background: var(--color-surface, #fff);
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.cal-nav,
+.cal-views {
+  display: flex;
+  gap: var(--spacing-xs, 2px);
+}
+
+.cal-btn {
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 550;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #18181b);
+  cursor: pointer;
+  line-height: 1.2;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.cal-btn:hover {
+  background: var(--color-surface-soft, #f4f4f5);
+  border-color: var(--color-border-strong, #a1a1aa);
+}
+
+.cal-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+.cal-btn-seg[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 16%, var(--color-surface, #fff));
+  border-color: color-mix(in srgb, var(--color-primary, #e0a040) 55%, var(--color-border, #e4e4e7));
+  color: var(--color-text, #18181b);
+  font-weight: 650;
+}
+
+.cal-title {
+  margin: 0 auto;
+  padding: 0 var(--spacing-md, 8px);
+  font-size: var(--text-base, 1rem);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-zone-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 8px);
+  padding: 4px var(--spacing-lg, 16px);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  background: var(--color-surface-soft, #f4f4f5);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+  flex: none;
+}
+
+/* The DST badge the SERVER sends down with the window: the frame would
+   otherwise have no way to know this Tuesday is an hour short. */
+.cal-dst {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #b45309) 45%, var(--color-border, #e4e4e7));
+  color: color-mix(in oklab, var(--color-warning, #b45309) 70%, var(--color-text, #18181b) 30%);
+  background: color-mix(in srgb, var(--color-warning, #b45309) 10%, var(--color-surface, #fff));
+  border-radius: var(--radii-full, 9999px);
+  padding: 1px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.cal-status {
+  flex: none;
+  padding: 3px var(--spacing-lg, 16px);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+  border-top: 1px solid var(--color-border, #e4e4e7);
+  background: var(--color-surface, #fff);
+  min-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-background, #fafafa);
+  position: relative;
+}
+
+/* --- month view -------------------------------------------------------- */
+
+.cal-month-head,
+.cal-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-month-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--color-surface, #fff);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+}
+
+.cal-month-head > div {
+  padding: 6px 8px;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-subtle, #71717a);
+  text-align: center;
+}
+
+.cal-mcell {
+  min-height: 92px;
+  border-right: 1px solid var(--color-border, #e4e4e7);
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--color-surface, #fff);
+  text-align: left;
+}
+
+.cal-mcell.is-out {
+  background: color-mix(in srgb, var(--color-surface-soft, #f4f4f5) 55%, var(--color-surface, #fff));
+}
+
+.cal-mcell:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: -2px;
+}
+
+.cal-mdate {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-text-muted, #52525b);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 3px;
+  border-radius: var(--radii-sm, 4px);
+  align-self: flex-start;
+}
+
+.cal-mcell.is-today .cal-mdate {
+  background: var(--color-primary, #e0a040);
+  color: var(--color-primary-fg, #fff);
+}
+
+.cal-mcell[aria-selected="true"] .cal-mdate {
+  box-shadow: 0 0 0 1.5px var(--color-primary, #e0a040);
+}
+
+.cal-mmore {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+  padding: 1px 3px;
+}
+
+/* --- event chips (shared by every view) -------------------------------- */
+
+.cal-evt {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid var(--color-primary, #e0a040);
+  border-radius: var(--radii-sm, 4px);
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 12%, var(--color-surface, #fff));
+  color: var(--color-text, #18181b);
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  line-height: 1.25;
+  text-align: left;
+  padding: 2px 5px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 120ms ease;
+}
+
+.cal-evt:hover {
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 22%, var(--color-surface, #fff));
+}
+
+.cal-evt:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+.cal-evt .cal-evt-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+
+.cal-evt.is-allday {
+  border-left-color: var(--color-text-subtle, #71717a);
+  background: var(--color-surface-soft, #f4f4f5);
+}
+
+.cal-evt.is-recurring::after {
+  content: " ⟳";
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
+/* Conflicts arrive from the server; the frame styles the verdict. */
+.cal-evt.is-conflict {
+  border-left-color: var(--color-danger, #b91c1c);
+  background: color-mix(in srgb, var(--color-danger, #b91c1c) 12%, var(--color-surface, #fff));
+}
+
+.cal-evt.is-conflict:hover {
+  background: color-mix(in srgb, var(--color-danger, #b91c1c) 20%, var(--color-surface, #fff));
+}
+
+.cal-evt.is-continues {
+  border-left-style: dashed;
+  opacity: 0.85;
+}
+
+/* --- week / day views --------------------------------------------------- */
+
+.cal-wk {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  min-height: 100%;
+}
+
+.cal-wk-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cal-allday {
+  display: grid;
+  border-bottom: 1px solid var(--color-border, #e4e4e7);
+  background: var(--color-surface, #fff);
+}
+
+.cal-allday-inner {
+  display: grid;
+  grid-template-columns: repeat(var(--cal-cols, 7), 1fr);
+  min-height: 30px;
+}
+
+.cal-allday-day {
+  padding: 3px 3px;
+  border-left: 1px solid var(--color-border, #e4e4e7);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cal-allday-day .cal-evt {
+  white-space: normal;
+}
+
+.cal-wk-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.cal-wk-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--cal-cols, 7), 1fr);
+  height: calc(24 * var(--cal-hour-h, 44px));
+}
+
+.cal-gutter {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cal-gutter-hour {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The spring-forward / fall-back line, drawn where the server says the
+   transition lands. The 02:00 that never happens is visible as a marked
+   absence, not silently papered over. */
+.cal-dstline {
+  position: absolute;
+  left: 52px;
+  right: 0;
+  border-top: 1.5px dashed color-mix(in srgb, var(--color-warning, #b45309) 65%, transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cal-dstline::after {
+  content: attr(data-label);
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: color-mix(in oklab, var(--color-warning, #b45309) 75%, var(--color-text, #18181b) 25%);
+  background: color-mix(in srgb, var(--color-surface, #fff) 82%, transparent);
+  padding: 0 4px;
+  border-radius: var(--radii-sm, 4px);
+}
+
+.cal-daycol {
+  border-left: 1px solid var(--color-border, #e4e4e7);
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--cal-hour-h, 44px) - 1px),
+      var(--color-border, #e4e4e7) calc(var(--cal-hour-h, 44px) - 1px),
+      var(--color-border, #e4e4e7) var(--cal-hour-h, 44px)
+    );
+}
+
+.cal-daycol.is-weekend {
+  background-color: color-mix(in srgb, var(--color-surface-soft, #f4f4f5) 40%, var(--color-surface, #fff));
+}
+
+.cal-dayhead {
+  padding: 4px 6px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-muted, #52525b);
+  border-left: 1px solid var(--color-border, #e4e4e7);
+  background: var(--color-surface, #fff);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-dayhead.is-today {
+  color: var(--color-primary-fg, #fff);
+  background: var(--color-primary, #e0a040);
+  border-radius: var(--radii-sm, 4px);
+  font-weight: 650;
+}
+
+.cal-dayhead .cal-dst-dot {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--color-warning, #b45309);
+}
+
+/* Positioned occurrences. Timed chips live in a per-day absolute layer;
+   overlap layout is naive side-by-side (column split) — this frame's job is
+   to be correct about WHAT it renders (server strings), not to win a
+   layout contest. */
+.cal-evtbox {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  z-index: 2;
+}
+
+.cal-evtbox .cal-evt {
+  height: 100%;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cal-evtbox.is-tiny .cal-evt .cal-evt-title {
+  display: none;
+}
+
+.cal-ghost {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.85;
+  border-left: 3px solid var(--color-primary, #e0a040);
+  border-radius: var(--radii-sm, 4px);
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 30%, var(--color-surface, #fff));
+  color: var(--color-text, #18181b);
+  font-size: var(--text-xs, 0.75rem);
+  padding: 2px 5px;
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+/* --- event popover ------------------------------------------------------ */
+
+.cal-pop {
+  position: absolute;
+  z-index: 40;
+  width: min(300px, calc(100% - 24px));
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border-strong, #a1a1aa);
+  border-radius: var(--radii-lg, 10px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06));
+  padding: var(--spacing-md, 8px) var(--spacing-lg, 16px) var(--spacing-lg, 16px);
+}
+
+.cal-pop h3 {
+  margin: 0 0 var(--spacing-sm, 4px);
+  font-size: var(--text-base, 1rem);
+  font-weight: 650;
+  padding-right: 22px;
+}
+
+.cal-pop-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.cal-pop dl {
+  margin: 0 0 var(--spacing-md, 8px);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--spacing-md, 8px);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.cal-pop dt {
+  color: var(--color-text-subtle, #71717a);
+  white-space: nowrap;
+}
+
+.cal-pop dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+}
+
+.cal-pop .cal-pop-note {
+  margin: 0 0 var(--spacing-md, 8px);
+  font-size: var(--text-xs, 0.75rem);
+  color: color-mix(in oklab, var(--color-warning, #b45309) 75%, var(--color-text, #18181b) 25%);
+  border: 1px solid color-mix(in srgb, var(--color-warning, #b45309) 40%, transparent);
+  background: color-mix(in srgb, var(--color-warning, #b45309) 8%, var(--color-surface, #fff));
+  border-radius: var(--radii-sm, 4px);
+  padding: 4px 8px;
+}
+
+.cal-pop .cal-pop-conflict {
+  margin: 0 0 var(--spacing-md, 8px);
+  font-size: var(--text-xs, 0.75rem);
+  color: color-mix(in oklab, var(--color-danger, #b91c1c) 80%, var(--color-text, #18181b) 20%);
+  font-weight: 600;
+}
+
+.cal-pop-actions {
+  display: flex;
+  gap: var(--spacing-sm, 4px);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .cal-title {
+    order: 3;
+    width: 100%;
+    text-align: left;
+    margin: 0;
+  }
+  .cal-wk {
+    grid-template-columns: 40px 1fr;
+  }
+  .cal-gutter {
+    width: 40px;
+  }
+  .cal-dstline {
+    left: 40px;
+  }
+}

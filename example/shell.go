@@ -34,6 +34,7 @@ var demoEntries = []demoEntry{
 	{"logstream", "Log Stream", "/logstream", "A live log tail pushed across the sandbox — the frame acks every batch, and overflow shows up as a visible drop marker.", "sandboxed", "📜"},
 	{"imageedit", "Image Edit", "/imageedit", "Crop, annotate and redact — the doc is an operation list, and Go re-renders every export from it.", "sandboxed", "🖼️"},
 	{"formbuilder", "Form Builder", "/formbuilder", "Design a form in the sandbox — the schema is data only, Go validates every save, and the live route enforces it server-side.", "sandboxed", "🧩"},
+	{"calendar", "Calendar", "/calendar", "Month/week/day views written from scratch — recurrence, timezones and conflicts are answered in Go; the frame only renders what the server resolved.", "sandboxed", "📅"},
 }
 
 // recipeEntries are the whole-app recipes. They get their own sidebar section
