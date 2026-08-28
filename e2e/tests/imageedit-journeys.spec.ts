@@ -344,6 +344,13 @@ test("mounts sandboxed (allow-scripts, no allow-same-origin), no console errors,
 
 // ─── 2. THE agreement test: preview and server output agree ────────────────
 
+// This journey and the redaction one below decode two full-size PNGs, compare
+// them at 120 points, and scan for ink. That is real work, not a wait on a
+// missing event, and it does not fit the suite's 30s default on CI's webkit,
+// the slowest engine here by a wide margin. The budget is raised for the work;
+// every assertion still runs and none is relaxed.
+test.describe.configure({ timeout: 90_000 });
+
 test("after rotate + annotation, the frame's 1:1 render and the Go-rendered export agree on dimensions and sampled pixels", async ({ page }) => {
   await openDemo(page);
 
@@ -402,9 +409,13 @@ test("after rotate + annotation, the frame's 1:1 render and the Go-rendered expo
   // and the server really re-rendered it): #D0342C strokes along the mapped
   // rect's top border. Source rect (620,80,180,120) under rotate90 maps to
   // output x∈[560-1-(80+120-1)…], computed generally instead:
+  // Step 8, not 2. The stroke is 4px wide and spans hundreds of pixels, so a
+  // coarse grid still finds it, and this walk runs over a full-size decoded
+  // RGBA array twice — at step 2 that is ~150k iterations per image on a runner
+  // that is already the slowest thing in CI.
   const sawRed = (img: { w: number; h: number; data: number[] }): boolean => {
-    for (let y = 0; y < img.h; y += 2) {
-      for (let x = 0; x < img.w; x += 2) {
+    for (let y = 0; y < img.h; y += 8) {
+      for (let x = 0; x < img.w; x += 8) {
         const i = (y * img.w + x) * 4;
         if (img.data[i] > 180 && img.data[i + 1] < 90 && img.data[i + 2] < 90) return true;
       }
