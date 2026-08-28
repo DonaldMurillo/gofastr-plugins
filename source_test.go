@@ -2,6 +2,7 @@ package gofastrplugins
 
 import (
 	"io/fs"
+	"os/exec"
 	"path"
 	"strings"
 	"testing"
@@ -100,4 +101,57 @@ func TestSourceCoversRegistryAndStaysSlim(t *testing.T) {
 			"likely swallowed something it should not", totalBytes, sizeBudget>>20)
 	}
 	t.Logf("embedded source totals %.1f MB", float64(totalBytes)/(1<<20))
+}
+
+// TestSourceEmbedsEveryTrackedJSSubdir is the guard for the failure mode the
+// registry check above cannot see: a plugin's own dir is embedded, its
+// assets/ is non-empty, and the eject still ships an incomplete tree because
+// one js/ subdirectory lost its pattern.
+//
+// It happened while adding the datagrid plugin: the new patterns were spliced
+// in over `//go:embed pdf/js/scripts`, which vanished. Every existing guard
+// stayed green, because pdf still had plugin.go and a full assets/ dir.
+//
+// Directories under <plugin>/js/ are the right unit to check. Individual files
+// there are deliberately selective (pdf/js/spike-*.mjs are tracked and NOT
+// embedded on purpose), but every tracked SUBDIRECTORY is source the eject
+// needs. git is the source of truth so build artifacts like js/test-results,
+// which are untracked, do not count.
+func TestSourceEmbedsEveryTrackedJSSubdir(t *testing.T) {
+	tracked, err := exec.Command("git", "ls-files", "-z").Output()
+	if err != nil {
+		t.Skipf("git ls-files unavailable, skipping embed-completeness guard: %v", err)
+	}
+	idx, err := registry.ParseIndex(RegistryJSON())
+	if err != nil {
+		t.Fatalf("parsing embedded registry: %v", err)
+	}
+	pluginDirs := map[string]bool{}
+	for _, p := range idx.Plugins {
+		if dir, ok := strings.CutPrefix(p.ModulePath, ModulePath+"/"); ok {
+			pluginDirs[dir] = true
+		}
+	}
+
+	src := Source()
+	seen := map[string]bool{}
+	for _, f := range strings.Split(string(tracked), "\x00") {
+		parts := strings.Split(f, "/")
+		// <plugin>/js/<subdir>/<file…> — anything shallower is a loose file.
+		if len(parts) < 4 || parts[1] != "js" || !pluginDirs[parts[0]] {
+			continue
+		}
+		dir := path.Join(parts[0], "js", parts[2])
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		if _, err := fs.Stat(src, dir); err != nil {
+			t.Errorf("%s is tracked in git but missing from the embedded tree: "+
+				"add a //go:embed pattern for it in source.go (%v)", dir, err)
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("found no tracked <plugin>/js/<subdir> paths at all; the guard is not testing anything")
+	}
 }
