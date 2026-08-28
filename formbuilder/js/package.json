@@ -1,0 +1,15 @@
+{
+  "name": "@gofastr/formbuilder-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame form-schema builder for the GoFastr formbuilder plugin. Builds a single IIFE (no third-party code) that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage: the schema it edits is DATA ONLY, every save crosses the bridge to the host, and Go validates it before persisting.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}

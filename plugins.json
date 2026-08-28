@@ -220,6 +220,27 @@
       "schema": "imageedit-v1",
       "minHeight": "520px",
       "docs": "docs/imageedit.md"
+    },
+    {
+      "name": "formbuilder",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/formbuilder",
+      "version": "0.1.0",
+      "description": "Form-schema authoring tool \u2014 the first plugin whose output the framework itself consumes and enforces. A drag-to-reorder field list plus a property panel in an opaque-origin sandboxed iframe (no vendor library) edits a canonical doc that is DATA ONLY: {version, fields[]} per formbuilder-v1, never markup \u2014 Go validates every save and refuses bad schemas with specific 400 codes (unknown type, duplicate/empty/invalid name, malformed rule, unknown version, markup). The demo closes the loop: a second route renders the SAVED schema as a real working form through GoFastr's own ui.Form and re-validates every rule server-side on POST, with zero client trust in the path.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/formbuilder",
+      "entry": "/__gofastr/plugin/formbuilder/builder.html",
+      "schema": "formbuilder-v1",
+      "minHeight": "560px",
+      "docs": "docs/formbuilder.md"
     }
   ]
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
+	"github.com/DonaldMurillo/gofastr-plugins/formbuilder"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/imageedit"
 	"github.com/DonaldMurillo/gofastr-plugins/logstream"
@@ -187,6 +188,18 @@ func newApp() (*framework.App, error) {
 		imageedit.WithUploadHandler(demoImageeditUpload),
 		imageedit.WithExportHandler(demoImageeditExport),
 	))
+	// The form builder — the ninth sandboxed plugin, and the only one that
+	// authors the framework itself: its output is a form schema the server
+	// consumes and enforces, not content it displays. The design demo runs
+	// at /formbuilder; /formbuilder/live renders the SAVED schema through
+	// GoFastr's own ui.Form and re-validates every rule in Go on POST —
+	// design a required field with a pattern in the cage, then try to get
+	// garbage past the live form. That round trip is the whole argument.
+	app.RegisterPlugin(formbuilder.New(
+		formbuilder.WithDevGrantAll(),
+		formbuilder.WithDemoPage(),
+	))
+
 	if err := app.InitPlugins(); err != nil {
 		return nil, err
 	}

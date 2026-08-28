@@ -1,0 +1,370 @@
+/* GoFastr form builder — token-only frame stylesheet.
+ *
+ * Every color/font/radius reads a bridged --* custom property with an inline
+ * fallback, so the frame is legible before init and matches the host palette
+ * after it (protocol-v1.md §7).
+ *
+ * The controls mirror the host's house classes (fui-btn & friends) rebuilt
+ * from tokens: the class names themselves cannot cross the iframe boundary,
+ * but their shape can. A browser-default control inside the frame would read
+ * as a different product.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #18181b);
+  font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-size: var(--text-sm, 0.875rem);
+  line-height: 1.5;
+}
+
+#fb-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 8px);
+  padding: var(--spacing-lg, 16px);
+  min-height: 320px;
+}
+
+/* --- toolbar: the seven-type palette + the running schema count ------------ */
+
+.fb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 8px);
+  flex-wrap: wrap;
+}
+
+.fb-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Token-rebuilt .fui-btn shape for the add buttons. */
+.fb-add-btn {
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 500;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #18181b);
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.fb-add-btn:hover {
+  background: var(--color-surface-soft, #f4f4f5);
+  border-color: var(--color-border-strong, #a1a1aa);
+}
+
+.fb-add-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+/* The count is the frame's running schema summary, so it carries weight. */
+.fb-count {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-text-muted, #52525b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- two-pane work area ----------------------------------------------------- */
+
+.fb-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--spacing-lg, 16px);
+  align-items: start;
+}
+
+@media (max-width: 560px) {
+  .fb-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px;
+}
+
+.fb-empty {
+  border: 1px dashed var(--color-border-strong, #a1a1aa);
+  border-radius: var(--radii-md, 6px);
+  padding: var(--spacing-lg, 16px);
+  color: var(--color-text-subtle, #71717a);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.fb-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 4px);
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+}
+
+.fb-item:hover {
+  border-color: var(--color-border-strong, #a1a1aa);
+}
+
+.fb-item.is-selected {
+  border-color: var(--color-primary, #e0a040);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, #e0a040) 45%, transparent);
+}
+
+.fb-item.is-dragging {
+  opacity: 0.45;
+}
+
+.fb-item.is-drop-target {
+  border-color: var(--color-primary, #e0a040);
+  border-top: 2px solid var(--color-primary, #e0a040);
+}
+
+.fb-grip {
+  color: var(--color-text-subtle, #71717a);
+  cursor: grab;
+  flex: none;
+  line-height: 1;
+}
+
+/* Type chips: token-tinted, lowercase, monospace — they read as data. */
+.fb-type {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  color: color-mix(in oklab, var(--color-primary, #e0a040) 55%, var(--color-text, #18181b) 45%);
+  background: color-mix(in srgb, var(--color-primary, #e0a040) 10%, var(--color-surface, #fff));
+  border-radius: var(--radii-full, 9999px);
+  padding: 1px 8px;
+}
+
+.fb-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.fb-item-name {
+  margin-left: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-subtle, #71717a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-item-btns {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.fb-iconbtn {
+  font: inherit;
+  font-size: var(--text-xs, 0.75rem);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radii-sm, 4px);
+  background: transparent;
+  color: var(--color-text-muted, #52525b);
+  cursor: pointer;
+}
+
+.fb-iconbtn:hover {
+  background: var(--color-surface-soft, #f4f4f5);
+  border-color: var(--color-border, #e4e4e7);
+  color: var(--color-text, #18181b);
+}
+
+.fb-iconbtn:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+/* --- property panel ---------------------------------------------------------- */
+
+.fb-props {
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-md, 6px);
+  background: color-mix(in srgb, var(--color-surface-soft, #f4f4f5) 45%, var(--color-surface, #fff));
+  padding: var(--spacing-md, 8px) var(--spacing-lg, 16px) var(--spacing-lg, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fb-props-empty {
+  margin: 0;
+  padding: var(--spacing-lg, 16px) 0;
+  color: var(--color-text-subtle, #71717a);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.fb-prop-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spacing-md, 8px);
+}
+
+.fb-prop-row-wide {
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+}
+
+.fb-prop-check {
+  grid-template-columns: auto auto;
+  justify-content: start;
+  gap: var(--spacing-md, 8px);
+}
+
+.fb-prop-label {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-text-muted, #52525b);
+}
+
+/* Token-rebuilt house input shape. */
+.fb-input {
+  font: inherit;
+  font-size: var(--text-sm, 0.875rem);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #18181b);
+}
+
+.fb-input::placeholder {
+  color: var(--color-text-subtle, #71717a);
+}
+
+.fb-input:hover {
+  border-color: var(--color-border-strong, #a1a1aa);
+}
+
+.fb-input:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 1px;
+}
+
+textarea.fb-options {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.fb-prop-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm, 4px);
+}
+
+.fb-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary, #e0a040);
+}
+
+/* --- warnings + footer ------------------------------------------------------- */
+
+.fb-warn {
+  margin: 0;
+  padding: var(--spacing-sm, 4px) 0 var(--spacing-sm, 4px) var(--spacing-xl, 24px);
+  color: var(--color-danger, #b91c1c);
+  font-size: var(--text-xs, 0.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fb-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 8px);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border, #e4e4e7);
+  padding-top: var(--spacing-md, 8px);
+}
+
+.fb-status {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-muted, #52525b);
+  min-height: 1.2em;
+}
+
+.fb-status-ok {
+  color: var(--color-success, #166534);
+  font-weight: 600;
+}
+
+.fb-status-bad {
+  color: var(--color-danger, #b91c1c);
+  font-weight: 600;
+}
+
+/* Token-rebuilt primary .fui-btn for Save schema. */
+.fb-save {
+  font: inherit;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radii-md, 6px);
+  background: var(--color-primary, #e0a040);
+  color: var(--color-primary-fg, #fff);
+  cursor: pointer;
+  line-height: 1.4;
+  transition: filter 150ms ease;
+}
+
+.fb-save:hover {
+  filter: brightness(1.05);
+}
+
+.fb-save:focus-visible {
+  outline: 2px solid var(--color-primary, #e0a040);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  #fb-root {
+    padding: var(--spacing-md, 8px);
+  }
+
+  .fb-prop-row,
+  .fb-prop-row-wide {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
