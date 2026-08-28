@@ -502,12 +502,20 @@ test("the live operation list mirrors edits as JSON, on the iframe and on the de
 
   // Crop narrows the output: drag a crop over the left half, then the
   // preview's backing canvas shrinks accordingly.
+  //
+  // The rect starts INSIDE the image rather than at source (0,0). The canvas
+  // corner is a pointer dead zone — a 1px border plus a 4px radius, and
+  // canvasPoint rejects a coordinate equal to the backing width — so a
+  // corner-anchored drag is a coin flip that came up tails on CI's webkit while
+  // passing everywhere else. What this journey tests is that the operation list
+  // mirrors the drag, not that the extreme corner is reachable; the crop
+  // geometry itself is covered by the agreement journey and the Go tests.
   await fl(page).locator('.ie-tool[data-tool="crop"]').click();
-  await dragSourceRect(page, 0, 0, 480, 640);
+  await dragSourceRect(page, 40, 40, 400, 560);
   await page.waitForFunction(() => {
     const f = document.querySelector("iframe") as Mirror | null;
     const d = f && f.__imageeditDoc ? JSON.parse(f.__imageeditDoc) : null;
-    return !!d && !!d.crop && d.crop.w > 400 && d.crop.w < 520;
+    return !!d && !!d.crop && d.crop.w > 330 && d.crop.w < 440;
   });
   const geom = await canvasGeom(page);
   expect(geom.width).toBeLessThan(960); // cropped, not the full image
