@@ -1,7 +1,7 @@
 {
   "registryVersion": "1",
   "$comment": "Curated registry index for gofastr-plugins. This is a CONVENTION, not a service: a JSON manifest + the docs/plugin-platform.md page. There is no runtime discovery server. Apps import a plugin package directly via its modulePath and mount it with framework.RegisterPlugin. Each row mirrors the plugin's own identity/route constants and its pluginhost.Manifest (see <pkg>/plugin.go). Update a plugin's row in the same change that bumps its Version or capabilities. This file is consumed by COPY, not import: a host fetches it from a release asset and vendors it, so nothing imports a Go API for it. In THIS repo it is parsed by internal/registry (test-only, not importable by consumers) -- keep it valid JSON, and add new keys to the Go structs in internal/registry/registry.go at the same time (the parser rejects unknown fields).",
-  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Most run isolated in an opaque-origin sandboxed iframe and talk to the host only over a versioned postMessage capability bridge (isolation \"sandbox-iframe-opaque\"). A plugin that must reach the host DOM (the guided-tour plugin) instead runs as a vouched-for trusted host-page script (isolation \"trusted-host-page\", trusted:true) — never sandboxed and never same-origin-in-a-frame. See docs/plugin-platform.md for the platform contract.",
+  "description": "Officially-maintained heavy-JavaScript plugins for the GoFastr framework. Most run isolated in an opaque-origin sandboxed iframe and talk to the host only over a versioned postMessage capability bridge (isolation \"sandbox-iframe-opaque\"). A plugin that must reach the host DOM (the guided-tour plugin) instead runs as a vouched-for trusted host-page script (isolation \"trusted-host-page\", trusted:true) \u2014 never sandboxed and never same-origin-in-a-frame. See docs/plugin-platform.md for the platform contract.",
   "framework": {
     "name": "gofastr",
     "modulePath": "github.com/DonaldMurillo/gofastr",
@@ -34,7 +34,7 @@
       "name": "mermaid",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/mermaid",
       "version": "0.1.0-phase0",
-      "description": "Isolated Mermaid diagram editor/renderer. The second heavy-JS plugin — the completeness canary proving the extracted pluginhost platform generalizes beyond the editor. Canonical doc is {source:\"...\"}; no upload path.",
+      "description": "Isolated Mermaid diagram editor/renderer. The second heavy-JS plugin \u2014 the completeness canary proving the extracted pluginhost platform generalizes beyond the editor. Canonical doc is {source:\"...\"}; no upload path.",
       "isolation": "sandbox-iframe-opaque",
       "sandbox": [
         "allow-scripts"
@@ -100,7 +100,7 @@
       "name": "datagrid",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/datagrid",
       "version": "0.1.0",
-      "description": "Data grid over AG Grid Community's infinite row model — the fifth sandboxed heavy-JS plugin, and the first whose traffic is pages rather than one document. The framed CSP's connect-src 'none' means the frame can never fetch its own rows: every page crosses the postMessage bridge as a correlated requestRows/rowsResult event pair (the richtext requestUpload pattern), and sorting, filtering and paging all run in the host's Go rows source behind POST /rows. Canonical doc is VIEW STATE ONLY ({columns[], sort, filter, pageSize}, schema datagrid-v1) — rows are never part of it. Cell editing (requestCellWrite → POST /cell) and view-state saves gate on optional data:write; host-side CSV export (requestExport → POST /export, the download starts in the host page) gates on optional data:export — each granted exactly when the host wires the matching handler option, like pdf:export.",
+      "description": "Data grid over AG Grid Community's infinite row model \u2014 the fifth sandboxed heavy-JS plugin, and the first whose traffic is pages rather than one document. The framed CSP's connect-src 'none' means the frame can never fetch its own rows: every page crosses the postMessage bridge as a correlated requestRows/rowsResult event pair (the richtext requestUpload pattern), and sorting, filtering and paging all run in the host's Go rows source behind POST /rows. Canonical doc is VIEW STATE ONLY ({columns[], sort, filter, pageSize}, schema datagrid-v1) \u2014 rows are never part of it. Cell editing (requestCellWrite \u2192 POST /cell) and view-state saves gate on optional data:write; host-side CSV export (requestExport \u2192 POST /export, the download starts in the host page) gates on optional data:export \u2014 each granted exactly when the host wires the matching handler option, like pdf:export.",
       "isolation": "sandbox-iframe-opaque",
       "sandbox": [
         "allow-scripts"
@@ -124,7 +124,7 @@
       "name": "tour",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/tour",
       "version": "0.1.0",
-      "description": "Guided product-tour (\"app cues\") plugin: spotlights host-page elements with stepped tooltip bubbles, progress, and don't-show-again persistence. The FIRST trusted host-page plugin — it runs in the host page with full DOM access (it must, to highlight real elements), so it is NOT sandboxed. Runtime is a same-origin script + stylesheet; tours are registered server-side and completion is persisted client-side and via a seen endpoint.",
+      "description": "Guided product-tour (\"app cues\") plugin: spotlights host-page elements with stepped tooltip bubbles, progress, and don't-show-again persistence. The FIRST trusted host-page plugin \u2014 it runs in the host page with full DOM access (it must, to highlight real elements), so it is NOT sandboxed. Runtime is a same-origin script + stylesheet; tours are registered server-side and completion is persisted client-side and via a seen endpoint.",
       "isolation": "trusted-host-page",
       "trusted": true,
       "capabilities": [
@@ -139,7 +139,7 @@
       "name": "map",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/geomap",
       "version": "0.3.0",
-      "description": "Interactive vector map (MapLibre GL + OpenFreeMap). A TRUSTED host-page plugin (like tour) — it runs in the host page with fetch/worker access so it can render OpenFreeMap vector tiles (free for commercial use, no API key). Canonical doc is {lat,lng,zoom,markers[]}; click-to-add draggable pins whose popup is a live label editor with per-pin delete, a style switcher (layers), geolocate + scale controls, optional marker clustering, an optional place-search box backed by the plugin's own same-origin geocode proxy, and a fly-to side panel. The host page CSP MUST allow connect-src/img-src https://tiles.openfreemap.org and worker-src blob: (see docs/geomap.md); search needs no extra CSP host because it is proxied through the plugin's own origin. Place search is opt-in (geomap.WithSearch): enabling it registers /__gofastr/plugin/map/geocode and adds the optionalCapability geocode:search.",
+      "description": "Interactive vector map (MapLibre GL + OpenFreeMap). A TRUSTED host-page plugin (like tour) \u2014 it runs in the host page with fetch/worker access so it can render OpenFreeMap vector tiles (free for commercial use, no API key). Canonical doc is {lat,lng,zoom,markers[]}; click-to-add draggable pins whose popup is a live label editor with per-pin delete, a style switcher (layers), geolocate + scale controls, optional marker clustering, an optional place-search box backed by the plugin's own same-origin geocode proxy, and a fly-to side panel. The host page CSP MUST allow connect-src/img-src https://tiles.openfreemap.org and worker-src blob: (see docs/geomap.md); search needs no extra CSP host because it is proxied through the plugin's own origin. Place search is opt-in (geomap.WithSearch): enabling it registers /__gofastr/plugin/map/geocode and adds the optionalCapability geocode:search.",
       "isolation": "trusted-host-page",
       "trusted": true,
       "capabilities": [
@@ -160,7 +160,7 @@
       "name": "chart",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/chart",
       "version": "0.1.0",
-      "description": "One chart spec, two agreeing renderers: a pure-Go SSR SVG (chart/ssr — the page works with JavaScript off) and a sandboxed Observable Plot frame that hydrates it into an interactive chart. The Go tick algorithm is a line-for-line port of d3-array's ticks, so server and client axis labels agree exactly; an e2e agreement test compares both SVGs on awkward ranges. Canonical doc is {type, series[], axes, options} (chart-v1) covering line/bar/area/scatter with axes, legend and title; the data lives in the doc, capped at 10,000 total points across at most 12 series.",
+      "description": "One chart spec, two agreeing renderers: a pure-Go SSR SVG (chart/ssr \u2014 the page works with JavaScript off) and a sandboxed Observable Plot frame that hydrates it into an interactive chart. The Go tick algorithm is a line-for-line port of d3-array's ticks, so server and client axis labels agree exactly; an e2e agreement test compares both SVGs on awkward ranges. Canonical doc is {type, series[], axes, options} (chart-v1) covering line/bar/area/scatter with axes, legend and title; the data lives in the doc, capped at 10,000 total points across at most 12 series.",
       "isolation": "sandbox-iframe-opaque",
       "sandbox": [
         "allow-scripts"
@@ -181,7 +181,7 @@
       "name": "logstream",
       "modulePath": "github.com/DonaldMurillo/gofastr-plugins/logstream",
       "version": "0.1.0",
-      "description": "Live log tail in an opaque-origin sandboxed iframe (xterm.js). The only plugin whose traffic is not turn-based: the host PUSHES NDJSON lines from GET /stream and delivers unsolicited streamBatch events over the postMessage bridge; the frame renders one batch per ~16ms tick and acks with streamAck carrying the last rendered sequence number. Backpressure is explicit — a 4-batch ack window and a bounded host buffer that drops from the OLDEST end when the producer outruns the frame, with the dropped count riding the next batch and rendering as a visible 'N lines dropped' marker. Scrollback is bounded at 10,000 lines. Read-only: stream:read + theme:read only, no PTY, no shell, no command input, no writes.",
+      "description": "Live log tail in an opaque-origin sandboxed iframe (xterm.js). The only plugin whose traffic is not turn-based: the host PUSHES NDJSON lines from GET /stream and delivers unsolicited streamBatch events over the postMessage bridge; the frame renders one batch per ~16ms tick and acks with streamAck carrying the last rendered sequence number. Backpressure is explicit \u2014 a 4-batch ack window and a bounded host buffer that drops from the OLDEST end when the producer outruns the frame, with the dropped count riding the next batch and rendering as a visible 'N lines dropped' marker. Scrollback is bounded at 10,000 lines. Read-only: stream:read + theme:read only, no PTY, no shell, no command input, no writes.",
       "isolation": "sandbox-iframe-opaque",
       "sandbox": [
         "allow-scripts"
@@ -196,6 +196,30 @@
       "schema": "logstream-v1",
       "minHeight": "560px",
       "docs": "docs/logstream.md"
+    },
+    {
+      "name": "imageedit",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/imageedit",
+      "version": "0.1.0",
+      "description": "Crop / annotate / redact image editor, and the proof that the pdf plugin's bytes-over-the-bridge design generalizes: the frame has connect-src 'none' and receives the image as an ArrayBuffer over postMessage, the canonical doc is an OPERATION LIST (imageedit-v1: src, crop, rotate, annotations[], redactions[] in image coordinates \u2014 never pixels), and every export is re-rendered by Go from that list using only the standard library. EXIF is stripped by full re-encode, 16 MiB / 24 MP / 8192px caps are enforced at the header stage before decode, and redactions are verified against the produced bytes \u2014 a region must be gone, not painted over, or the export fails closed.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "optionalCapabilities": [
+        "upload:images"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/imageedit",
+      "entry": "/__gofastr/plugin/imageedit/editor.html",
+      "schema": "imageedit-v1",
+      "minHeight": "520px",
+      "docs": "docs/imageedit.md"
     }
   ]
 }

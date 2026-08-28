@@ -32,6 +32,7 @@ var demoEntries = []demoEntry{
 	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
 	{"chart", "Chart", "/chart", "One spec, two renderers — a pure-Go SSR SVG hydrated by a sandboxed Plot frame.", "sandboxed", "📈"},
 	{"logstream", "Log Stream", "/logstream", "A live log tail pushed across the sandbox — the frame acks every batch, and overflow shows up as a visible drop marker.", "sandboxed", "📜"},
+	{"imageedit", "Image Edit", "/imageedit", "Crop, annotate and redact — the doc is an operation list, and Go re-renders every export from it.", "sandboxed", "🖼️"},
 }
 
 // recipeEntries are the whole-app recipes. They get their own sidebar section
