@@ -24,7 +24,54 @@ async function audit(page: Page, label: string) {
   const detail = serious
     .map((v) => `[${v.impact}] ${v.id}: ${v.help}\n  ${v.nodes.map((n) => n.target.join(" ")).join("\n  ")}`)
     .join("\n");
-  expect(serious, `${label}: serious/critical a11y violations:\n${detail}`).toEqual([]);
+
+  // A contrast violation reports the two colours it compared and nothing about
+  // WHY the element had them. That is the whole question when a frame is
+  // themed over a postMessage bridge: which tokens actually landed, and did the
+  // host and the frame agree on the scheme. Reproducing it took several CI
+  // rounds precisely because the failure carried none of that. Dump it here so
+  // the next failure explains itself on the first look.
+  let themeDump = "";
+  if (serious.some((v) => v.id === "color-contrast")) {
+    themeDump = await page
+      .evaluate(() => {
+        const names = [
+          "--color-text", "--color-surface", "--color-background",
+          "--color-border", "--color-surface-soft",
+        ];
+        const read = (root: Document) => {
+          const cs = getComputedStyle(root.documentElement);
+          return Object.fromEntries(names.map((n) => [n, cs.getPropertyValue(n).trim()]));
+        };
+        const iframe = document.querySelector("iframe") as HTMLIFrameElement | null;
+        const mirrors = iframe as unknown as Record<string, unknown> | null;
+        let frame: unknown = "unreachable (opaque origin)";
+        try {
+          if (iframe?.contentDocument) frame = read(iframe.contentDocument);
+        } catch {
+          /* opaque origin — expected for sandboxed plugins */
+        }
+        return JSON.stringify(
+          {
+            hostScheme: document.documentElement.getAttribute("data-color-scheme"),
+            prefersDark: matchMedia("(prefers-color-scheme: dark)").matches,
+            hostTokens: read(document),
+            frameTokens: frame,
+            frameThemeMirror: mirrors
+              ? Object.keys(mirrors).filter((k) => k.startsWith("__") && k.toLowerCase().includes("theme"))
+                  .map((k) => [k, mirrors[k]])
+              : [],
+          },
+          null,
+          2
+        );
+      })
+      .catch((e) => `theme dump failed: ${String(e)}`);
+  }
+  expect(
+    serious,
+    `${label}: serious/critical a11y violations:\n${detail}${themeDump ? `\n\ntheme state at audit time:\n${themeDump}` : ""}`
+  ).toEqual([]);
 }
 
 test.beforeEach(async ({ request, baseURL }) => {
