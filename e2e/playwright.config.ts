@@ -5,7 +5,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import { BLOGAPP_PORT, BLOGSITE_PORT } from "./tests/recipes";
 
-const PORT = 8123;
+// Ports are env-overridable so a second git worktree can run the suite at the
+// same time as this one. Unset, they keep the original fixed values.
+const PORT = Number(process.env.E2E_PORT ?? 8123);
 
 // The dogfood shots (tests/shots.spec.ts) are a visual-review tool, not a
 // pass/fail gate: they write PNGs for humans and assert nothing. They run ONLY

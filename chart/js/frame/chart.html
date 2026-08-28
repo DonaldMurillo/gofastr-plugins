@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  GoFastr chart frame — opaque-origin sandboxed frame document (protocol v1).
+
+  Served same-origin at /__gofastr/plugin/chart/chart.html and loaded inside
+  an <iframe sandbox="allow-scripts"> (NO allow-same-origin). Under that
+  sandbox the frame is an opaque origin: document.cookie / localStorage
+  throw, and window.parent.document is unreachable. The ONLY host channel
+  is window.parent.postMessage. Sub-resources are referenced by RELATIVE
+  path so they resolve under the plugin asset route prefix regardless of the
+  host-appended ?v= cache-buster.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Chart</title>
+    <link rel="stylesheet" href="./chart.css" />
+  </head>
+  <body>
+    <div id="chart-root" role="region" aria-label="Interactive chart"></div>
+    <!--
+      The bundle is the ONLY script: no inline JS (framed CSP script-src is
+      the concrete origin, never 'unsafe-inline'). Observable Plot and
+      d3-array are bundled in.
+    -->
+    <script src="./chart.js"></script>
+  </body>
+</html>

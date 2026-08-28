@@ -8,8 +8,8 @@
 // OS-assigned: playwright.config.ts has to know them to health-check each
 // server before the suite starts.
 
-export const BLOGSITE_PORT = 8124;
-export const BLOGAPP_PORT = 8125;
+export const BLOGSITE_PORT = Number(process.env.E2E_BLOGSITE_PORT ?? 8124);
+export const BLOGAPP_PORT = Number(process.env.E2E_BLOGAPP_PORT ?? 8125);
 
 export const BLOGSITE = `http://localhost:${BLOGSITE_PORT}`;
 export const BLOGAPP = `http://localhost:${BLOGAPP_PORT}`;

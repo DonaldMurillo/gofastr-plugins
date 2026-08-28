@@ -1,0 +1,28 @@
+<svg class="gofastr-chart-svg" viewBox="0 0 480.00 320.00" width="100%" role="img" aria-label="chart" data-domain-x="0,2" data-domain-y="2,3.5" aria-description="Server-rendered chart (chart-v1)."><style>
+.gofastr-chart-svg{--gcc-bg:var(--color-background,#fff);--gcc-text:var(--color-text,#1c2024);--gcc-muted:var(--color-text-muted,#5b6470);--gcc-border:var(--color-border,#e3e6ea);--gcc-primary:var(--color-primary,#4f46e5);--gcc-info:var(--color-info,#1d4ed8);--gcc-success:var(--color-success,#166534);--gcc-accent:var(--color-accent,#7c3aed);--gcc-danger:var(--color-danger,#b91c1c);font-family:var(--font-body,system-ui,-apple-system,sans-serif);font-size:12px;display:block}
+.gofastr-chart-svg text{fill:var(--gcc-text)}
+.gofastr-chart-title{font-size:15px;font-weight:600}
+.gofastr-chart-grid line{stroke:var(--gcc-border);stroke-width:1;stroke-opacity:.6}
+.gofastr-chart-axis-line{stroke:var(--gcc-muted);stroke-width:1}
+.gofastr-chart-tick{stroke:var(--gcc-muted);stroke-width:1}
+.gofastr-chart-tick-label{font-size:11px;fill:var(--gcc-muted)}
+.gofastr-chart-axis-label{font-size:11px;fill:var(--gcc-muted)}
+.gofastr-chart-legend-text{font-size:12px}
+.gofastr-chart-legend-swatch{fill:currentColor;stroke:none}
+.gofastr-chart-line{fill:none;stroke:currentColor;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.gofastr-chart-area{fill:currentColor;fill-opacity:.18;stroke:none}
+.gofastr-chart-bar{fill:currentColor;stroke:none}
+.gofastr-chart-dot{fill:currentColor;stroke:var(--gcc-bg);stroke-width:1.5}
+.gofastr-chart-s0{color:var(--gcc-primary)}
+.gofastr-chart-s1{color:var(--gcc-info)}
+.gofastr-chart-s2{color:var(--gcc-success)}
+.gofastr-chart-s3{color:var(--gcc-accent)}
+.gofastr-chart-s4{color:var(--gcc-danger)}
+.gofastr-chart-s5{color:color-mix(in srgb,var(--gcc-info) 55%,var(--gcc-text))}
+.gofastr-chart-s6{color:color-mix(in srgb,var(--gcc-primary) 45%,var(--gcc-text))}
+.gofastr-chart-s7{color:color-mix(in srgb,var(--gcc-success) 45%,var(--gcc-text))}
+.gofastr-chart-s8{color:color-mix(in srgb,var(--gcc-danger) 50%,var(--gcc-text))}
+.gofastr-chart-s9{color:color-mix(in srgb,var(--gcc-accent) 50%,var(--gcc-text))}
+.gofastr-chart-s10{color:color-mix(in srgb,var(--gcc-info) 35%,var(--gcc-text))}
+.gofastr-chart-s11{color:color-mix(in srgb,var(--gcc-primary) 25%,var(--gcc-text))}
+</style><title>chart</title><g class="gofastr-chart-grid" aria-hidden="true"><line x1="56.00" y1="288.00" x2="462.00" y2="288.00"/><line x1="56.00" y1="196.00" x2="462.00" y2="196.00"/><line x1="56.00" y1="104.00" x2="462.00" y2="104.00"/><line x1="56.00" y1="12.00" x2="462.00" y2="12.00"/><line x1="56.00" y1="12.00" x2="56.00" y2="288.00"/><line x1="157.50" y1="12.00" x2="157.50" y2="288.00"/><line x1="259.00" y1="12.00" x2="259.00" y2="288.00"/><line x1="360.50" y1="12.00" x2="360.50" y2="288.00"/><line x1="462.00" y1="12.00" x2="462.00" y2="288.00"/></g><g class="gofastr-chart-series gofastr-chart-s0" data-series="solo" aria-label="solo"><polyline class="gofastr-chart-line" points="56.00,288.00 259.00,104.00 462.00,12.00"/><circle class="gofastr-chart-dot" cx="56.00" cy="288.00" r="3.50"/><circle class="gofastr-chart-dot" cx="259.00" cy="104.00" r="3.50"/><circle class="gofastr-chart-dot" cx="462.00" cy="12.00" r="3.50"/></g><g class="gofastr-chart-axis gofastr-chart-axis-x" data-axis="x"><line class="gofastr-chart-axis-line" x1="56.00" y1="288.00" x2="462.00" y2="288.00"/><line class="gofastr-chart-tick" x1="56.00" y1="288.00" x2="56.00" y2="293.00"/><text class="gofastr-chart-tick-label" x="56.00" y="304.00" text-anchor="middle">0.0</text><line class="gofastr-chart-tick" x1="157.50" y1="288.00" x2="157.50" y2="293.00"/><text class="gofastr-chart-tick-label" x="157.50" y="304.00" text-anchor="middle">0.5</text><line class="gofastr-chart-tick" x1="259.00" y1="288.00" x2="259.00" y2="293.00"/><text class="gofastr-chart-tick-label" x="259.00" y="304.00" text-anchor="middle">1.0</text><line class="gofastr-chart-tick" x1="360.50" y1="288.00" x2="360.50" y2="293.00"/><text class="gofastr-chart-tick-label" x="360.50" y="304.00" text-anchor="middle">1.5</text><line class="gofastr-chart-tick" x1="462.00" y1="288.00" x2="462.00" y2="293.00"/><text class="gofastr-chart-tick-label" x="462.00" y="304.00" text-anchor="middle">2.0</text></g><g class="gofastr-chart-axis gofastr-chart-axis-y" data-axis="y"><line class="gofastr-chart-axis-line" x1="56.00" y1="12.00" x2="56.00" y2="288.00"/><line class="gofastr-chart-tick" x1="51.00" y1="288.00" x2="56.00" y2="288.00"/><text class="gofastr-chart-tick-label" x="48.00" y="291.50" text-anchor="end">2.0</text><line class="gofastr-chart-tick" x1="51.00" y1="196.00" x2="56.00" y2="196.00"/><text class="gofastr-chart-tick-label" x="48.00" y="199.50" text-anchor="end">2.5</text><line class="gofastr-chart-tick" x1="51.00" y1="104.00" x2="56.00" y2="104.00"/><text class="gofastr-chart-tick-label" x="48.00" y="107.50" text-anchor="end">3.0</text><line class="gofastr-chart-tick" x1="51.00" y1="12.00" x2="56.00" y2="12.00"/><text class="gofastr-chart-tick-label" x="48.00" y="15.50" text-anchor="end">3.5</text></g></svg>

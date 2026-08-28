@@ -6,6 +6,31 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — chart: one spec, two agreeing renderers (2026-08-27)
+
+The `chart` plugin generalizes what `richtext/ssr` does for documents: a
+canonical chart-v1 doc (`{type, series[], axes, options}`; line / bar /
+area / scatter; data in the doc, capped at 10,000 points across 12 series)
+rendered by TWO implementations that must agree — a pure-Go static SVG
+(`chart/ssr`, the page works with JavaScript off) and a sandboxed
+Observable Plot frame that hydrates it (hover tooltips; the host adapter
+hides the SSR node on `ready` and restores it on `bootError`). The crux
+is tick agreement: `chart/ssr/ticks.go` is a line-for-line port of
+d3-array 3.2.4's `ticks`/`tickIncrement`/`tickStep` (cited), replayed
+against a committed ~3000-case ground-truth sweep recorded from real d3;
+both renderers use explicit domains, tick counts and a shared
+round-trip-precision label format, and an e2e journey asserts SSR and
+frame agree on tick labels, series names and extents across four awkward
+ranges (0–7, 0–1, −3.5–3.5, 0–1e6) in both chromium and webkit. Mounted
+in the example gallery at `/chart`; docs in
+[`docs/chart.md`](docs/chart.md). Demo page built to
+`docs/demo-page-design.md` (hero + fact chips, framed
+mount, type switcher, server-SVG reveal, feature cards). Series marks
+carry equal visual weight in both renderers: 2.5px strokes, value dots,
+token-driven grid; bars are dodged per series with a half-group x-domain
+pad (identical arithmetic in `ssr.minXGap` / `spec.ts minXGap`, covered
+by the agreement journey).
+
 ### Added — datagrid: 100,000 rows over the bridge (2026-08-26)
 
 
@@ -70,6 +95,7 @@ count stays at or below the cap. Console/page errors are captured from
 before navigation, so boot errors are visible to the assertions. Theming
 uses AG Grid's Theming API mapped from the bridged tokens — verified in
 WebKit, not assumed.
+
 
 ### Changed — gofastr v0.71.1 → v0.71.2 (2026-08-26)
 
