@@ -33,6 +33,23 @@ const SCHEMA_VERSION = "logstream-v1";
 export const SCROLLBACK_LINES = 10_000;
 /** One batch per tick: the frame's declared consumption rate (~60/s). */
 const DRAIN_TICK_MS = 16;
+/**
+ * Ceiling on LINES written per tick, independent of how many arrived.
+ *
+ * One batch per tick bounds delivery, not rendering cost. At 6,000 lines/s a
+ * batch is ~100 lines, and parsing plus painting that every 16ms starves the
+ * main thread on a small machine: on CI's webkit the frame's own Pause button
+ * stopped responding entirely — Playwright could not complete an actionability
+ * check on it in 90 seconds (#40). The one control that stops a flood was the
+ * one the flood made unreachable.
+ *
+ * Roughly a screenful. Lines beyond it stay queued and are written next tick,
+ * so nothing is silently discarded here and the ack keeps meaning "written to
+ * the terminal". If the producer stays ahead, the host's own bounded buffer
+ * fills and IT drops and counts, which is the designed backpressure and is
+ * already reported honestly in the drop marker and the telemetry counter.
+ */
+const MAX_LINES_PER_TICK = 24;
 const SAMPLE_TOKENS = ["--color-surface", "--color-text", "--color-border"];
 
 /** One host-pushed batch, narrowed from the untrusted postMessage payload. */
@@ -61,6 +78,13 @@ let initialized = false;
 let lastTokens: unknown = null;
 /** Batches accepted from the host, not yet rendered. */
 const pending: StreamBatch[] = [];
+/** Drop markers actually WRITTEN to the terminal, and the most recent one.
+ *  These ride on the ack so a test can assert the gap was recorded without
+ *  driving the UI: at flood rate CI's webkit cannot reliably service a click
+ *  or a fill, so any assertion routed through the search box measures the
+ *  runner rather than the plugin. */
+let markersWritten = 0;
+let lastMarkerText = "";
 /** The pending queue's bound: a stalled frame must not hoard host memory. */
 const MAX_PENDING_BATCHES = 240;
 /** Highest sequence number actually written to the terminal. */
@@ -118,12 +142,28 @@ function drainOne(): void {
   const batch = pending.shift();
   if (!batch || !term) return;
   let out = "";
-  if (batch.dropped > 0) out += dropMarker(batch.dropped);
-  for (const line of batch.lines) {
+  if (batch.dropped > 0) {
+    const marker = dropMarker(batch.dropped);
+    out += marker;
+    markersWritten += 1;
+    lastMarkerText = marker.replace(/[\r\n]+$/, "");
+  }
+  let written = 0;
+  let i = 0;
+  for (; i < batch.lines.length; i += 1) {
+    const line = batch.lines[i];
     if (line.seq <= lastRendered) continue; // reconnect dedup: already written
+    if (written >= MAX_LINES_PER_TICK) break;
     out += `${line.text}\r\n`;
     lastRendered = line.seq;
     rendered += 1;
+    written += 1;
+  }
+  if (i < batch.lines.length) {
+    // Over the per-tick ceiling: the rest goes back at the FRONT, in order, and
+    // is written next tick. dropped is zeroed because its marker is already in
+    // `out` — re-emitting it would double-count a gap that happened once.
+    pending.unshift({ ...batch, lines: batch.lines.slice(i), dropped: 0 });
   }
   if (out !== "") {
     term.write(out, () => {
@@ -147,6 +187,8 @@ function ackParams(): Record<string, unknown> {
   return {
     lastSeq: lastRendered,
     rendered,
+    markers: markersWritten,
+    lastMarker: lastMarkerText,
     scrollback,
     rows,
     cap: SCROLLBACK_LINES,

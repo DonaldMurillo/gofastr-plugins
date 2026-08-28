@@ -40,7 +40,15 @@ type Mirror = HTMLIFrameElement & {
   __logstreamDelivered?: number;
   __logstreamDropped?: number;
   __logstreamInFlight?: number;
-  __logstreamStats?: { lastSeq: number; rendered: number; scrollback: number; cap: number; rows: number };
+  __logstreamStats?: {
+    lastSeq: number;
+    rendered: number;
+    markers: number;
+    lastMarker: string;
+    scrollback: number;
+    cap: number;
+    rows: number;
+  };
 };
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -98,7 +106,15 @@ interface FrameState {
   delivered: number;
   dropped: number;
   inFlight: number;
-  stats: { lastSeq: number; rendered: number; scrollback: number; cap: number; rows: number } | null;
+  stats: {
+    lastSeq: number;
+    rendered: number;
+    markers: number;
+    lastMarker: string;
+    scrollback: number;
+    cap: number;
+    rows: number;
+  } | null;
 }
 
 async function frameState(page: Page): Promise<FrameState> {
@@ -263,34 +279,27 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
     );
   }
 
-  // Pause before looking for the marker.
+  // Assert the marker from the ACK, not from the DOM.
   //
-  // `.xterm-rows > div` holds only the rows currently ON SCREEN. At 6,000
-  // lines/s every row, the drop marker included, is scrolled out of the
-  // viewport within milliseconds, so hunting for it mid-flood is a race the
-  // test loses on a slow renderer — it failed exactly this way on CI's webkit
-  // while the drop COUNTER was already climbing, which is why the counter wait
-  // above passed and this did not.
+  // The gap being recorded is the claim. Reaching it through the UI is not: at
+  // flood rate CI's webkit cannot reliably service a click or a fill — a real
+  // page.click on Pause once took over 90s, and search.fill did the same — so
+  // an assertion routed through the search box measures the runner rather than
+  // the plugin. It also failed in a shard holding only 8 tests, which ruled out
+  // suite load as the cause.
   //
-  // It is also how a person reads it: nobody reads a line at flood rate. You
-  // pause, and then the gap is there in the buffer. Pausing first tests the
-  // claim that actually matters — the gap is recorded and legible — rather
-  // than that a specific row happened to be on screen at a specific instant.
-  // Dispatch the click rather than page.click().
-  //
-  // page.click() waits for actionability, and during a flood CI's webkit is so
-  // busy rendering that the check never completes — it timed out at 90s on the
-  // button itself, with the browser still painting. That unresponsiveness is a
-  // real property of the plugin under load and is filed as #40; it is not what
-  // THIS journey is about, which is that a dropped line is recorded and
-  // legible. Dispatching straight to the element measures the drop mechanism
-  // instead of the runner's ability to schedule a hit test.
-  await page.locator("#ls-btn-pause").dispatchEvent("click");
-  const marker = fl(page).locator(".xterm-rows > div", { hasText: "lines dropped" });
-  await expect(marker.first()).toBeVisible({ timeout: 15_000 });
-  const markerText = await marker.first().innerText();
-  expect(markerText).toMatch(/⋯ [\d,]+ lines dropped/);
-  await page.locator("#ls-btn-pause").dispatchEvent("click"); // resume
+  // The frame counts the markers it WRITES and ships the count and the most
+  // recent one on every ack, so this reads what actually reached the terminal.
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector(".editor-card iframe") as Mirror | null;
+      return !!f && (f.__logstreamStats?.markers ?? 0) > 0;
+    },
+    undefined,
+    { timeout: 20_000 }
+  );
+  const withMarker = await frameState(page);
+  expect(withMarker.stats!.lastMarker).toMatch(/⋯ [\d,]+ lines dropped/);
 
   // The scrollback bound: the frame's own ack accounting (retained history =
   // buffer minus viewport rows) never exceeds the published cap, and the

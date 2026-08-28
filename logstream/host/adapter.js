@@ -40,7 +40,8 @@
  *   __logstreamDropped        lines dropped host-side (never crossed)
  *   __logstreamInFlight       unacknowledged batches right now
  *   __logstreamAcks           streamAck events received
- *   __logstreamStats          latest ack {lastSeq, rendered, scrollback, cap}
+ *   __logstreamStats          latest ack {lastSeq, rendered, markers,
+ *                             lastMarker, scrollback, cap}
  *   __logstreamPaused         push paused?
  *   __logstreamReconnects     NDJSON reconnects after error/close
  *   __logstreamLastError      last transport/protocol error code
@@ -123,6 +124,12 @@
         mirror("__logstreamStats", {
           lastSeq: typeof params.lastSeq === "number" ? params.lastSeq : 0,
           rendered: typeof params.rendered === "number" ? params.rendered : 0,
+          // Drop markers the frame actually WROTE, and the most recent one.
+          // Narrowed like every other field: the frame is untrusted, so the
+          // text is length-capped rather than mirrored verbatim.
+          markers: typeof params.markers === "number" ? params.markers : 0,
+          lastMarker:
+            typeof params.lastMarker === "string" ? params.lastMarker.slice(0, 200) : "",
           scrollback: typeof params.scrollback === "number" ? params.scrollback : 0,
           cap: typeof params.cap === "number" ? params.cap : 0
         });

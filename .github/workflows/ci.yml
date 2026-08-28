@@ -153,12 +153,32 @@ jobs:
   # Journeys run in WebKit as well as Chromium on purpose: several shipped bugs
   # were Safari-only and invisible to Chrome-based tests.
   e2e:
-    name: e2e (${{ matrix.browser }})
+    name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # Sharded because one serial job stopped being able to hold the suite.
+        #
+        # workers is 1 and fullyParallel is off (journeys share persisted demo
+        # state), so a single job runs every test end to end. As plugins landed,
+        # webkit — much the slower engine — passed the point where adding one
+        # plugin pushed an UNRELATED journey over its timeout: imageedit and
+        # whiteboard each broke logstream's flood test, and a logstream-only
+        # change broke datagrid's sort test. Failures landed on whoever was
+        # unlucky rather than whoever caused them, which cost several rounds of
+        # looking in the wrong plugin.
+        #
+        # Playwright shards by file, so each shard still runs its files serially
+        # and the shared-state assumption holds within a shard.
+        #
+        # Four rather than three: file sizes are lopsided (the editor journeys
+        # dwarf everything else), and three gave 124/5/62 while four gives
+        # 48/76/30/37 — the long pole drops from 190 tests to 76. Balance is
+        # bounded by the largest single file, which sharding cannot split.
+        # See #34.
         browser: [webkit, chromium]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -183,11 +203,11 @@ jobs:
 
       - name: test
         working-directory: e2e
-        run: npx playwright test --project=${{ matrix.browser }}
+        run: npx playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/4
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
           path: e2e/playwright-report/
           retention-days: 7
