@@ -26,6 +26,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
+	"github.com/DonaldMurillo/gofastr-plugins/logstream"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
 	"github.com/DonaldMurillo/gofastr-plugins/pdf"
@@ -150,6 +151,22 @@ func newApp() (*framework.App, error) {
 		chart.WithDemoPage(),
 	))
 
+	// The log stream — the eighth sandboxed heavy-JS plugin, and the only one
+	// whose traffic is not turn-based: the host PUSHES log lines into the
+	// frame without ever being asked, and the bridge's backpressure (a
+	// 4-batch ack window, a bounded host buffer, oldest-end drops with a
+	// visible marker in the terminal) is the product. The demo source is a
+	// deterministic synthetic generator (example/logstream.go) with a page
+	// control switching between 5 lines/s and a 6,000 lines/s flood that the
+	// frame's ~60-batches/s render rate provably cannot absorb. Demo at
+	// /logstream.
+	app.RegisterPlugin(logstream.New(
+		logstream.WithDevGrantAll(),
+		logstream.WithDemoPage(),
+		logstream.WithSource(demoLogs.source),
+		logstream.WithDemoControlURL(demoLogControlPath),
+	))
+
 	if err := app.InitPlugins(); err != nil {
 		return nil, err
 	}
@@ -162,6 +179,7 @@ func newApp() (*framework.App, error) {
 	registerShell(app.Router())
 	registerRecipePages(app.Router())
 	registerDemoExportRoute(app.Router())
+	registerDemoLogControlRoute(app.Router())
 
 	return app, nil
 }

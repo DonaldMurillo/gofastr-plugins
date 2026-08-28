@@ -6,6 +6,31 @@ All notable changes to gofastr-plugins. Follows
 
 ## [Unreleased]
 
+### Added — logstream: a live log tail pushed across the sandbox (2026-08-28)
+
+The `logstream` plugin is the first whose traffic is not turn-based. Every
+other plugin here loads a document and saves it; even the datagrid moves its
+100,000 rows one request at a time in answer to a question the frame asked.
+A log tail is open-ended, host-initiated, and produced faster than it can be
+rendered — so [`logstream/`](logstream/) exists to prove the bridge carries
+a live push and to make the overflow answer EXPLICIT. The host adapter
+drains the plugin's chunked NDJSON route (`GET /stream`, capability
+`stream:read`, no-store, per-line flush) and pushes unsolicited
+`streamBatch` events into an xterm.js frame whose CSP forbids every fetch;
+the frame renders one batch per ~16 ms tick and acks with `streamAck`
+carrying the last rendered sequence number. Backpressure is the product: a
+4-batch ack window and a 2,000-line bounded host buffer that drops from the
+OLDEST end when the producer outruns the frame, with the dropped count
+riding the next batch and rendering as a visible "N lines dropped" marker —
+never a silent gap. Scrollback is bounded at 10,000 lines and every ack
+publishes the live depth against that cap. Read-only by design: no PTY, no
+shell, no command input, no write surface at all. The demo's deterministic
+generator switches between 5 lines/s and a 6,000 lines/s flood the frame
+provably cannot absorb, and the demo page's live telemetry (lines/s,
+delivered, dropped, scrollback/cap, in flight) shows the whole mechanism at
+a glance. e2e in both webkit and chromium drives the drop path for real;
+docs in [`docs/logstream.md`](docs/logstream.md).
+
 ### Added — chart: one spec, two agreeing renderers (2026-08-27)
 
 The `chart` plugin generalizes what `richtext/ssr` does for documents: a

@@ -1,0 +1,20 @@
+{
+  "name": "@gofastr/logstream-term-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame terminal bundle for the GoFastr logstream plugin. Builds a single IIFE (xterm.js + search/fit addons) that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage: the host PUSHES streamBatch events unasked, the frame renders one batch per animation frame and acknowledges with streamAck — the ack window is the bridge's backpressure.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
+    "@xterm/xterm": "6.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}
