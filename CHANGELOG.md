@@ -5,6 +5,34 @@ All notable changes to gofastr-plugins. Follows
 `0.x-phase` until the platform API stabilises.
 
 
+
+### Added — calendar: no calendar library; Go owns the clocks (2026-08-28)
+
+[`calendar/`](calendar/) is the month/week/day calendar plugin, written from
+scratch — FullCalendar was the obvious pick and was deliberately rejected:
+wrapping a library proves the wrapper works, not the platform. The frame
+bundle is ~24 KB raw / ~8.8 KB gzip with **zero npm dependencies**, and the
+parts everyone gets wrong run in Go: RRULE expansion (DAILY/WEEKLY/MONTHLY
+with COUNT/UNTIL/BYDAY, wall-clock anchored, everything else rejected
+loudly with the offender named), timezone resolution with an explicit
+gap/fold policy (spring-forward times carried by the pre-transition offset
+so they land *after* the gap; ambiguous hours resolved to the first
+occurrence — table-tested against America/New_York's 2026 transitions,
+Lord Howe's 30-minute step, and Kolkata's half-hour offset), and conflict
+detection over resolved instants (all-day included, end-touching excluded,
+same-series instances exempt). Events are host-owned wall-clock strings
+plus an IANA zone — the frame never receives an RRULE (asserted on the
+wire) and renders occurrences already resolved to explicit instants AND
+wall clocks. Moves are INTENTS: a pointer drag or arrow key sends a
+wall-clock delta, `POST /move` re-resolves it through the zone, and the
+answer can differ from the drag — dragging the 01:30 EST event one hour
+onto the nonexistent 02:30 comes back at 03:30 EDT with requested +60 min,
+wall result +120 min, elapsed +60 min, and a plain-language note. Per-instance
+edits are overrides keyed by event + original series date (RECURRENCE-ID
+semantics), so moving one occurrence never touches the series. The demo at
+`/calendar` jump-buttons straight to both 2026 DST weekends and shows the
+three deltas live; docs in [`docs/calendar.md`](docs/calendar.md).
+
 ### Added — imageedit: crop, annotate, redact; the server decides what's true (2026-08-28)
 
 [`imageedit/`](imageedit/) is the image crop / annotate / redact plugin, and

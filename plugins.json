@@ -241,6 +241,27 @@
       "schema": "formbuilder-v1",
       "minHeight": "560px",
       "docs": "docs/formbuilder.md"
+    },
+    {
+      "name": "calendar",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/calendar",
+      "version": "0.1.0",
+      "description": "Month/week/day calendar written from scratch \u2014 no FullCalendar, no upstream JS library at all (~24 KB bundle, 0 npm dependencies). The parts everyone gets wrong run in Go: RRULE expansion (DAILY/WEEKLY/MONTHLY with COUNT/UNTIL/BYDAY, wall-clock anchored, everything else rejected loudly), timezone resolution with an explicit gap/fold policy (spring-forward times carried past the gap, ambiguous hours resolved to the first occurrence \u2014 table-tested against America/New_York and Lord Howe's 30-minute step), and conflict detection over resolved instants. The frame renders server-resolved occurrences only and sends move INTENTS \u2014 a wall-clock delta \u2014 which the host re-resolves: a drag onto a DST boundary can come back with a different wall-clock delta than was dragged, and the demo's live readout shows requested vs wall vs elapsed.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "document:read",
+        "document:write",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/calendar",
+      "entry": "/__gofastr/plugin/calendar/app.html",
+      "schema": "calendar-v1",
+      "minHeight": "620px",
+      "docs": "docs/calendar.md"
     }
   ]
 }

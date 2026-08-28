@@ -46,6 +46,21 @@ test("a11y: pdf demo page (host chrome + mount)", async ({ page }) => {
   await audit(page, "pdf demo");
 });
 
+test("a11y: calendar demo page (host chrome + mount)", async ({ page }) => {
+  await page.goto("/calendar");
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __calendarReady?: boolean }) | null;
+      return !!f && f.__calendarReady === true;
+    },
+    undefined,
+    { timeout: 25_000 }
+  );
+  // As with the other sandboxed plugins, axe cannot see into the opaque
+  // frame, so this audits the host page and the mount chrome around it.
+  await audit(page, "calendar demo");
+});
+
 test("a11y: framed demo page (host chrome)", async ({ page }) => {
   await page.goto("/richtext");
   await page.waitForFunction(() => {

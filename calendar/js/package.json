@@ -1,0 +1,15 @@
+{
+  "name": "@gofastr/calendar-frame-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame calendar bundle for the GoFastr calendar plugin. Hand-written month/week/day views, no calendar library: builds a single dependency-free IIFE that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage. The frame renders server-resolved occurrences only — RRULE expansion, timezone conversion and conflict detection all run in Go — and sends move INTENTS (wall-clock deltas) that the host re-resolves.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}
