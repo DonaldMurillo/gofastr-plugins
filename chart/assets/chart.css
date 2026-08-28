@@ -1,0 +1,63 @@
+/* GoFastr chart frame — token-only stylesheet.
+ *
+ * The host bridges resolved --* token values over init/themeChanged; the
+ * frame bundle writes them into a <style id="chart-tokens">:root{…} block
+ * appended AFTER this sheet, so it wins on equal specificity. Everything
+ * here references tokens with conservative fallbacks, so the frame is
+ * legible before init and flips light/dark with the host palette.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-background, #fff);
+  color: var(--color-text, #1c2024);
+  font-family: var(--font-body, system-ui, -apple-system, sans-serif);
+}
+
+#chart-root {
+  padding: var(--spacing-md, 8px) var(--spacing-lg, 16px);
+}
+
+/* Plot theming: transparent plot area (the host page supplies the surface),
+ * token-driven text and grid. Plot hardcodes system-ui on its own legend;
+ * these rules re-bind what it emits to tokens where reachable. */
+#chart-root .plot,
+#chart-root .plot-figure {
+  background: transparent;
+  --plot-background: transparent;
+  max-width: 100%;
+}
+
+#chart-root .plot text {
+  fill: currentColor;
+}
+#chart-root .plot g[aria-label="x-grid"] line,
+#chart-root .plot g[aria-label="y-grid"] line {
+  /* Match the SSR grid: border token at .6, not Plot's currentColor @ .1 —
+   * CSS rules win over Plot's presentation attributes. */
+  stroke: var(--color-border, #e3e6ea);
+  stroke-opacity: 0.6;
+}
+
+#chart-root .plot-figure h2 {
+  /* Plot's title element */
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--color-text, #1c2024);
+}
+
+.chart-note {
+  padding: var(--spacing-lg, 16px);
+  font-size: 13px;
+  border: 1px dashed var(--color-border, #e3e6ea);
+  border-radius: var(--radii-md, 8px);
+  color: var(--color-text-muted, #5b6470);
+}
+
+.chart-note-error {
+  color: var(--color-danger, #b91c1c);
+}

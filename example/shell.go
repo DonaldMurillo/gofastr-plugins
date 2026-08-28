@@ -30,6 +30,7 @@ var demoEntries = []demoEntry{
 	{"pdf", "PDF", "/pdf", "View, annotate and truly redact PDFs — the frame has no network at all.", "sandboxed", "📄"},
 	{"tour", "Guided Tour", "/tour", "Appcues-style tour that spotlights real page elements.", "trusted", "🧭"},
 	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
+	{"chart", "Chart", "/chart", "One spec, two renderers — a pure-Go SSR SVG hydrated by a sandboxed Plot frame.", "sandboxed", "📈"},
 }
 
 // recipeEntries are the whole-app recipes. They get their own sidebar section

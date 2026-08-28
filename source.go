@@ -108,6 +108,16 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed geomap/js/package-lock.json
 //go:embed geomap/js/tsconfig.json
 //go:embed geomap/js/src
+//go:embed chart/*.go
+//go:embed chart/assets
+//go:embed chart/host
+//go:embed chart/js/build.mjs
+//go:embed chart/js/package.json
+//go:embed chart/js/package-lock.json
+//go:embed chart/js/tsconfig.json
+//go:embed chart/js/src
+//go:embed chart/js/frame
+//go:embed chart/ssr
 var bundled embed.FS
 
 //go:embed plugins.json

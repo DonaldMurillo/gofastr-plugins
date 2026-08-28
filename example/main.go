@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
@@ -135,6 +136,18 @@ func newApp() (*framework.App, error) {
 		datagrid.WithCellWriteHandler(demoGridDataset.writeCell),
 		datagrid.WithExportHandler(demoGridExport),
 		datagrid.WithDemoDoc(demoGridDoc()),
+	))
+
+	// The chart plugin — one chart spec, two agreeing renderers. The server
+	// renders a static SVG (chart/ssr) that stands on its own with JavaScript
+	// off; the sandboxed Observable Plot frame hydrates it into an interactive
+	// chart, and the host adapter hides the static node once the frame reports
+	// ready. Both renderers share the same spec, theme tokens, and — via a
+	// faithful port of d3-array's tick algorithm — the same axis tick labels.
+	// Demo at /chart.
+	app.RegisterPlugin(chart.New(
+		chart.WithDevGrantAll(),
+		chart.WithDemoPage(),
 	))
 
 	if err := app.InitPlugins(); err != nil {

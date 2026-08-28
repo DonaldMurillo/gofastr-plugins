@@ -1,0 +1,20 @@
+{
+  "name": "@gofastr/chart-frame-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame chart renderer bundle for the GoFastr chart plugin. Builds a single IIFE (Observable Plot) that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@observablehq/plot": "0.6.17",
+    "d3-array": "3.2.4"
+  },
+  "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "esbuild": "0.23.1",
+    "typescript": "^7.0.2"
+  }
+}
