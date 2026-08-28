@@ -29,6 +29,12 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  // GOFASTR_ISOLATION=off on every server below. gofastr's framework/isolation
+  // auto-activates on a LINKED WORKTREE checkout and remaps ports, including an
+  // explicitly assigned PORT. This repo is developed in two linked worktrees
+  // and Playwright waits on fixed ports, so an activation would show up as a
+  // webServer timeout with no explanation. Pinning it off is cheap insurance
+  // against a ghost; see DonaldMurillo/gofastr#268.
   // Three servers, one per app under test. baseURL points at the plugin gallery
   // because that is what most of the suite drives; the recipe journeys use the
   // absolute URLs exported from tests/recipes.ts instead. Playwright starts all
@@ -38,7 +44,7 @@ export default defineConfig({
       command: "go run ./example",
       cwd: "..",
       port: PORT,
-      env: { PORT: String(PORT) },
+      env: { PORT: String(PORT), GOFASTR_ISOLATION: "off" },
       reuseExistingServer: false,
       timeout: 60_000,
     },
@@ -46,7 +52,7 @@ export default defineConfig({
       command: "go run ./recipes/blogsite",
       cwd: "..",
       port: BLOGSITE_PORT,
-      env: { PORT: String(BLOGSITE_PORT) },
+      env: { PORT: String(BLOGSITE_PORT), GOFASTR_ISOLATION: "off" },
       reuseExistingServer: false,
       timeout: 60_000,
     },
@@ -57,7 +63,7 @@ export default defineConfig({
       command: "go run ./recipes/blogapp",
       cwd: "..",
       port: BLOGAPP_PORT,
-      env: { PORT: String(BLOGAPP_PORT) },
+      env: { PORT: String(BLOGAPP_PORT), GOFASTR_ISOLATION: "off" },
       reuseExistingServer: false,
       timeout: 60_000,
     },
