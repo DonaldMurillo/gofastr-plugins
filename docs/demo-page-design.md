@@ -53,12 +53,16 @@ move up. The datagrid demo shipped with 400px of dead white space under a
 430px grid; that is what this rule exists to stop.
 
 **Declare the whole palette on `:root` in the frame stylesheet.** Per-property
-`var(--token, fallback)` fallbacks are fine as a second line, never as the only
-definition. The host bridges the theme after the frame first paints, so a
-partial bridge can pair a dark `--color-text` with a `--color-surface` falling
-back to `#fff`: near-white text on white, 1.12:1, invisible. Every fallback in
-that frame was individually sensible; together they were not. A complete
-`:root` palette makes the frame coherent before any token arrives.
+`var(--token, fallback)` fallbacks work, but they scatter the defaults across
+every rule that uses one, and keeping them coherent then depends on each author
+pairing light with light. A single `:root` block puts them in one reviewable
+place and makes the frame legible before any token arrives.
+
+This is a tidiness rule, not a defence against a known failure. It was
+originally written up as the latter, on the strength of a contrast failure that
+turned out to be a measurement artifact — axe cannot resolve a background across
+an opaque-origin frame and assumes white. Worth doing anyway; not worth
+believing a story about.
 
 **Tokens only.** No hardcoded colors. The accent is the amber already in the
 design system, not whatever the plugin's upstream library defaults to. The pdf
