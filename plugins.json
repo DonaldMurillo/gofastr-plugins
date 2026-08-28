@@ -262,6 +262,28 @@
       "schema": "calendar-v1",
       "minHeight": "620px",
       "docs": "docs/calendar.md"
+    },
+    {
+      "name": "whiteboard",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/whiteboard",
+      "version": "0.1.0",
+      "description": "Collaborative whiteboard, and the proof that collaboration does not need a socket in the cage. The frame (Yjs CRDT + a small canvas controller, ~28 KB gzip) runs under connect-src 'none': strokes are order-insensitive binary update blobs that cross the postMessage bridge as ArrayBuffers, and the HOST relays them between browsers \u2014 SSE fan-out, replay-on-join, and presence cursors carrying an opaque pid and a colour, never a name, because identity is the host's to decide and the frame is untrusted. The optional sync:room capability is granted exactly when the host wires a room hub; the routes fail closed without one, and a reconnect publishes the frame's full CRDT state so offline edits on both sides converge instead of last-writer-winning.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "theme:read"
+      ],
+      "optionalCapabilities": [
+        "sync:room"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/whiteboard",
+      "entry": "/__gofastr/plugin/whiteboard/board.html",
+      "schema": "whiteboard-v1",
+      "minHeight": "480px",
+      "docs": "docs/whiteboard.md"
     }
   ]
 }

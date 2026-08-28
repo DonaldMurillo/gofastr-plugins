@@ -154,6 +154,15 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed calendar/js/tsconfig.json
 //go:embed calendar/js/src
 //go:embed calendar/js/frame
+//go:embed whiteboard/*.go
+//go:embed whiteboard/assets
+//go:embed whiteboard/host
+//go:embed whiteboard/js/build.mjs
+//go:embed whiteboard/js/package.json
+//go:embed whiteboard/js/package-lock.json
+//go:embed whiteboard/js/tsconfig.json
+//go:embed whiteboard/js/src
+//go:embed whiteboard/js/frame
 var bundled embed.FS
 
 //go:embed plugins.json

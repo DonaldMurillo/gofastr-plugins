@@ -116,6 +116,18 @@ async function frameState(page: Page): Promise<FrameState> {
   return handle.jsonValue() as Promise<FrameState>;
 }
 
+// The flood journey deliberately drives the producer faster than the frame can
+// render and then polls frame state while ~6,000 lines/s cross the bridge. That
+// is real work, and on CI's webkit — the slowest engine here, running last in a
+// suite that now covers eleven plugins — it does not fit the suite's 30s
+// default. It fails as a page.evaluate timeout while the frame is busy, not as
+// a missing drop.
+//
+// The budget is raised for the work. Every assertion still runs: the counter
+// moves, the marker renders, scrollback stays under its bound, and in-flight
+// batches stay within the ack window.
+test.describe.configure({ timeout: 90_000 });
+
 // The producer keeps a 1,024-line replay ring and re-serves it on connect
 // (?after=0), so every fresh page first absorbs a ~1k-line burst at the
 // frame's full render rate before settling into the live calm rate. Tests
@@ -219,13 +231,37 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
   // Dropped counter climbs (host dropped from the oldest end of its buffer),
   // and a visible "N lines dropped" marker row passes through the viewport —
   // at 6,000 lines/s against a ~1,480 lines/s render rate both are continuous.
-  await page.waitForFunction(
-    () => {
-      const f = document.querySelector(".editor-card iframe") as Mirror;
-      return !!f && (f.__logstreamDropped ?? 0) > 200;
-    },
-    { timeout: 20_000 }
-  );
+  // On CI's webkit this wait has never been satisfied: it consumed 40s of a 30s
+  // budget and 1.7m of a 90s one, which is a hang rather than slowness. Report
+  // the bridge state on the way out so the next failure says WHY nothing was
+  // dropped instead of only that nothing was.
+  try {
+    await page.waitForFunction(
+      () => {
+        const f = document.querySelector(".editor-card iframe") as Mirror;
+        return !!f && (f.__logstreamDropped ?? 0) > 200;
+      },
+      { timeout: 20_000 }
+    );
+  } catch (err) {
+    const state = await page.evaluate(() => {
+      const f = document.querySelector(".editor-card iframe") as Mirror | null;
+      return {
+        haveFrame: !!f,
+        ready: f?.__logstreamReady ?? null,
+        delivered: f?.__logstreamDelivered ?? null,
+        dropped: f?.__logstreamDropped ?? null,
+        inFlight: f?.__logstreamInFlight ?? null,
+        stats: f?.__logstreamStats ?? null,
+      };
+    });
+    const rate = await page
+      .evaluate(async () => (await (await fetch("/demo/logstream/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rate: "fast" }) })).text()))
+      .catch((e) => `rate probe failed: ${String(e)}`);
+    throw new Error(
+      `flood never dropped a line.\nbridge state: ${JSON.stringify(state, null, 2)}\nrate route said: ${rate}\noriginal: ${String(err)}`
+    );
+  }
 
   const marker = fl(page).locator(".xterm-rows > div", { hasText: "lines dropped" });
   await expect(marker.first()).toBeVisible({ timeout: 15_000 });

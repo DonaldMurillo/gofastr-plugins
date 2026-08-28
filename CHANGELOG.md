@@ -5,6 +5,55 @@ All notable changes to gofastr-plugins. Follows
 `0.x-phase` until the platform API stabilises.
 
 
+### Added — whiteboard: collaboration without a socket in the cage (2026-08-28)
+
+[`whiteboard/`](whiteboard/) is the collaborative whiteboard plugin, and the
+answer to "surely a live multi-user board needs the frame to open a
+connection". It does not. The board runs in the same opaque-origin sandboxed
+iframe as every other heavy-JS plugin here, under `connect-src 'none' — the
+exfiltration guard the whole isolation design rests on — because CRDT
+updates are order-insensitive binary blobs: they cross the postMessage
+bridge as `ArrayBuffer`s, and the HOST relays them between browsers (SSE
+fan-out, replay-on-join, presence). The frame collaborates with people it
+cannot reach. The document is a Yjs CRDT (`yjs` 13.6, bundled to a ~88 KB /
+28 KB-gzip IIFE alongside a small canvas controller); strokes are normalized
+`[0..1]` coords in a `Y.Map`, erases are CRDT deletes, and a joiner is
+replayed the room's accumulated state and converges.
+
+- **New optional capability `sync:room`**, granted exactly when the host
+  wires a room hub via `WithRoomHub(subscribe, publish)` (the datagrid
+  optional-capability pattern). The hub is host-owned by design — the
+  example app ships one (`example/whiteboard.go`) with SSE fan-out,
+  history-replay persistence, presence, and a 32 MiB-per-room cap that
+  fails `E_ROOM_FULL` rather than silently grow. Both room routes
+  (`GET /room/stream`, `POST /room/publish`) fail closed without the hub
+  (403; 503 `E_NO_ROOM_HUB` under the dev bypass), and a grant that implies
+  `sync:room` — including the `sync:*` / `*:*` wildcards — without a hub is
+  a construction panic, matched with `access.ScopeMatch` so wildcard grants
+  cannot slip between the construction check and the runtime gate.
+- **Identity is the host's to decide.** The hub assigns each participant an
+  opaque pid and a colour; presence carries `{pid, color, x, y, down}` and
+  never a name, and the hub attaches the assigned colour on fan-out so a
+  client cannot forge another participant's. The frame draws in its assigned
+  colour — there is no picker in the cage. This is documented as an
+  isolation property ([docs/whiteboard.md](docs/whiteboard.md)).
+- **Convergence, not last-writer.** The adapter's reconnect handshake asks
+  the frame for its full CRDT state (`syncSnapshot`) and publishes it while
+  the hub replays everyone else's — so the demo's drop-connection control
+  (draw offline on both sides, reconnect) merges both sets of strokes.
+- **The no-network claim is asserted, not assumed.** The frame bundle wraps
+  `fetch`/`XHR`/`EventSource`/`WebSocket`/`sendBeacon` at boot and records
+  every attempt on `window.__wbNetProbe`; the e2e suite additionally
+  filters the page's own request log by initiating frame and expects zero.
+  Two-browser-context journeys pin the whole claim: a stroke drawn in one
+  window appears in the other with identical canvas pixels, a late joiner
+  gets the existing board, and the presence cursor from the other
+  participant appears carrying no name. Suite passes in WebKit and Chromium.
+- Demo at `/whiteboard` in the example gallery, with live relay telemetry
+  (bytes sent/received via the host, participants, strokes), the
+  drop/reconnect control, and a second-window button; docs in
+  [`docs/whiteboard.md`](docs/whiteboard.md).
+
 
 ### Added — calendar: no calendar library; Go owns the clocks (2026-08-28)
 
