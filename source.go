@@ -117,6 +117,15 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed chart/js/tsconfig.json
 //go:embed chart/js/src
 //go:embed chart/js/frame
+//go:embed logstream/*.go
+//go:embed logstream/assets
+//go:embed logstream/host
+//go:embed logstream/js/build.mjs
+//go:embed logstream/js/package.json
+//go:embed logstream/js/package-lock.json
+//go:embed logstream/js/tsconfig.json
+//go:embed logstream/js/src
+//go:embed logstream/js/frame
 //go:embed chart/ssr
 var bundled embed.FS
 

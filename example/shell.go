@@ -31,6 +31,7 @@ var demoEntries = []demoEntry{
 	{"tour", "Guided Tour", "/tour", "Appcues-style tour that spotlights real page elements.", "trusted", "🧭"},
 	{"map", "Geomap", "/map", "MapLibre + OpenFreeMap vector map — editable pins, search, clustering.", "trusted", "🗺️"},
 	{"chart", "Chart", "/chart", "One spec, two renderers — a pure-Go SSR SVG hydrated by a sandboxed Plot frame.", "sandboxed", "📈"},
+	{"logstream", "Log Stream", "/logstream", "A live log tail pushed across the sandbox — the frame acks every batch, and overflow shows up as a visible drop marker.", "sandboxed", "📜"},
 }
 
 // recipeEntries are the whole-app recipes. They get their own sidebar section

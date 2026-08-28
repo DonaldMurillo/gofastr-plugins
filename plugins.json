@@ -176,6 +176,26 @@
       "schema": "chart-v1",
       "minHeight": "360px",
       "docs": "docs/chart.md"
+    },
+    {
+      "name": "logstream",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/logstream",
+      "version": "0.1.0",
+      "description": "Live log tail in an opaque-origin sandboxed iframe (xterm.js). The only plugin whose traffic is not turn-based: the host PUSHES NDJSON lines from GET /stream and delivers unsolicited streamBatch events over the postMessage bridge; the frame renders one batch per ~16ms tick and acks with streamAck carrying the last rendered sequence number. Backpressure is explicit — a 4-batch ack window and a bounded host buffer that drops from the OLDEST end when the producer outruns the frame, with the dropped count riding the next batch and rendering as a visible 'N lines dropped' marker. Scrollback is bounded at 10,000 lines. Read-only: stream:read + theme:read only, no PTY, no shell, no command input, no writes.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "stream:read",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/logstream",
+      "entry": "/__gofastr/plugin/logstream/term.html",
+      "schema": "logstream-v1",
+      "minHeight": "560px",
+      "docs": "docs/logstream.md"
     }
   ]
 }
