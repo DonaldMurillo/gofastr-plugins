@@ -53,6 +53,19 @@ func newChrome(t *testing.T) (context.Context, context.CancelFunc) {
 			// every isolation assertion below — is unaffected by process model.
 			chromedp.Flag("disable-site-isolation-trials", true),
 			chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
+			// chromedp waits 20s by default for Chrome to print its DevTools
+			// websocket URL, and a cold start on a loaded CI runner misses
+			// that. It surfaces as "chrome start (is Chrome installed?):
+			// websocket url timeout reached" — which reads like a missing
+			// dependency and is not: the workflow installs Chrome with
+			// setup-chrome and runs `google-chrome --version` right before
+			// these tests. main has gone red on it intermittently.
+			//
+			// A genuinely missing binary still fails, and fast: exec of a
+			// nonexistent Chrome errors immediately rather than waiting out
+			// this timeout. So raising it absorbs slow starts without hiding
+			// the failure the message describes.
+			chromedp.WSURLReadTimeout(90*time.Second),
 		)...,
 	)
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
