@@ -87,10 +87,15 @@ The mechanism, end to end:
    flood on a small machine.
 
    The marker is a line in the stream, not a banner. At flood rate it scrolls
-   out of the viewport in milliseconds like anything else, so it is read the
-   way a person reads a fast log: pause, or scroll back, and the gap is there
-   in the buffer. The live counter in the telemetry strip is what stays on
-   screen while the stream is moving.
+   out of the viewport in milliseconds like anything else, so it is found the
+   way a person finds anything in a fast log: search, or scroll back, and the
+   gap is there in the buffer. The live counter in the telemetry strip is what
+   stays on screen while the stream is moving.
+
+   Note that **pausing does not surface a marker that has not been written
+   yet**: pause freezes the drain, so anything still queued in the frame stays
+   queued. Search reads the terminal buffer and finds what was actually
+   written, which is why the e2e journey searches rather than pauses.
 5. **Pause** is host-side: sending stops, draining continues into the
    bounded buffer, so a long pause overflows and shows the same marker on
    resume. The frame stays a pure sink whose every ack is truthful.

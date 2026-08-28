@@ -263,30 +263,31 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
     );
   }
 
-  // Pause before looking for the marker.
+  // The marker lives in SCROLLBACK, so search for it rather than hoping it is
+  // on screen.
   //
-  // `.xterm-rows > div` holds only the rows currently ON SCREEN. At 6,000
-  // lines/s every row, the drop marker included, is scrolled out of the
-  // viewport within milliseconds, so hunting for it mid-flood is a race the
-  // test loses on a slow renderer — it failed exactly this way on CI's webkit
-  // while the drop COUNTER was already climbing, which is why the counter wait
-  // above passed and this did not.
+  // `.xterm-rows > div` holds only the rows currently in the viewport, and at
+  // flood rate every row scrolls out within milliseconds. Pausing first does
+  // not help either: pause freezes the drain, so a marker still queued in the
+  // frame never reaches the terminal at all. The search addon reads the whole
+  // buffer, which is also how a person would find it — the same mechanism the
+  // scrollback journey below exercises.
   //
-  // It is also how a person reads it: nobody reads a line at flood rate. You
-  // pause, and then the gap is there in the buffer. Pausing first tests the
-  // claim that actually matters — the gap is recorded and legible — rather
-  // than that a specific row happened to be on screen at a specific instant.
-  // A REAL click, deliberately: page.click waits for actionability, so this
-  // asserts the UI still responds mid-flood. It used to time out at 90s on CI's
-  // webkit because the frame wrote a whole ~100-line batch per tick and starved
-  // the main thread (#40). With rendering capped per tick a real click lands in
-  // ~48ms under the same flood. Keeping page.click here means a regression in
-  // responsiveness fails this journey instead of hiding behind a dispatch.
-  await page.click("#ls-btn-pause");
+  // A real page.click on Pause still happens further down, so responsiveness
+  // under flood stays covered (#40).
+  const search = fl(page).locator("#ls-search");
+  await search.fill("lines dropped");
+  await search.press("Enter");
   const marker = fl(page).locator(".xterm-rows > div", { hasText: "lines dropped" });
   await expect(marker.first()).toBeVisible({ timeout: 15_000 });
   const markerText = await marker.first().innerText();
   expect(markerText).toMatch(/⋯ [\d,]+ lines dropped/);
+  await search.fill("");
+  await search.press("Escape");
+
+  // Responsiveness under flood: a REAL click, which waits for actionability.
+  // This timed out at 90s before rendering was capped per tick (#40).
+  await page.click("#ls-btn-pause");
   await page.click("#ls-btn-pause"); // resume
 
   // The scrollback bound: the frame's own ack accounting (retained history =
