@@ -34,6 +34,13 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  // NOTE: this can be narrowed once a gofastr release carries #288 — see
+  // gofastr-plugins#78. Upstream shipped GOFASTR_ISOLATION_REWRITE=0, which
+  // keeps isolation ON and only stops it remapping an explicitly-assigned
+  // port. That is the flag this actually wants; the blunt "off" below is what
+  // existed when this was written. The fix is 45 commits ahead of the pinned
+  // v0.73.0, so it is not available yet.
+  //
   // GOFASTR_ISOLATION=off on every server below. gofastr's framework/isolation
   // auto-activates on a LINKED WORKTREE checkout and remaps ports, including an
   // explicitly assigned PORT. This repo is developed in two linked worktrees
