@@ -34,19 +34,30 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  // NOTE: this can be narrowed once a gofastr release carries #288 — see
-  // gofastr-plugins#78. Upstream shipped GOFASTR_ISOLATION_REWRITE=0, which
-  // keeps isolation ON and only stops it remapping an explicitly-assigned
-  // port. That is the flag this actually wants; the blunt "off" below is what
-  // existed when this was written. The fix is 45 commits ahead of the pinned
-  // v0.73.0, so it is not available yet.
+  // GOFASTR_ISOLATION_REWRITE=0 on every server below (gofastr#268, shipped in
+  // v0.74.0). It keeps isolation ON and only stops it remapping an explicitly
+  // assigned port, which is precisely what a harness waiting on fixed ports
+  // needs. It replaces a blunt GOFASTR_ISOLATION=off.
   //
-  // GOFASTR_ISOLATION=off on every server below. gofastr's framework/isolation
-  // auto-activates on a LINKED WORKTREE checkout and remaps ports, including an
-  // explicitly assigned PORT. This repo is developed in two linked worktrees
-  // and Playwright waits on fixed ports, so an activation would show up as a
-  // webServer timeout with no explanation. Pinning it off is cheap insurance
-  // against a ghost; see DonaldMurillo/gofastr#268.
+  // What was actually measured before making the swap, because the old comment
+  // asserted a failure nobody had reproduced:
+  //
+  //   - In a LINKED WORKTREE isolation activates by default and does remap:
+  //     Addr(":8742") returns ":10604". In the primary checkout it is inert.
+  //     So the hazard is real, and invisible to anyone testing in the primary.
+  //   - It could never have reached THESE servers. example, blogsite and
+  //     blogapp each call net.Listen on the raw PORT and http.Serve the
+  //     router; none goes through App.Start, which is the only path the remap
+  //     touches. The old "off" was a no-op here, not a fix.
+  //   - The swap is NOT cosmetic. "off" disables isolation wholly; this keeps
+  //     it on, so in a worktree the recipes' sqlite DSN moves under
+  //     .gofastr/isolation/<id>/. That is isolation doing its job, and it is a
+  //     real behaviour change rather than a narrower spelling of the same one.
+  //
+  // Verified where it is observable: the full chromium suite, run inside a
+  // linked worktree with this flag, passes 218/218, and .gofastr/ is created —
+  // so isolation was genuinely active, not silently off. A green run in the
+  // primary checkout would have proved nothing.
   // Three servers, one per app under test. baseURL points at the plugin gallery
   // because that is what most of the suite drives; the recipe journeys use the
   // absolute URLs exported from tests/recipes.ts instead. Playwright starts all
@@ -58,7 +69,7 @@ export default defineConfig({
       port: PORT,
       env: {
         PORT: String(PORT),
-        GOFASTR_ISOLATION: "off",
+        GOFASTR_ISOLATION_REWRITE: "0",
         // The logstream flood journey asserts a property of being ABOVE the
         // frame's render ceiling (~1,480 lines/s), not of 6,000 specifically.
         // At the demo's headline rate a two-core CI runner hosting this
@@ -78,7 +89,7 @@ export default defineConfig({
       command: "go run ./recipes/blogsite",
       cwd: "..",
       port: BLOGSITE_PORT,
-      env: { PORT: String(BLOGSITE_PORT), GOFASTR_ISOLATION: "off" },
+      env: { PORT: String(BLOGSITE_PORT), GOFASTR_ISOLATION_REWRITE: "0" },
       reuseExistingServer: false,
       timeout: 60_000,
     },
@@ -89,7 +100,7 @@ export default defineConfig({
       command: "go run ./recipes/blogapp",
       cwd: "..",
       port: BLOGAPP_PORT,
-      env: { PORT: String(BLOGAPP_PORT), GOFASTR_ISOLATION: "off" },
+      env: { PORT: String(BLOGAPP_PORT), GOFASTR_ISOLATION_REWRITE: "0" },
       reuseExistingServer: false,
       timeout: 60_000,
     },
