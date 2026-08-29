@@ -12,7 +12,7 @@
     "yjs": "13.6.20"
   },
   "devDependencies": {
-    "esbuild": "0.23.1",
+    "esbuild": "0.25.0",
     "typescript": "^7.0.2"
   }
 }
