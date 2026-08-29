@@ -4,6 +4,61 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — `genui`, where the untrusted input is a model's output (2026-08-29)
+
+Generative UI in the cage. A model answers with a tree of component names and
+typed props — never markup, never CSS, never a script. Eight React components
+exist, each declaring a closed set of props, so there is no `style`, no
+`className` and no `dangerouslySetInnerHTML` for generated output to travel
+through. The bounded registry IS the containment story; there is nothing to
+sanitise because generated output never becomes markup on any path.
+
+Validated twice on purpose: Go before storing and serving, the frame again
+before rendering. Not belt and braces — "the host already checked it" is
+exactly the assumption that turns one bug into a rendered payload, and the
+frame is the last thing between a composition and a DOM. Rejections name the
+offending path, because a model's output is debugged by a human reading that
+message.
+
+The model runs in Go. The frame receives a finished tree over the bridge, holds
+no credentials, and keeps `connect-src 'none'`. Both halves matter: an API key
+in a browser is not a key, and a frame that could call a model could also send
+it the document it was composing over.
+
+`AnthropicComposer` talks to the Messages API over plain `net/http` — no SDK,
+so the module gains no dependency and no version to track for about forty lines
+of request building. It is not the default: `FixtureComposer` is, deterministic
+and offline, so the demo and the entire suite run with no credentials. The tool
+call is forced, because a model left to answer in prose returns JSON inside a
+paragraph. A refused composition is handed back verbatim for one correction and
+then fails — repairing bad output, or silently dropping to fixtures, would hide
+the exact case the plugin exists to demonstrate.
+
+The demo page demonstrates its own containment: "Try an unsafe composition"
+posts a tree naming a component that does not exist straight at the frame, past
+the Go validator, and it is refused in front of you. The three e2e journeys that
+matter most are the ones where nothing renders.
+
+Found in review, and worth remembering: the host adapter used a constant it
+never declared. It parses, it loads, the plugin mounts, and the first call
+throws `ReferenceError`. Go never runs these files and `node --check` cannot see
+it, so a guard now reads every adapter for that class across all nine.
+
+### Changed — the framework pin, and a job that notices next time (2026-08-29)
+
+gofastr 0.71.2 → 0.73.0. The pin was two releases behind with every build green,
+which is the problem in one sentence: pinning made drift invisible rather than
+impossible. CI now also builds and tests against the LATEST gofastr release,
+resolved at run time — on `main`, on a schedule and on demand, but deliberately
+not on pull requests, because a third party publishing a release should not turn
+someone's unrelated PR red.
+
+Every demo page is now captured on every run too: 17 pages, light and dark plus
+390px, 51 screenshots uploaded as an artifact. It cannot judge a design. What it
+removes is the excuse that looking was inconvenient — every visual defect this
+repo has shipped was found by looking at pixels and by nothing else, and all of
+them passed the whole test suite.
+
 ### Added — `scanner`, the plugin whose input is a device (2026-08-29)
 
 Barcode and QR scanning in an opaque-origin sandboxed iframe, and the plugin

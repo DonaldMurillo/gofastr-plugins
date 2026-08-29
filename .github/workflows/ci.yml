@@ -253,6 +253,50 @@ jobs:
           path: e2e/shots/
           retention-days: 14
 
+  # The measurement #66 needs, from the machine that has the problem.
+  #
+  # I could not reproduce host-page saturation locally: at ~5,900 lines/s with
+  # the CPU throttled 10x the event loop never stalled past 30ms. But the
+  # failure that raised the question happened on a two-core runner hosting the
+  # producer, a webkit browser and the driver at once, and throttling one
+  # process is not the same as oversubscribing a box.
+  #
+  # So this runs it there, at the demo's REAL 6,000 lines/s, on both engines,
+  # and prints the numbers. Manual-only: it deliberately drives the rate the
+  # rest of CI avoids, and it answers a question rather than guarding anything.
+  load-profile:
+    name: logstream load profile (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: install
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium webkit
+      - name: profile
+        working-directory: e2e
+        env:
+          LOAD_PROFILE: "1"
+          GOFASTR_DEMO_FAST_LPS: "6000"
+        run: npx playwright test logstream-loadprofile --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logstream-load-profile
+          path: e2e/test-results/
+          retention-days: 14
+
   e2e:
     name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest

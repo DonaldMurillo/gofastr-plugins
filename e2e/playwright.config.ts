@@ -15,7 +15,12 @@ const PORT = Number(process.env.E2E_PORT ?? 8123);
 // the normal run collects them nowhere and reports ZERO skips instead of a wall
 // of skipped shot rows. See the testIgnore on the default projects below.
 const SHOTS = process.env.SHOTS === "1";
+const PROFILE = process.env.LOAD_PROFILE === "1";
 const SHOTS_RE = /shots\.spec\.ts/;
+// The load profile is a measurement run on demand (LOAD_PROFILE=1), not part of
+// any suite: it drives the producer at its full 6,000 lines/s, which is exactly
+// the rate the normal e2e deliberately avoids (#66).
+const PROFILE_RE = /loadprofile\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests",
@@ -54,7 +59,10 @@ export default defineConfig({
         // that the journey's own in-page waits time out — measuring the runner
         // rather than the plugin (#66). 2,500 still overruns the ceiling by
         // 1.7x. The demo binary keeps 6,000 for humans.
-        GOFASTR_DEMO_FAST_LPS: "2500",
+        // Overridable so the on-demand load profile can drive the demo's real
+        // 6,000 (LOAD_PROFILE runs set GOFASTR_DEMO_FAST_LPS=6000). The suite
+        // itself stays at 2,500.
+        GOFASTR_DEMO_FAST_LPS: process.env.GOFASTR_DEMO_FAST_LPS ?? "2500",
       },
       reuseExistingServer: false,
       timeout: 60_000,
@@ -84,10 +92,18 @@ export default defineConfig({
     // (npm run shots). Keeping them out of the default projects is what makes the
     // normal run report zero skips.
     ...(SHOTS ? [{ name: "shots", use: { ...devices["Desktop Chrome"] }, testMatch: SHOTS_RE }] : []),
+    // The load profile runs on BOTH engines when asked for: the question it
+    // answers (#66) came from webkit, and chromium is the control.
+    ...(PROFILE
+      ? [
+          { name: "profile-webkit", use: { ...devices["Desktop Safari"] }, testMatch: PROFILE_RE },
+          { name: "profile-chromium", use: { ...devices["Desktop Chrome"] }, testMatch: PROFILE_RE },
+        ]
+      : []),
     // Desktop engines: the full journey + a11y suites. Shots are excluded here so
     // they are not collected-then-skipped in the default run.
-    { name: "webkit", use: { ...devices["Desktop Safari"] }, testIgnore: [/mobile/, SHOTS_RE] },
-    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: [/mobile/, SHOTS_RE] },
+    { name: "webkit", use: { ...devices["Desktop Safari"] }, testIgnore: [/mobile/, SHOTS_RE, PROFILE_RE] },
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: [/mobile/, SHOTS_RE, PROFILE_RE] },
     // Mobile engines (Phase-1 mobile gate): narrow viewport + touch, running
     // the dedicated mobile journeys. iPhone = WebKit, Pixel = Chromium. testMatch
     // already keeps shots (and everything non-mobile) out.
