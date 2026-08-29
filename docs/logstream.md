@@ -210,16 +210,27 @@ The demo's flood control runs at 6,000 lines/s, which is four times what the
 frame's render loop absorbs and exists to make the backpressure visible. It is
 not a supported throughput figure, and the honest number is per engine.
 
-Measured on a two-core CI runner, both engines, same machine, same adapter:
+Measured on a two-core CI runner, both engines, same machine, same adapter,
+across four rates:
 
-| engine | lines/s | host event-loop lag | server | `page.evaluate` |
+| rate | engine | achieved | max lag | `page.evaluate` |
 |---|---|---|---|---|
-| chromium | 6,877 | max **3 ms** | 3 ms | 12 ms |
-| webkit | 6,000 | — | — | **did not complete in 180 s** |
+| 3,000 | chromium | 3,280/s | 5 ms | 12 ms |
+| 3,000 | **webkit** | 3,132/s | **1,410 ms** | **1,381 ms** |
+| 4,000 | chromium | 4,477/s | 4 ms | 16 ms |
+| 4,000 | **webkit** | — | — | **did not complete in 180 s** |
+| 6,000 | chromium | 6,877/s | 3 ms | 12 ms |
+| 6,000 | **webkit** | — | — | **did not complete in 180 s** |
 
-The webkit row is the finding. What timed out was `apiRequestContext`, which is
-Playwright's own HTTP client and never touches the page's event loop — so on
-that runner the whole machine was pinned, not just the page.
+chromium is flat and healthy across the whole range. webkit degrades sharply
+between 2,500 and 4,000: at 3,000 it still finishes, but with **second-long
+stalls** — a trivial `page.evaluate` took 1.4 seconds, and the 16 ms heartbeat
+managed 166 ticks in six seconds where chromium managed 383.
+
+The failing rows are the finding, and the detail that makes them decisive is
+*what* timed out: `apiRequestContext`, which is Playwright's own HTTP client and
+never touches the page's event loop. On that runner the whole machine was
+pinned, not just the page.
 
 That rules out the host adapter: chromium runs the same per-line work, the same
 mirrors and the same `JSON.parse` at nearly 6,900 lines/s with 3 ms of lag. The
@@ -227,15 +238,14 @@ cost that saturates the runner is **webkit processing the stream inside the
 frame**, and the two engines differ by more than an order of magnitude on
 identical hardware.
 
-What is known about the boundary:
+So the usable ceiling on two cores is **under 3,000 lines/s on webkit**, and
+somewhere past 6,000 on chromium. 2,500 is the rate the whole e2e suite runs at
+every run without trouble, which is the one number here with hundreds of
+observations behind it rather than one.
 
-- **2,500 lines/s is fine on webkit** — the whole e2e suite runs there on the
-  same class of runner, every run.
-- **6,000 is not**, on two cores.
-
-The rate in between has not been narrowed, and the CI job takes an input for
-exactly that: run the `load-profile` job from the Actions tab with
-`load_profile_rate` set, and it reports both engines at that rate.
+The CI job takes a rate input, so this table can be extended rather than argued
+about: run `load-profile` from the Actions tab with `load_profile_rate` set and
+it reports both engines at that rate.
 
 The practical advice is the boring one. A host tailing thousands of lines a
 second should know which browsers its users have, and should not assume the
