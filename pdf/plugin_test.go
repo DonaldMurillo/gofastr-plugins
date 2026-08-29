@@ -213,6 +213,15 @@ func newChrome(t *testing.T) (context.Context, context.CancelFunc) {
 			chromedp.Flag("no-sandbox", true),
 			chromedp.Flag("disable-site-isolation-trials", true),
 			chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
+			// Headless Chrome's default window is 756x413. At that height any
+			// demo page with a hero taller than ~400px pushes the mount fully
+			// below the fold, and pdf.js does not render an offscreen frame:
+			// its render task advances on requestAnimationFrame, which a frame
+			// that is never painted never gets. The frame still boots and the
+			// bridge still works, so the failure looks like a hang with an
+			// empty console — which cost two demo-page rewrites before the
+			// diagnostics dumped the geometry (#25). Emulate a real viewport.
+			chromedp.WindowSize(1280, 900),
 			chromedp.WSURLReadTimeout(90*time.Second),
 			// Same reason as example/smoke_test.go and posthog/e2e_test.go:
 			// chromedp waits 20s by default for Chrome to print its DevTools
@@ -289,7 +298,8 @@ func TestRenderInOpaqueFrame(t *testing.T) {
 		return { ready: !!f.__pdfRendered };
 	})()`, 25*time.Second)
 	if ready == nil {
-		t.Fatal("timed out waiting for iframe readiness; no error mirror either")
+		t.Fatalf("timed out waiting for iframe readiness; no error mirror either\npage state:\n%s\nconsole:\n%s",
+			frameDiagnostics(ctx), strings.Join(cap.snapshotMessages(), "\n"))
 	}
 	if e, ok := ready["error"].(string); ok && e != "" {
 		t.Fatalf("frame reported renderError before rendering: %s\nconsole messages:\n%s",
@@ -462,4 +472,51 @@ func (c *consoleCapture) snapshotExceptions() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.except...)
+}
+
+// frameDiagnostics reads everything the page can say about why a render never
+// landed, for the failure message. The three chromedp waits in this package all
+// time out with the same silence — no console output, no error mirror — and
+// "timed out" alone cannot distinguish a frame that never mounted from one that
+// mounted and never painted. Whatever this returns goes straight into t.Fatalf,
+// so a CI-only failure arrives explained (see #25).
+func frameDiagnostics(ctx context.Context) string {
+	const expr = `(function () {
+		var out = { documentReady: document.readyState, iframes: document.querySelectorAll('iframe').length };
+		var f = document.querySelector('iframe');
+		if (!f) {
+			out.marker = !!document.querySelector('[data-fui-plugin]');
+			out.broker = typeof window.__gofastrPluginHost;
+			return out;
+		}
+		var r = f.getBoundingClientRect();
+		out.frame = {
+			// Mirrors the adapter sets; missing keys mean that stage never ran.
+			ready: f.__pdfReady ?? null,
+			rendered: f.__pdfRendered ?? null,
+			error: f.__pdfError ?? null,
+			pageCount: f.__pdfPageCount ?? null,
+			nonWhitePixels: f.__pdfNonWhitePixels ?? null,
+			pdfjsVersion: f.__pdfPdfjsVersion ?? null,
+			pluginReady: f.__pluginReady ?? null,
+			sandbox: f.getAttribute('sandbox'),
+			src: (f.getAttribute('src') || '').slice(0, 120),
+			// Geometry, because a frame with no box never gets to paint.
+			rect: { top: r.top, left: r.left, width: r.width, height: r.height },
+			inViewport: r.top < window.innerHeight && r.bottom > 0 && r.width > 0 && r.height > 0
+		};
+		out.viewport = { width: window.innerWidth, height: window.innerHeight, scrollY: window.scrollY };
+		out.hidden = document.hidden;
+		out.broker = typeof window.__gofastrPluginHost;
+		return out;
+	})()`
+	var raw interface{}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(expr, &raw)); err != nil {
+		return fmt.Sprintf("(frame diagnostics unavailable: %v)", err)
+	}
+	b, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("(frame diagnostics unmarshalable: %v)", err)
+	}
+	return string(b)
 }

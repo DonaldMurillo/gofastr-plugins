@@ -402,8 +402,8 @@ func TestScannedDocumentRendering(t *testing.T) {
 				return { ready: !!f.__pdfRendered };
 			})()`, 25*time.Second)
 			if ready == nil {
-				t.Fatalf("timed out waiting for %s render; console:\n%s",
-					fx.name, strings.Join(cap.snapshotMessages(), "\n"))
+				t.Fatalf("timed out waiting for %s render\npage state:\n%s\nconsole:\n%s",
+					fx.name, frameDiagnostics(ctx), strings.Join(cap.snapshotMessages(), "\n"))
 			}
 			if e, ok := ready["error"].(string); ok && e != "" {
 				t.Fatalf("frame reported renderError for %s: %s\nconsole:\n%s",

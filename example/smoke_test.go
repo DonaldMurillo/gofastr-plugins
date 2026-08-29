@@ -66,6 +66,12 @@ func newChrome(t *testing.T) (context.Context, context.CancelFunc) {
 			// this timeout. So raising it absorbs slow starts without hiding
 			// the failure the message describes.
 			chromedp.WSURLReadTimeout(90*time.Second),
+			// Headless Chrome defaults to a 756x413 window, which is shorter
+			// than any real one and puts anything below a demo page's hero
+			// out of view. A frame that is never painted never gets a
+			// requestAnimationFrame, so plugins that render on one silently
+			// do nothing there (#25). Emulate a real viewport instead.
+			chromedp.WindowSize(1280, 900),
 		)...,
 	)
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
