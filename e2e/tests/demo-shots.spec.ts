@@ -13,7 +13,8 @@
 //
 // Opt-in like the editor shots: SHOTS=1 npm run shots. Output is gitignored.
 import { test, expect, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const SHOTS = process.env.SHOTS === "1";
 const DIR = "shots";
@@ -24,22 +25,26 @@ test.describe.configure({ mode: "serial" });
 test.beforeAll(() => mkdirSync(DIR, { recursive: true }));
 
 /**
- * The page list comes from the running gallery, not a table here.
+ * One test per page, from plugins.json plus the two recipes.
  *
- * A hand-kept list is the thing that already went stale once: the scanner
- * shipped fully wired and missing from the gallery, and nothing noticed.
- * Go's TestGalleryListsEveryShippedPlugin makes the gallery cover
- * plugins.json, so scraping the gallery inherits that coverage — a plugin
- * cannot ship without appearing here.
+ * Generated statically rather than discovered inside one big test, because a
+ * single test capturing seventeen pages is a single timeout and a single
+ * retry: on CI the batch blew a five-minute budget and Playwright then redid
+ * all seventeen. Per page, a failure names the page and the retry costs one
+ * page.
+ *
+ * plugins.json is the source of truth for what ships, and Go's
+ * TestGalleryListsEveryShippedPlugin already ties the gallery to it, so a
+ * plugin cannot ship uncaptured. The coverage test below closes the other
+ * direction: a page in the gallery that is not in this list fails.
  */
-async function demoRoutes(page: Page): Promise<{ slug: string; path: string }[]> {
-  await page.goto("/");
-  const slugs = await page.locator(".nav-item").evaluateAll((els) =>
-    els.map((e) => (e as HTMLElement).dataset.slug ?? "").filter(Boolean)
-  );
-  expect(slugs.length, "the gallery listed no plugins at all").toBeGreaterThan(5);
-  return slugs.map((slug) => ({ slug, path: `/${slug}` }));
-}
+const RECIPES = ["blogsite", "blogapp"];
+const PLUGIN_SLUGS: string[] = (
+  JSON.parse(readFileSync(join(__dirname, "..", "..", "plugins.json"), "utf8")) as {
+    plugins: { name: string }[];
+  }
+).plugins.map((p) => p.name);
+const PAGES = [...PLUGIN_SLUGS, ...RECIPES];
 
 /**
  * Wait for the plugin to be up, generically.
@@ -66,39 +71,59 @@ async function settle(page: Page): Promise<void> {
   await page.waitForTimeout(900);
 }
 
-test("capture every demo page, light and dark", async ({ page }) => {
-  test.setTimeout(300_000);
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const routes = await demoRoutes(page);
-
-  for (const { slug, path } of routes) {
-    for (const scheme of ["light", "dark"] as const) {
-      await page.goto(path);
-      const current = await page.evaluate(() => document.documentElement.dataset.colorScheme);
-      if (current !== scheme) {
-        const toggle = page.locator("#fui-scheme-toggle");
-        if (await toggle.count()) {
-          await toggle.first().click();
-          await page.waitForTimeout(500); // token re-bridge into the frame
-        }
-      }
-      await settle(page);
-      await page.screenshot({ path: `${DIR}/demo-${slug}-${scheme}.png`, fullPage: true });
+async function shoot(page: Page, slug: string, scheme: "light" | "dark"): Promise<void> {
+  await page.goto(`/${slug}`);
+  const current = await page.evaluate(() => document.documentElement.dataset.colorScheme);
+  if (current !== scheme) {
+    // Best effort, on purpose. The tour plugin lays a spotlight overlay across
+    // the page, so its toggle is not clickable while the tour runs — and a
+    // capture job that fails because one page's control is obstructed captures
+    // nothing, which is worse than capturing that page in one scheme. Fall
+    // back to setting the attribute directly; if even that does not take, the
+    // shot is still taken and the reader sees what is there.
+    const toggle = page.locator("#fui-scheme-toggle");
+    if (await toggle.count()) {
+      await toggle
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(async () => {
+          await page.evaluate((s) => {
+            document.documentElement.dataset.colorScheme = s;
+          }, scheme);
+        });
+      await page.waitForTimeout(500); // token re-bridge into the frame
     }
   }
-});
+  await settle(page);
+  await page.screenshot({ path: `${DIR}/demo-${slug}-${scheme}.png`, fullPage: true });
+}
 
-test("capture every demo page at 390px, where the layout actually breaks", async ({ page }) => {
-  test.setTimeout(300_000);
-  // The design standard says check 390px, and it is where the real defects
-  // have been: a frame height that fits a toolbar and no content, controls
-  // that wrap into a column, cards that stop stacking.
-  await page.setViewportSize({ width: 390, height: 844 });
-  const routes = await demoRoutes(page);
+for (const slug of PAGES) {
+  test(`shots: ${slug}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await shoot(page, slug, "light");
+    await shoot(page, slug, "dark");
 
-  for (const { slug, path } of routes) {
-    await page.goto(path);
+    // 390px, where the real defects have been: a frame height that fits a
+    // toolbar and no content, controls that wrap into a column, cards that
+    // stop stacking. The design standard names this width specifically.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/${slug}`);
     await settle(page);
     await page.screenshot({ path: `${DIR}/demo-${slug}-mobile.png`, fullPage: true });
-  }
+  });
+}
+
+// The other direction: a page reachable from the gallery that nothing above
+// captures. plugins.json covers the plugins; this catches anything else the
+// gallery grows.
+test("every gallery entry is captured", async ({ page }) => {
+  await page.goto("/");
+  const slugs = await page.locator(".nav-item").evaluateAll((els) =>
+    els.map((e) => (e as HTMLElement).dataset.slug ?? "").filter(Boolean)
+  );
+  expect(slugs.length, "the gallery listed no plugins at all").toBeGreaterThan(5);
+  const missing = slugs.filter((s) => !PAGES.includes(s));
+  expect(missing, `the gallery links pages that no shot covers: ${missing.join(", ")}`).toEqual([]);
 });
