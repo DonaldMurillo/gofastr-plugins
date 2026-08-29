@@ -73,6 +73,10 @@
   var MAX_IN_FLIGHT = 4;   // unacknowledged batches allowed in flight
   var BATCH_MAX = 24;      // lines per streamBatch
   var FLUSH_MS = 100;      // send a short batch after this idle, never slower
+  // Minimum spacing between out-of-band gap notices. A gap is still reported
+  // within this long of happening; what the interval removes is the thousands
+  // of identical messages a sustained overflow used to produce.
+  var NOTICE_MIN_MS = 150;
   var BUFFER_MAX = 2000;   // bounded line buffer; overflow drops OLDEST
   var RECONNECT_MS = 500;  // backoff before reopening the NDJSON stream
 
@@ -98,6 +102,8 @@
       delivered: 0,
       acks: 0,
       notices: 0,        // out-of-band gap notices sent to the frame
+      noticeTimer: null, // pending coalesced notice, if any
+      lastNoticeAt: 0,   // when the last notice actually went out
       paused: false,
       reconnects: 0,
       abort: null,
@@ -150,15 +156,46 @@
       maybeSend();
     }
 
-    // Out-of-band gap notice. Fire-and-forget: if the frame is gone, the same
-    // teardown path maybeSend uses will notice on the next attempt.
-    function notifyDropped() {
+    // Out-of-band gap notice, COALESCED. Fire-and-forget: if the frame is gone,
+    // the same teardown path maybeSend uses will notice on the next attempt.
+    //
+    // This used to post one message per dropped line, and onLine calls it for
+    // every line while the buffer stays full — so at flood rate the host fired
+    // a postMessage per drop. Measured on webkit: 4,124 notices a second, one
+    // per dropped line, all of them saying the same thing.
+    //
+    // That is a self-inflicted denial of service on the host's OWN main thread.
+    // The frame was never the bottleneck; the page that mounted it was. On a
+    // slow runner a plain fetch() on that page could not get a turn for over 90
+    // seconds, which is what made the flood journey hang on CI long after the
+    // marker it was waiting for had arrived (#54).
+    //
+    // The claim the notice exists to keep is "never a silent gap", and that
+    // survives coalescing: a drop is still reported within NOTICE_MIN_MS of
+    // happening, and the counts are cumulative so a coalesced notice carries
+    // everything since the last one. What is dropped is only repetition.
+    function sendDroppedNow() {
+      st.noticeTimer = null;
+      st.lastNoticeAt = Date.now();
+      if (st.closed || st.dropped <= 0) return;
       try {
         st.notices += 1;
         api.sendEvent("streamDropped", { dropped: st.dropped, total: st.droppedTotal });
       } catch (e) {
         /* frame went away; maybeSend handles the teardown */
       }
+    }
+
+    function notifyDropped() {
+      if (st.noticeTimer) return; // one already queued; it will carry the total
+      var since = Date.now() - st.lastNoticeAt;
+      if (since >= NOTICE_MIN_MS) {
+        sendDroppedNow();
+        return;
+      }
+      // Trailing edge, so a gap that happens just after a notice is still
+      // reported rather than waiting for the next drop to push it out.
+      st.noticeTimer = setTimeout(sendDroppedNow, NOTICE_MIN_MS - since);
     }
 
     // Push as many buffered batches as the window allows. The dropped count
@@ -187,6 +224,7 @@
           // The iframe went away between checks (SPA nav race): stop quietly.
           st.closed = true;
           if (st.abort) st.abort.abort();
+          if (st.noticeTimer) { clearTimeout(st.noticeTimer); st.noticeTimer = null; }
           return;
         }
         st.sent = last;
@@ -241,7 +279,11 @@
     // duplicate lines.
     function open() {
       if (st.closed) return;
-      if (!frame.isConnected) { st.closed = true; return; }
+      if (!frame.isConnected) {
+        st.closed = true;
+        if (st.noticeTimer) { clearTimeout(st.noticeTimer); st.noticeTimer = null; }
+        return;
+      }
       st.abort = new AbortController();
       fetch(STREAM_URL + "?after=" + st.acked, {
         method: "GET",
