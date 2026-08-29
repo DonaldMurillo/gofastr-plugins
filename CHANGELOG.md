@@ -4,6 +4,37 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — a daily tripwire against upstream gofastr main (2026-08-29)
+
+`gofastr-latest` answers "does the newest gofastr **release** still work here".
+On a day when go.mod already pins the newest release, that job proves nothing,
+and that is most days. Meanwhile upstream main sits 66 commits ahead of
+v0.73.0, carrying all four fixes this repo is waiting on, and the first thing
+that would tell us one of them broke us is the tag itself.
+
+So `gofastr-main` clones upstream main, points the module at it with a
+`replace`, and builds and tests. It runs on the daily schedule and on demand,
+never on push or pull_request: upstream's main is not this repo's to keep
+green, and a third party's broken commit must not block a merge here. A red
+scheduled run means the next tag will break us, and blocks nobody.
+
+Measured before writing the job, so it is not shipping on faith:
+
+| against upstream main `916cf0f` | result |
+|---|---|
+| `go build ./...` | clean |
+| `go test ./...` | all pass |
+| dependency set | unchanged, no new modules in go.sum |
+| e2e, chromium | 211/211 |
+| e2e, webkit | 211/211 |
+
+The e2e halves are the ones worth having run. A bridge change like gofastr#271,
+which replaced stylesheet-walking with a fixed 78-token vocabulary, cannot fail
+a Go test and would surface only as a frame rendering wrong. That is why the
+tripwire's Go-only scope is a deliberate limit rather than a claim: it catches
+API breakage daily and cheaply, and the browser half stays a thing to run on
+demand.
+
 ### Changed — the nightly upstream check now names which ticket a release unblocks (2026-08-29)
 
 `gofastr#255` was closed and shipped upstream while nothing here noticed. The
