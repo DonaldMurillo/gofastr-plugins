@@ -4,6 +4,38 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — the nightly upstream check now names which ticket a release unblocks (2026-08-29)
+
+`gofastr#255` was closed and shipped upstream while nothing here noticed. The
+wasm CSP tier landed in gofastr's #293 (`c0266af3`), which means #21
+(sqlnotebook) stopped being blocked on a design question and started being
+blocked on a tag. Nothing in this repo would have surfaced that, because the
+daily `gofastr-latest` job only knew how to say "a newer release exists" in a
+`::notice::` inside a green job, and a notice inside a green job is a thing
+nobody reads.
+
+So the job now reads `.github/awaiting-upstream.tsv`, which pairs each upstream
+commit this repo waits on with the local ticket it unblocks, and asks the compare API whether the newest gofastr *tag* contains
+each of them. Containment is `status` being `behind` or `identical`; `ahead`
+means the fix is on main and no release carries it. Today both rows answer
+`ahead`:
+
+| awaited | upstream | in v0.73.0? | ticket |
+|---|---|---|---|
+| `c0266af3` | gofastr#255, the `wasm-unsafe-eval` tier | no | #21 |
+| `34300c92` | gofastr#268, `GOFASTR_ISOLATION_REWRITE=0` | no | #78 |
+
+Both were checked against the live API rather than assumed, and the positive
+branch was checked too, with a commit known to be in the tag, because a poller
+that can only ever print "still waiting" is the same vacuous green as a test
+that asserts `expect.any(Number)`.
+
+`TestAwaitingUpstreamManifestIsWellFormed` guards the file's shape. A typo in a
+sha does not fail the nightly job: the compare call 404s, the row prints a
+warning, and the ticket it guards stays blocked forever with nobody the wiser.
+An empty manifest is the same failure wearing green, so a zero-row file fails
+too.
+
 ### Added — `genui`, where the untrusted input is a model's output (2026-08-29)
 
 Generative UI in the cage. A model answers with a tree of component names and
