@@ -4,6 +4,39 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — the e2e isolation workaround narrows, and turns out to have been inert (2026-08-29)
+
+`GOFASTR_ISOLATION=off` on all three e2e servers becomes
+`GOFASTR_ISOLATION_REWRITE=0`, the knob gofastr#268 shipped in v0.74.0. It
+keeps isolation on and only stops it remapping an explicitly assigned port,
+which is what a harness waiting on fixed ports needs.
+
+The interesting part is what measuring first turned up, because the old comment
+asserted a failure nobody had reproduced.
+
+**The hazard is real, and invisible from the primary checkout.** In a linked
+worktree isolation activates by default and remaps: `Addr(":8742")` returns
+`":10604"`. In the primary checkout it is inert, `active=false`. Anyone
+verifying this change where they normally work would have learned nothing.
+
+**But it could never have reached these servers.** `example`, `blogsite` and
+`blogapp` each call `net.Listen` on the raw `PORT` and `http.Serve` the router.
+None goes through `App.Start`, which is the only path the remap touches. The
+first attempt to reproduce the problem through the app honoured the port in
+every configuration, including with no flag at all — which looked like evidence
+the fix was unnecessary, and was actually the app bypassing isolation entirely.
+Probing the isolation runtime directly is what separated the two.
+
+**The swap is not cosmetic.** `off` disables isolation wholly; this keeps it on.
+In a worktree the recipes' sqlite DSN moves to
+`.gofastr/isolation/<id>/blog.db`. That is isolation doing its job and is
+almost certainly what a worktree wants, but it is a behaviour change rather
+than a narrower spelling of the same one, and the ticket did not anticipate it.
+
+Verified where it is observable: the full chromium suite inside a linked
+worktree, with this flag, passes 218/218, and `.gofastr/` is created during the
+run — so isolation was genuinely active rather than silently off.
+
 ### Added — scanner declares its camera requirement, and this app enforces it (2026-08-29)
 
 The scanner needs the camera on the **host page**, because an opaque origin
