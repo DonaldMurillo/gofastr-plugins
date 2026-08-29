@@ -211,8 +211,10 @@ func TestCIBundleMatrixCoversEveryPlugin(t *testing.T) {
 	}
 }
 
-// TestEveryChromedpAllocatorSetsWSURLReadTimeout keeps the fix for a recurring
-// CI flake from rotting the way the CI bundle matrix did.
+// TestEveryChromedpAllocatorOverridesHeadlessDefaults keeps two fixes for
+// recurring CI failures from rotting the way the CI bundle matrix did. Both
+// come from headless Chrome defaults that are wrong for this repo, and both
+// were fixed at one call site and had to be fixed again at the others.
 //
 // chromedp waits 20s by default for Chrome to print its DevTools websocket
 // URL. A cold start on a loaded runner misses that and reports "chrome start
@@ -222,7 +224,7 @@ func TestCIBundleMatrixCoversEveryPlugin(t *testing.T) {
 // The flake was fixed once in example/smoke_test.go and came straight back from
 // pdf/plugin_test.go, because a fix applied to one call site is not applied to
 // the others. This asserts all of them.
-func TestEveryChromedpAllocatorSetsWSURLReadTimeout(t *testing.T) {
+func TestEveryChromedpAllocatorOverridesHeadlessDefaults(t *testing.T) {
 	tracked, err := exec.Command("git", "ls-files", "-z", "*.go").Output()
 	if err != nil {
 		t.Skipf("git ls-files unavailable: %v", err)
@@ -245,6 +247,18 @@ func TestEveryChromedpAllocatorSetsWSURLReadTimeout(t *testing.T) {
 			t.Errorf("%s builds a chromedp allocator without WSURLReadTimeout, so a cold "+
 				"Chrome start on a loaded runner will fail it with a misleading "+
 				"\"is Chrome installed?\" error", f)
+		}
+		// Same shape of trap, found the same way. Headless Chrome's default
+		// window is 756x413 — shorter than any real one. A mount below a demo
+		// page's hero lands outside it, an unpainted frame gets no
+		// requestAnimationFrame, and plugins that render on one (pdf.js among
+		// them) do nothing at all while the frame still boots and the bridge
+		// still answers. It reads as a hang with an empty console, and it cost
+		// two demo-page rewrites before the geometry was dumped (#25).
+		if !strings.Contains(body, "WindowSize") {
+			t.Errorf("%s builds a chromedp allocator without WindowSize, so it runs at "+
+				"headless Chrome's 756x413 default; anything below a page's hero is "+
+				"offscreen there and never renders", f)
 		}
 	}
 	if checked == 0 {
