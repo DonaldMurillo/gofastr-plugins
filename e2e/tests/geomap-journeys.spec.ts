@@ -51,6 +51,13 @@ interface MapDoc {
 
 /** Click the map at a point offset from its centre, in CSS pixels. */
 async function clickMap(page: Page, dx = 0, dy = 0): Promise<void> {
+  // Scroll the map into view BEFORE measuring. page.mouse works in viewport
+  // coordinates, and the demo page now opens with a hero above the map, so the
+  // mount sits well below the fold at the default 720px viewport — a click at
+  // its centre lands outside the viewport entirely and reaches nothing. Same
+  // trap the imageedit journeys hit. Centre it rather than using "nearest", so
+  // the sticky header cannot cover the point being clicked.
+  await container(page).evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest" }));
   const box = await container(page).boundingBox();
   expect(box, "map container must have a bounding box").not.toBeNull();
   if (!box) return;
