@@ -4,6 +4,44 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — scanner declares its camera requirement, and this app enforces it (2026-08-29)
+
+The scanner needs the camera on the **host page**, because an opaque origin
+cannot hold the permission at all: the host captures and hands frames in. Until
+now that requirement lived only in prose. `docs/scanner.md` told adopters to
+relax the `Permissions-Policy`, and `example/main.go` did it in a comment beside
+the config. A prose requirement is one careless edit away from being untrue,
+and the symptom of getting it wrong is a `getUserMedia` console error that
+reads like a plugin bug.
+
+v0.74.0 carries gofastr#294, so the manifest declares it:
+
+```go
+HostRequirements: []string{pluginhost.HostRequirementPrefix + "camera"}
+```
+
+**Declaring it grants nothing, and cannot.** A `Permissions-Policy` is the app's
+response header, and a plugin must not be able to rewrite it. The example's
+`camera=(self)` line is still what opens the camera. What the declaration buys
+is that `CheckHostRequirements` names the plugin at boot when a host has not
+opted in.
+
+The policy is now a named constant so the boot check and the tests read the
+same string the app serves. Two copies would let a test pass while the app
+shipped a policy that denies the camera.
+
+Two tests, because upstream's check logs and never fails by design:
+
+- the app's real policy must satisfy every declared requirement, and must
+  literally contain `camera=(self)`. The check is deliberately narrow, warning
+  only on the empty allowlist `camera=()`, so a policy that dropped the
+  directive entirely would stay silent. **Silence is not proof.**
+- teeth: the framework default must produce a warning naming both `scanner` and
+  the token, or the check is inert and would pass just as happily on an app
+  that denies the camera.
+
+The real boot log was checked too, and is silent with the configured policy.
+
 ### Removed — calendar's hand-declared palette, and the light-only contrast gap (2026-08-29)
 
 `calendar/demo.go` declared fourteen `--color-*` custom properties whose values

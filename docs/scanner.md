@@ -61,6 +61,36 @@ framework.WithConfig(framework.AppConfig{
 })
 ```
 
+### The plugin declares it, but only you can grant it
+
+Since gofastr v0.74.0 the manifest carries the requirement:
+
+```go
+HostRequirements: []string{pluginhost.HostRequirementPrefix + "camera"}
+```
+
+Declaring it grants nothing, and cannot. A `Permissions-Policy` is your app's
+response header, and a plugin must not be able to rewrite it. The line above is
+still what opens the camera.
+
+What the declaration buys is being told. Call the check once at startup with
+the policy you configured:
+
+```go
+pluginhost.CheckHostRequirements(slog.Default(), yourPolicy, modules...)
+```
+
+It logs and never fails, so a plugin cannot take your app down by declaring
+something. A host that forgets the opt-in gets a warning naming the plugin and
+the fix, instead of meeting a `getUserMedia` console error with nothing
+pointing back at the cause.
+
+One sharp edge worth knowing: the check is deliberately narrow. It warns only
+on the empty allowlist `camera=()`, the one shape that unambiguously denies the
+feature everywhere. A policy that drops the directive entirely stays silent, so
+**silence is not proof you granted it** — `example/main.go` asserts the literal
+`camera=(self)` for that reason.
+
 `example/main.go` does exactly this. Nothing else in the example needs the
 camera, so the grant is `self` and no wider. A host that never calls
 `startCamera()` can leave the default alone: the file and sample paths do not

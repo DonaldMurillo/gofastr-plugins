@@ -267,6 +267,15 @@ func newManifest() pluginhost.Manifest {
 		MinHeight: defaultMinHeight,
 		Schema:    SchemaVersion,
 		Title:     "Barcode scanner",
+		// The camera is granted to the HOST PAGE, never to this frame: an
+		// opaque origin cannot hold the permission at all, so the host
+		// captures and hands frames in. Declaring it here does not grant it
+		// and cannot — a Permissions-Policy is the app's header, and a plugin
+		// must not be able to rewrite it. What it buys is that
+		// pluginhost.CheckHostRequirements can name this plugin at boot when
+		// the host has not opted in, instead of the host discovering it as a
+		// getUserMedia console error with nothing pointing back here.
+		HostRequirements: []string{pluginhost.HostRequirementPrefix + "camera"},
 	}
 }
 
