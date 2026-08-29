@@ -34,8 +34,10 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
 	"github.com/DonaldMurillo/gofastr-plugins/pdf"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
+	"github.com/DonaldMurillo/gofastr-plugins/scanner"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
 	"github.com/DonaldMurillo/gofastr-plugins/whiteboard"
+	"github.com/DonaldMurillo/gofastr/core/middleware"
 	"github.com/DonaldMurillo/gofastr/framework"
 )
 
@@ -43,7 +45,20 @@ import (
 // by main and the e2e tests so they exercise the exact same wiring.
 func newApp() (*framework.App, error) {
 	app := framework.NewApp(
-		framework.WithConfig(framework.AppConfig{Name: "gofastr-plugins-example"}),
+		framework.WithConfig(framework.AppConfig{
+			Name: "gofastr-plugins-example",
+			// The scanner needs the camera ON THIS PAGE. The framework's
+			// default Permissions-Policy is
+			// "geolocation=(), microphone=(), camera=()", which denies it to
+			// the document itself — so getUserMedia fails on the HOST too, not
+			// just in the cage, and the failure surfaces as a console error
+			// rather than a prompt. A host that mounts the scanner has to opt
+			// in like this; docs/scanner.md says so, and nothing else here
+			// needs the camera, so the grant is 'self' and nothing wider.
+			SecurityHeaders: middleware.SecurityHeadersConfig{
+				PermissionsPolicy: "geolocation=(), microphone=(), camera=(self)",
+			},
+		}),
 	)
 
 	// The Rich Text editor plugin. WithDevGrantAll lets the unauthenticated demo
@@ -169,6 +184,17 @@ func newApp() (*framework.App, error) {
 		logstream.WithDemoPage(),
 		logstream.WithSource(demoLogs.source),
 		logstream.WithDemoControlURL(demoLogControlPath),
+	))
+
+	// The scanner — the plugin whose input is a DEVICE, and the one that
+	// proves a capability the cage cannot hold can still be delivered to it.
+	// An opaque-origin frame is refused getUserMedia outright, so this page
+	// keeps the camera and pushes grayscale frames over the bridge; the
+	// decoder runs inside the cage under connect-src 'none'. Demo at
+	// /scanner.
+	app.RegisterPlugin(scanner.New(
+		scanner.WithDevGrantAll(),
+		scanner.WithDemoPage(),
 	))
 
 	// The image editor — the pdf plugin's design applied to a second file

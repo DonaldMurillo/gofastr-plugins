@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+  GoFastr barcode scanner — opaque-origin sandboxed frame document (protocol v1).
+
+  Served same-origin at /__gofastr/plugin/scanner/scan.html and loaded inside
+  an <iframe sandbox="allow-scripts"> (NO allow-same-origin). Under that sandbox:
+    - the frame is an opaque origin; document.cookie / localStorage /
+      sessionStorage throw, and window.parent.document is unreachable.
+    - the camera is unreachable too (getUserMedia fails with SecurityError
+      under an opaque origin; allow="camera" does not change it), which is the
+      whole reason this plugin exists: the HOST captures and pushes grayscale
+      frames over the bridge, the cage decodes them.
+    - the framed CSP sets connect-src 'none': the frame can NEVER fetch. Every
+      pixel arrives from the host as a scanFrame event, and the frame answers
+      every frame with a frameDone ack — one frame in flight, the ack is the
+      flow control.
+  The UI is deliberately small and camera-free: the canvas shows the most
+  recent frame (host-pushed, or self-generated on scanSample), the result line
+  carries the payoff, the status line carries the counters. Every control
+  lives on the host page.
+  Sub-resources are referenced by RELATIVE path so they resolve under the
+  plugin asset route prefix regardless of the host-appended ?v= cache-buster.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Barcode scanner</title>
+    <link rel="stylesheet" href="./scan.css" />
+  </head>
+  <body>
+    <div id="scanner-root" role="region" aria-label="Barcode scanner">
+      <canvas id="scan-canvas" role="img" aria-label="The frame currently being decoded"></canvas>
+      <p id="scan-result" class="scan-result" aria-live="polite">
+        <span id="scan-format" class="scan-format" hidden></span>
+        <span id="scan-text" class="scan-text">waiting for a code…</span>
+      </p>
+      <p id="scan-status" class="scan-status" aria-live="polite" title="frames seen / decoded / last decode time">0 frames · 0 decodes</p>
+    </div>
+    <!--
+      The ?v= on the iframe SRC is a host-appended cache-buster for
+      scan.html; sub-resource references stay relative and do not depend on
+      its value. The bundle is the ONLY script: no inline JS (CSP script-src
+      'self'), @zxing/library is bundled in — pure JavaScript, no wasm, no
+      workers, no network.
+    -->
+    <script src="./scan.js"></script>
+  </body>
+</html>

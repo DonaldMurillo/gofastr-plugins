@@ -121,7 +121,7 @@ jobs:
       matrix:
         # Every plugin with a js/ directory belongs here: each commits a prebuilt
         # bundle that go:embed serves, so one left out ships stale JS silently.
-        plugin: [richtext, mermaid, monaco, tour, geomap, pdf, datagrid, chart, logstream, imageedit, formbuilder, calendar, whiteboard]
+        plugin: [richtext, mermaid, monaco, tour, geomap, pdf, datagrid, chart, logstream, imageedit, formbuilder, calendar, whiteboard, scanner]
     defaults:
       run:
         working-directory: ${{ matrix.plugin }}/js

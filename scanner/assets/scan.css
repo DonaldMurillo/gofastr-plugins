@@ -1,0 +1,128 @@
+/* GoFastr barcode scanner — token-only frame stylesheet (copied to
+ * assets/scan.css by the build; no vendor CSS exists to prepend — @zxing/
+ * library is pure JavaScript and ships none).
+ *
+ * The WHOLE default palette is declared on :root below (docs/
+ * demo-page-design.md) instead of per-property var() fallbacks: one
+ * reviewable block, and the frame is legible before any token arrives.
+ * theme.ts appends <style id="scan-tokens"> AFTER this sheet, which wins on
+ * equal :root specificity — bridged values overwrite exactly these slots.
+ * Every later rule reads var(--x) with no inline fallback, so there is
+ * exactly one place the defaults live.
+ */
+
+:root {
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f5;
+  --color-text: #1c2024;
+  --color-text-subtle: #71717a;
+  --color-border: #e4e4e7;
+  --color-border-strong: #a1a1aa;
+  --color-primary: #e0a040;
+  --color-primary-fg: #ffffff;
+  --color-success: #1a7f37;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --radii-sm: 6px;
+  --radii-md: 8px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --display: 22px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+#scanner-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+/* The live eye of the plugin: whatever the decoder is being fed, the visitor
+   is being fed too. Grayscale in, painted grayscale. The canvas is a VIEWPORT,
+   not a document: it fills the frame's width but never more than 62% of its
+   height, letterboxing the bitmap (object-fit: contain) so the result and
+   status lines below stay on screen no matter what aspect the host pushes —
+   a 300x300 sample QR at full width would otherwise push them past the fold.
+   `pixelated` keeps QR modules crisp when the bitmap is upscaled; the soft
+   background is what shows before the first frame arrives. */
+#scan-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 62vh;
+  object-fit: contain;
+  min-height: 120px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radii-md);
+  image-rendering: pixelated;
+}
+
+/* The payoff. Before a decode the line is a quiet placeholder; once a code is
+   read the text gets real display type and the format rides beside it as a
+   pill — data gets visual weight, words-in-grey-column does not
+   (docs/demo-page-design.md). The result is sticky: it stays until the next
+   decode, because the last thing read is the thing worth reading. */
+.scan-result {
+  margin: 0;
+  min-height: 2.6em;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.scan-format {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  border-radius: 999px;
+  padding: 2px var(--spacing-sm);
+}
+
+.scan-text {
+  color: var(--color-text-subtle);
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+#scanner-root.decoded .scan-text {
+  color: var(--color-text);
+  font-size: var(--display);
+  font-weight: 650;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+/* Counters: small, mono, tabular — bookkeeping, not the story. */
+.scan-status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-subtle);
+}
