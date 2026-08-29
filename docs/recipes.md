@@ -63,14 +63,49 @@ a screen that renders its own "not found" body answers HTTP 200. `blogapp`
 resolves the slug in middleware before the host routes and rewrites a miss to
 its 404 screen with the real status.
 
+## The measured product
+
+### [`recipes/relayboard`](https://github.com/DonaldMurillo/gofastr-plugins/tree/main/recipes/relayboard) — analytics without a third-party origin
+
+Three screens whose funnel runs end to end through the [`posthog`](../posthog/)
+integration against a self-hosted PostHog. The browser talks only to your own
+origin; the relay forwards from there.
+
+**Attribution survives client-side navigation.** Land on
+`/?utm_source=twitter&utm_campaign=launch`, navigate to pricing, buy. The
+`purchase` event still carries `utm_source=twitter` after the parameters have
+left the address bar, because posthog-js registers them from the first URL it
+sees and attaches them to every capture afterwards.
+
+**The app's auth is the only identity.** `whoami` answers from the session, so
+an anonymous visitor gets `{"id":null}` and a signed-in one gets their account
+id. Logging in merges the anonymous person into the identified one. Nothing on
+the analytics side can disagree, because nothing there is authoritative.
+
+**The feature gate is server-side and fails closed.** `/beta` asks a forty-line
+`featureflag.Store` that posts to the flags endpoint, since `/decide` answers
+403 on current self-hosted PostHog. An unknown key returns no answer rather
+than false, so `BoolDefault` semantics survive, and an error denies.
+
+**It degrades to a working app.** With `POSTHOG_KEY` unset every page works:
+no plugin, no flag store, `/beta` invite-only, the A/B script a no-op. One log
+line says which mode it is in.
+
+**It has no browser tests, deliberately.** posthog-js drops captures it
+believes came from a bot, which is what a headless browser looks like, so a
+browser suite would assert against an empty funnel and pass. HTTP smoke tests
+pin the routes, the gate against a fake PostHog, and the register-to-whoami
+chain instead. Its screens are still captured in the screenshot sweep.
+
 ## Running the tests
 
 ```sh
-go test ./recipes/...        # both recipes
-cd e2e && npm test           # journeys for both, WebKit + Chromium
+go test ./recipes/...        # all three recipes
+cd e2e && npm test           # journeys for the blog pair, WebKit + Chromium
 ```
 
-The e2e config boots each recipe on its own port alongside the plugin gallery.
+The e2e config boots each blog recipe on its own port alongside the plugin
+gallery. `relayboard` has Go tests only, for the reason above.
 
 ## See also
 

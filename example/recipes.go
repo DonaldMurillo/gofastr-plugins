@@ -140,6 +140,58 @@ var recipePages = []recipePage{
 			{"docs/recipes.md", repoTree + "/docs/recipes.md"},
 		},
 	},
+	{
+		Slug:  "relayboard",
+		Title: "Measured funnel",
+		Lede: "A three-screen product whose analytics run through this repository's PostHog integration. " +
+			"The browser talks only to your own origin, and the funnel is still attributed end to end.",
+		Command: "go run ./recipes/relayboard",
+		Port:    "http://localhost:8099 (no PostHog key needed to start)",
+		Points: []point{
+			{
+				"Attribution survives client-side navigation",
+				"Land on <code>/?utm_source=twitter</code>, move to the pricing page, buy. The " +
+					"<code>purchase</code> event still carries <code>utm_source=twitter</code> even though the " +
+					"parameters left the address bar, because posthog-js registers them from the first URL it " +
+					"sees and attaches them to every later capture.",
+			},
+			{
+				"The app's own auth is the only identity",
+				"The <code>whoami</code> endpoint answers from the session: an anonymous visitor gets " +
+					"<code>{\"id\":null}</code>, a signed-in one gets their account id, and logging in merges " +
+					"the anonymous person into the identified one. No identity exists on the analytics side to " +
+					"disagree with.",
+			},
+			{
+				"The feature gate is decided on the server, and fails closed",
+				"<code>/beta</code> asks a forty-line <code>featureflag.Store</code> that posts to the flags " +
+					"endpoint — <code>/decide</code> answers 403 on current self-hosted PostHog. An unknown key " +
+					"returns no answer rather than false, so default semantics survive, and an error denies.",
+			},
+			{
+				"It degrades to a working app",
+				"With no <code>POSTHOG_KEY</code> every page still works: no plugin, no flag store, " +
+					"<code>/beta</code> answers invite-only, and the A/B script no-ops because " +
+					"<code>window.posthog</code> never appears. One log line says which mode it is in.",
+			},
+			{
+				"No browser tests, on purpose",
+				"posthog-js drops every capture it believes came from a bot, which is what a headless browser " +
+					"looks like — so a browser suite here would assert against an empty funnel and pass. HTTP " +
+					"smoke tests pin the routes, the gate against a fake PostHog, and the register-to-whoami " +
+					"identity chain instead.",
+			},
+		},
+		Files: []srcRef{
+			{"recipes/relayboard/main.go", "the screens, the accounts, the flag store, the gate and the A/B script"},
+			{"recipes/relayboard/relayboard_test.go", "smoke tests over HTTP, including against a fake PostHog"},
+			{"posthog/plugin.go", "the integration this recipe is built on"},
+		},
+		Docs: []link{
+			{"README", repoTree + "/recipes/relayboard/README.md"},
+			{"docs/recipes.md", repoTree + "/docs/recipes.md"},
+		},
+	},
 }
 
 // registerRecipePages mounts a landing page per recipe. Registered alongside the

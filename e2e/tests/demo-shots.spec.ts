@@ -13,8 +13,8 @@
 //
 // Opt-in like the editor shots: SHOTS=1 npm run shots. Output is gitignored.
 import { test, expect, type Page } from "@playwright/test";
-import { mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { PAGES } from "./pages";
+import { mkdirSync } from "node:fs";
 
 const SHOTS = process.env.SHOTS === "1";
 const DIR = "shots";
@@ -38,13 +38,8 @@ test.beforeAll(() => mkdirSync(DIR, { recursive: true }));
  * plugin cannot ship uncaptured. The coverage test below closes the other
  * direction: a page in the gallery that is not in this list fails.
  */
-const RECIPES = ["blogsite", "blogapp"];
-const PLUGIN_SLUGS: string[] = (
-  JSON.parse(readFileSync(join(__dirname, "..", "..", "plugins.json"), "utf8")) as {
-    plugins: { name: string }[];
-  }
-).plugins.map((p) => p.name);
-const PAGES = [...PLUGIN_SLUGS, ...RECIPES];
+// Derived from plugins.json + recipes/ — see tests/pages.ts for why neither
+// list is written out here any more.
 
 /**
  * Wait for the plugin to be up, generically.

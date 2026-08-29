@@ -55,6 +55,7 @@ var demoEntries = []demoEntry{
 var recipeEntries = []demoEntry{
 	{"blogsite", "Markdown blog", "/recipes/blogsite", "Posts are markdown files that ship with the app.", "recipe", "📁"},
 	{"blogapp", "Authored blog", "/recipes/blogapp", "Write posts in the browser. The app stores them in SQLite and sends readers server-rendered HTML.", "recipe", "✍️"},
+	{"relayboard", "Measured funnel", "/recipes/relayboard", "A three-screen product whose analytics run first-party: attribution survives client-side navigation, and the browser talks only to your origin.", "recipe", "📉"},
 }
 
 // registerShell mounts the gallery shell at "/". The plugin demos keep their own
