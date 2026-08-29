@@ -75,14 +75,23 @@ jobs:
       - name: Point this module at it
         run: |
           set -euo pipefail
+          cp go.sum /tmp/go.sum.pinned
           go mod edit -replace github.com/DonaldMurillo/gofastr=../gofastr-main
           GOFLAGS=-mod=mod go mod tidy
-          # A replace that adds modules means the next tag changes this repo's
-          # dependency set, which is worth knowing before it lands rather than
-          # in the PR that bumps the pin.
-          if ! git diff --quiet go.sum; then
-            echo "::warning::upstream main changes this module's dependency set"
-            git diff --stat go.sum
+          # A replace that adds or drops THIRD-PARTY modules means the next tag
+          # changes this repo's dependency set, which is worth knowing before it
+          # lands rather than in the PR that bumps the pin.
+          #
+          # gofastr's own lines are excluded, and that exclusion is the whole
+          # point: a replace ALWAYS drops the replaced module's hashes, so
+          # comparing raw go.sum warned on every single run. A warning that
+          # cannot not fire is noise, and noise is how a real one gets ignored.
+          mods() { grep -v '^github.com/DonaldMurillo/gofastr ' "$1" | awk '{print $1, $2}' | sort -u; }
+          if ! diff -q <(mods /tmp/go.sum.pinned) <(mods go.sum) >/dev/null; then
+            echo "::warning::upstream main changes this module's third-party dependency set"
+            diff <(mods /tmp/go.sum.pinned) <(mods go.sum) || true
+          else
+            echo "third-party dependency set unchanged"
           fi
       - name: Build and test against upstream main
         run: |
