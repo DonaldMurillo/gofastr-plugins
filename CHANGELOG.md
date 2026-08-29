@@ -4,6 +4,37 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Removed — calendar's hand-declared palette, and the light-only contrast gap (2026-08-29)
+
+`calendar/demo.go` declared fourteen `--color-*` custom properties whose values
+were only the light defaults. They were never design decisions: the old broker
+discovered token NAMES by walking `document.styleSheets`, so a sheet still
+parsing when the frame booted contributed no names and the frame got a partial
+palette. A partial dark palette on light fallbacks rendered near-white text on
+white, at 1.12:1. gofastr v0.74.0 carries the fix (gofastr#271): the broker now
+reads a fixed 78-token vocabulary from computed style and never walks a sheet,
+so declaring names buys nothing. calendar's `:root` is now the same one line as
+every sibling demo.
+
+**The guard had to be fixed before the deletion meant anything.** The in-frame
+contrast test ran in the default theme only, and the bug it exists to catch is
+a *dark* one, so it could not have seen a regression of that exact shape. It
+now runs both schemes, and asserts the scheme it asked for is the one in effect,
+because a dark test that silently gets light measures the light theme twice.
+
+Its skip path went too. An unresolved token used to `continue`, which meant a
+frame that received NO palette passed every pair by measuring nothing. A
+palette arriving incomplete is the entire failure mode here, so an unresolved
+token is now the finding.
+
+Measured rather than assumed, with the block deleted: the frame resolves the
+full palette in both schemes, `oklch(0.96 0.006 80)` on `oklch(0.17 0.006 75)`
+in dark and `#18181B` on `#FFFFFF` in light, nothing unset. Light now resolves
+`--color-background` to the theme's `#F9FAFB` where the hand-declared block had
+been forcing `#ffffff`, so the page is more correct than before, not merely
+smaller. 58 a11y and calendar journeys pass on both engines, and the dark page
+was screenshotted.
+
 ### Changed — gofastr v0.74.0, which unblocks four tickets at once (2026-08-29)
 
 The release the awaiting-upstream manifest was built to watch for. Every fix
