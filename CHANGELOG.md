@@ -24,11 +24,22 @@ means the fix is on main and no release carries it. Today both rows answer
 |---|---|---|---|
 | `c0266af3` | gofastr#255, the `wasm-unsafe-eval` tier | no | #21 |
 | `34300c92` | gofastr#268, `GOFASTR_ISOLATION_REWRITE=0` | no | #78 |
+| `ad7a2168` | gofastr#271, token names from a loading stylesheet | no | #81 |
+| `627bf1af` | gofastr#294, a manifest declaring a host permission | no | #82 |
 
-Both were checked against the live API rather than assumed, and the positive
-branch was checked too, with a commit known to be in the tag, because a poller
-that can only ever print "still waiting" is the same vacuous green as a test
-that asserts `expect.any(Number)`.
+Every row was checked against the live API rather than assumed, and the
+positive branch was checked too, with a commit known to be in the tag, because
+a poller that can only ever print "still waiting" is the same vacuous green as
+a test that asserts `expect.any(Number)`.
+
+The last two rows are a correction. The file shipped with two rows because
+those were the two upstream fixes I happened to remember, which is the same
+kind of incompleteness the file exists to prevent. Walking every closed
+upstream issue this repo references turned up two more, each with a real
+workaround here waiting to be deleted: calendar's hand-declared token block
+and scanner's hand-written host permission line. gofastr#273 is deliberately
+absent, having been closed on the conclusion that no fix was possible, so
+nothing here is waiting on it.
 
 `TestAwaitingUpstreamManifestIsWellFormed` guards the file's shape. A typo in a
 sha does not fail the nightly job: the compare call 404s, the row prints a

@@ -12,3 +12,5 @@
 # sha	upstream	issue	what it unblocks
 c0266af3	gofastr#255	#21	Manifest.CSP wasm-unsafe-eval tier, for the sqlnotebook plugin
 34300c92	gofastr#268	#78	GOFASTR_ISOLATION_REWRITE=0, narrowing the e2e isolation workaround
+ad7a2168	gofastr#271	#81	token-name collection from a still-loading stylesheet, deleting calendar's hand-declared palette
+627bf1af	gofastr#294	#82	a manifest declaring a host-page permission, deleting scanner's hand-written host opt-in
