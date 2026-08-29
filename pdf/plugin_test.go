@@ -213,6 +213,14 @@ func newChrome(t *testing.T) (context.Context, context.CancelFunc) {
 			chromedp.Flag("no-sandbox", true),
 			chromedp.Flag("disable-site-isolation-trials", true),
 			chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
+			chromedp.WSURLReadTimeout(90*time.Second),
+			// Same reason as example/smoke_test.go and posthog/e2e_test.go:
+			// chromedp waits 20s by default for Chrome to print its DevTools
+			// websocket URL, and a cold start on a loaded CI runner misses it.
+			// It surfaces as "chrome start (is Chrome installed?)", which reads
+			// like a missing dependency and is not — the workflow installs
+			// Chrome and runs `google-chrome --version` immediately before.
+			// A genuinely missing binary still fails fast.
 		)...,
 	)
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
