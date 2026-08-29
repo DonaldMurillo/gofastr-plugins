@@ -42,6 +42,60 @@ jobs:
   # third party publishing a release should not turn someone's unrelated PR
   # red. It runs on main, on a schedule, and on demand — which is enough for
   # drift to be a red build rather than a discovery months later.
+  # Build and test against upstream gofastr MAIN, not a release.
+  #
+  # gofastr-latest below answers "does the newest RELEASE still work here". On
+  # a day when the pin already IS the newest release, that job proves nothing —
+  # which is most days. Meanwhile main runs dozens of commits ahead and every
+  # one of them is in the next tag.
+  #
+  # This job is the tripwire for that window. It is deliberately NOT on push or
+  # pull_request: upstream's main is not ours to keep green, and a third party's
+  # broken commit must never block a merge here. It runs on the daily schedule
+  # and on demand, where a red run means "the next tag will break us, go look"
+  # and blocks nobody.
+  gofastr-main:
+    name: go (upstream gofastr main)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check out upstream main beside this repo
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/DonaldMurillo/gofastr.git ../gofastr-main
+          echo "upstream main: $(git -C ../gofastr-main rev-parse --short HEAD)"
+      - name: Point this module at it
+        run: |
+          set -euo pipefail
+          go mod edit -replace github.com/DonaldMurillo/gofastr=../gofastr-main
+          GOFLAGS=-mod=mod go mod tidy
+          # A replace that adds modules means the next tag changes this repo's
+          # dependency set, which is worth knowing before it lands rather than
+          # in the PR that bumps the pin.
+          if ! git diff --quiet go.sum; then
+            echo "::warning::upstream main changes this module's dependency set"
+            git diff --stat go.sum
+          fi
+      - name: Build and test against upstream main
+        run: |
+          set -euo pipefail
+          if ! go build ./...; then
+            echo "::error::this repo does not BUILD against upstream gofastr main; the next release will break it"
+            exit 1
+          fi
+          if ! go test ./... -count=1; then
+            echo "::error::this repo does not TEST clean against upstream gofastr main; the next release will break it"
+            exit 1
+          fi
+
   gofastr-latest:
     name: go (latest gofastr release)
     runs-on: ubuntu-latest
