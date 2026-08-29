@@ -333,3 +333,41 @@ func TestHostAdaptersDeclareEveryScreamingSnakeConstant(t *testing.T) {
 		}
 	}
 }
+
+// TestChangelogRecordsEveryShippedPlugin stops the changelog falling behind the
+// repo, which it has done twice.
+//
+// CHANGELOG.md says it covers "all notable changes" and a new plugin is the
+// most notable kind, but it is prose that nothing reads. The scanner shipped
+// without an entry; genui shipped without one too, in the same week, after the
+// first gap had already been noticed and fixed by hand.
+//
+// plugins.json is the repo's own answer to what ships, so that is the list the
+// changelog has to mention. This checks only that the name appears — whether
+// the entry is any good is a human's job, and a guard that tried to judge that
+// would be worse than none.
+func TestChangelogRecordsEveryShippedPlugin(t *testing.T) {
+	log, err := os.ReadFile("CHANGELOG.md")
+	if err != nil {
+		t.Fatalf("reading CHANGELOG.md: %v", err)
+	}
+	idx, err := registry.ParseIndex(RegistryJSON())
+	if err != nil {
+		t.Fatalf("parsing embedded registry: %v", err)
+	}
+	body := string(log)
+	var checked int
+	for _, p := range idx.Plugins {
+		dir, _ := strings.CutPrefix(p.ModulePath, ModulePath+"/")
+		checked++
+		if strings.Contains(body, p.Name) || (dir != "" && strings.Contains(body, dir)) {
+			continue
+		}
+		t.Errorf("plugin %q ships in plugins.json but CHANGELOG.md never mentions it; "+
+			"the changelog claims to cover all notable changes and a new plugin is "+
+			"the most notable kind", p.Name)
+	}
+	if checked == 0 {
+		t.Fatal("the registry lists no plugins at all; this guard is not testing anything")
+	}
+}
