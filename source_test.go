@@ -210,3 +210,44 @@ func TestCIBundleMatrixCoversEveryPlugin(t *testing.T) {
 		t.Fatal("found no <plugin>/js/package.json at all; the guard is not testing anything")
 	}
 }
+
+// TestEveryChromedpAllocatorSetsWSURLReadTimeout keeps the fix for a recurring
+// CI flake from rotting the way the CI bundle matrix did.
+//
+// chromedp waits 20s by default for Chrome to print its DevTools websocket
+// URL. A cold start on a loaded runner misses that and reports "chrome start
+// (is Chrome installed?): websocket url timeout reached", which reads like a
+// missing dependency and is not. Every allocator therefore raises it.
+//
+// The flake was fixed once in example/smoke_test.go and came straight back from
+// pdf/plugin_test.go, because a fix applied to one call site is not applied to
+// the others. This asserts all of them.
+func TestEveryChromedpAllocatorSetsWSURLReadTimeout(t *testing.T) {
+	tracked, err := exec.Command("git", "ls-files", "-z", "*.go").Output()
+	if err != nil {
+		t.Skipf("git ls-files unavailable: %v", err)
+	}
+	var checked int
+	for _, f := range strings.Split(string(tracked), "\x00") {
+		if f == "" {
+			continue
+		}
+		src, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		body := string(src)
+		if !strings.Contains(body, "NewExecAllocator") {
+			continue
+		}
+		checked++
+		if !strings.Contains(body, "WSURLReadTimeout") {
+			t.Errorf("%s builds a chromedp allocator without WSURLReadTimeout, so a cold "+
+				"Chrome start on a loaded runner will fail it with a misleading "+
+				"\"is Chrome installed?\" error", f)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no chromedp allocators at all; the guard is not testing anything")
+	}
+}
