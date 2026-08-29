@@ -4,6 +4,75 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — `scanner`, the plugin whose input is a device (2026-08-29)
+
+Barcode and QR scanning in an opaque-origin sandboxed iframe, and the plugin
+that answers a question the others could not: what happens when a plugin needs
+a capability the cage is not allowed to have.
+
+The camera is not awkward to reach from an `allow-scripts` frame. It is
+refused. Four iframes on one page, the same child document calling
+`getUserMedia`, a fake camera and permission granted: a plain same-origin
+frame works; the sandboxed frame fails with `SecurityError: Invalid security
+origin`; adding `allow="camera *"` changes **nothing**; and only
+`allow-same-origin` works, which this platform bans. All four reported
+`isSecureContext: true`. So a manifest permissions field would have shipped as
+a no-op, and upstream closed gofastr#273 on the same conclusion.
+
+The shape that works is the pdf plugin's applied to a device instead of a file:
+the **host page** owns the `MediaStream`, where the permission prompt is
+against an origin a user can read, and pushes grayscale luminance frames over
+the bridge one at a time, released by the frame's `frameDone` ack. The frame
+decodes and returns text plus format. Pixels never come back and the cage keeps
+`connect-src 'none'` — it can read your barcode and it cannot tell anyone what
+it read.
+
+Two decoders, native first. Not for speed: zxing's JS port cannot read some
+valid QR codes **its own encoder produces**. Bisected across payloads rendered
+identically at 300×300, `GOFASTR_SCANNER_E2E` (19 bytes) fails where 17, 18 and
+20 succeed, and the platform's `BarcodeDetector` reads the failing symbol
+without complaint — so the code is valid and the decoder is wrong. The results
+therefore report which decoder read them, the e2e forces **both** paths on
+every engine (CI's Linux chromium has no `BarcodeDetector` and a developer's
+mac does, so an unforced test would exercise one path per machine and neither
+run would notice the other rotting), and the fixture generator refuses to write
+a code the decoder cannot read.
+
+zxing is pure JavaScript, so unlike the SQL notebook this plugin is not blocked
+on a wasm tier in the framed CSP.
+
+A host that mounts it must relax the framework's default `Permissions-Policy`,
+which denies the camera to the host document itself; without that the failure
+is a console error rather than a prompt, which reads like a plugin bug.
+`example/main.go` opts in with `camera=(self)` and
+[docs/scanner.md](docs/scanner.md) says so. The manifest has no way to declare
+that requirement, which is filed upstream as gofastr#294.
+
+### Security — every open dependency advisory cleared, 30 → 0 (2026-08-29)
+
+`pdfjs-dist` 6.1.200 → 6.2.108 (high: arbitrary JavaScript execution on opening
+a malicious PDF), `mermaid` 11.4.1 → 11.16.1 (seven advisories: XSS via
+sequence-diagram labels and architecture `iconText`, CSS injection via
+`classDef` and configuration, infinite-loop DoS in Gantt and XY charts,
+prototype pollution), `markdown-it` 14.1.0 → 14.2.0 (ReDoS and quadratic
+smartquotes), `esbuild` 0.23.1 → 0.25.0 across all thirteen bundles (dev server
+answers cross-origin requests), and `dompurify` 3.4.12 → 3.4.14 transitively.
+
+Worth stating plainly: the XSS entries all execute inside an opaque-origin
+frame with `connect-src 'none'`, so none of them was a path to the host. The
+cage held. They were fixed anyway, because "not exploitable here" is an
+argument that has to be re-made every time it comes up and only has to be wrong
+once. The DoS entries are the ones the cage does nothing about — a hung frame
+is a hung frame.
+
+Eight of the thirteen bundles rebuilt byte-identical; the five that moved
+shifted between 6 and 67 bytes on files of 20 KB to 2.8 MB.
+
+The mermaid bump also revealed that its demo page had been claiming
+"mermaid 11.4.1, bundled" in two places, twelve releases stale, because the
+version is prose in a Go string. Every plugin that states a library version now
+reads it from the bundle's `package.json` and fails if the page disagrees.
+
 ### Changed — five early demo pages brought up to the demo-page standard (2026-08-28)
 
 The mermaid, monaco, pdf, geomap and tour demos predate
