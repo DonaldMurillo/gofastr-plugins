@@ -4,6 +4,37 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the upstream tripwire warned on every run, and documented limits that had expired (2026-08-29)
+
+Two things that had quietly stopped being true.
+
+**The `gofastr-main` job's dependency warning was a false positive by
+construction.** It compared `go.sum` before and after adding a `replace`, and a
+replace ALWAYS drops the replaced module's own hash lines, so the warning fired
+whether or not a real dependency moved. Confirmed against upstream main
+`da4e943`: the only delta was gofastr's own `v0.71.2` / `v0.73.0` / `v0.74.0`
+entries, and the job still printed "upstream main changes this module's
+dependency set". It now compares third-party modules only. Verified both ways:
+silent on the real case, and still firing when a genuine new module is added.
+
+A warning that cannot not fire is noise, and noise is how a real one gets
+ignored. That is the same argument that retired the awaiting-upstream manifest
+this morning, applied to something I had written a few hours earlier.
+
+**`docs/plugin-platform.md` still said WebAssembly was impossible.** The
+capability table read *"not today — CompileError, both engines. One CSP token
+would fix it"*, written when that was true. v0.74.0 shipped the token and
+`sqlnotebook` runs SQLite on it. The row now says opt-in, names the manifest
+field and the host call it needs, and carries the measured init times.
+
+A Worker row joins it, because that constraint decides which libraries can live
+in the cage and was written down nowhere: `new Worker("same-origin.js")` is a
+`SecurityError` on chromium and works on webkit, while a blob Worker works on
+both. It is also a fifth entry under "the ones that surprise people", since an
+engine divergence means a worker-based plugin can be built and tested happily in
+Safari and fail at mount in Chrome, with an error naming the `Worker`
+constructor rather than the isolation model.
+
 ### Added — `sqlnotebook`, and the answer to whether wasm runs in the cage (2026-08-29)
 
 A real SQLite engine, compiled to WebAssembly, running inside an opaque-origin

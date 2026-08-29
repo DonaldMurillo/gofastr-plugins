@@ -214,11 +214,12 @@ not inferred from a spec. The issue number is where the run and its output live.
 | network of any kind | **no** | `connect-src 'none'`. Even `WebAssembly.instantiateStreaming` fails on it. |
 | cookies, `localStorage`, parent DOM | **no** | `SecurityError`. Every plugin asserts all three on every run. |
 | camera / microphone | **no** | `getUserMedia` → `SecurityError: Invalid security origin` (#19) |
-| WebAssembly | **not today** | `CompileError`, both engines. One CSP token would fix it (gofastr#255) |
-| string `eval`, `new Function` | **no** | `EvalError`, and deliberately never granted |
-| a canvas, a worker-free renderer, a CRDT, a decoder | **yes** | pdf, whiteboard, scanner, mermaid all ship |
+| WebAssembly | **opt-in** | Refused by default; granted by `Manifest.CSP: ["'wasm-unsafe-eval'"]`, which the host must also pass to the AssetServer. sqlnotebook runs SQLite 3.49.1 this way, 28 ms chromium / 26 ms webkit (#21, gofastr#255) |
+| a Worker from a script URL | **chromium: no** | `new Worker("same-origin.js")` → `SecurityError` in chromium; webkit allows it. A blob Worker works in both. This is what rules out worker-based libraries, DuckDB among them (#21) |
+| string `eval`, `new Function` | **no** | `EvalError`, and deliberately never granted. The wasm tier does not change this: it was measured with the tier active |
+| a canvas, a worker-free renderer, a CRDT, a decoder, a SQL engine | **yes** | pdf, whiteboard, scanner, mermaid, sqlnotebook all ship |
 
-### The four that surprise people
+### The five that surprise people
 
 **`allow="camera"` does nothing on an opaque origin.** Not "needs configuration"
 — nothing. A same-origin frame gets the camera; `sandbox="allow-scripts"` is
@@ -239,6 +240,17 @@ not what it ships. (#21.)
 `'self'` matches nothing, so the framed CSP names the concrete origin instead.
 This is why `assets.go` interpolates the request origin rather than writing the
 obvious keyword — WebKit blocks the bundle outright otherwise.
+
+**The two engines disagree about Workers, and only one of them says so.**
+`new Worker("same-origin.js")` from inside the cage is a `SecurityError` on
+chromium and works fine on webkit. A blob Worker works on both. So a
+worker-based library can be built and tested happily in Safari and fail at mount
+in Chrome, with an error naming the `Worker` constructor rather than the
+isolation model. This is what ruled DuckDB out of `sqlnotebook`: its API is
+worker-based, so on chromium it cannot start in the cage at any size. The
+practical rule: a library needing a Worker from a script URL cannot be used
+here, one that accepts a blob Worker can if you rewrite its loading, and one
+needing no worker at all is the only kind that works unchanged. (#21.)
 
 **`requestAnimationFrame` does not fire in a frame that is never painted.** A
 mount below the fold, or in a headless window shorter than the page, simply does
