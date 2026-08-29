@@ -4,6 +4,36 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — relayboard was shipped and unlisted (2026-08-29)
+
+`recipes/relayboard` merged into `recipes/README.md` and this changelog while
+every list the gallery builds from stayed at two recipes. It had no landing
+page, no sidebar row, no home-grid card, no entry in `docs/recipes.md`, and no
+screenshot in the sweep that is this repo's only visual review. The app was
+complete; it was just invisible.
+
+This is the second time. `TestGalleryListsEveryShippedPlugin` exists because
+scanner merged fully wired and unlisted, and its own comment says so. That
+guard covers plugins, and recipes live in a different slice
+(`recipeEntries`, not `demoEntries`), so it could not have caught this.
+
+`TestGalleryListsEveryShippedRecipe` is the missing half: every directory under
+`recipes/` must have a `recipePages` entry, so `/recipes/<slug>` serves, and a
+`recipeEntries` row, so the gallery links it. It fails on an empty recipe list
+rather than passing vacuously.
+
+The landing page itself says the things worth knowing: attribution surviving
+client-side navigation, the app's auth being the only identity, a gate that
+fails closed, and that it has no browser tests on purpose, because posthog-js
+drops captures it believes came from a bot and a headless browser is exactly
+what that looks like. A browser suite there would assert against an empty
+funnel and pass.
+
+Checked at 1280 and at 390, where the run block's long comment pushed the URL
+off-screen. The `pre` scrolls (`overflow-x:auto`), so nothing was clipped, but
+the useful half was out of view; the line is now short enough to read before
+the scroll edge.
+
 ### Added — a daily tripwire against upstream gofastr main (2026-08-29)
 
 `gofastr-latest` answers "does the newest gofastr **release** still work here".

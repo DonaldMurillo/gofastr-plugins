@@ -51,3 +51,51 @@ func TestGalleryListsEveryShippedPlugin(t *testing.T) {
 		t.Fatal("the gallery lists nothing at all; this guard is not testing anything")
 	}
 }
+
+// TestGalleryListsEveryShippedRecipe is the recipe half of the guard above.
+//
+// The plugin half exists because the scanner merged fully wired and unlisted.
+// The same thing then happened to a recipe: relayboard shipped into
+// recipes/README.md and the changelog while every list that the gallery builds
+// from stayed at two entries. A recipe can be complete — routed, tested,
+// documented in its own README — and still be absent from "/", from its own
+// landing page, and from the screenshot sweep that is this repo's only visual
+// review.
+//
+// The directories under recipes/ are the answer to "what ships" here, the way
+// plugins.json is for plugins. Both lists have to cover them: recipePages
+// serves the landing page, recipeEntries puts it in the sidebar and home grid.
+func TestGalleryListsEveryShippedRecipe(t *testing.T) {
+	ents, err := os.ReadDir(filepath.Join("..", "recipes"))
+	if err != nil {
+		t.Fatalf("reading recipes/: %v", err)
+	}
+
+	paged := map[string]bool{}
+	for _, p := range recipePages {
+		paged[p.Slug] = true
+	}
+	listed := map[string]bool{}
+	for _, e := range recipeEntries {
+		listed[e.Slug] = true
+		listed[filepath.Base(e.Path)] = true
+	}
+
+	var found int
+	for _, ent := range ents {
+		if !ent.IsDir() {
+			continue
+		}
+		found++
+		slug := ent.Name()
+		if !paged[slug] {
+			t.Errorf("recipes/%s has no recipePages entry in recipes.go, so /recipes/%s 404s", slug, slug)
+		}
+		if !listed[slug] {
+			t.Errorf("recipes/%s is not in recipeEntries in shell.go, so the gallery never links it", slug)
+		}
+	}
+	if found == 0 {
+		t.Error("found no recipe directories; this guard would pass on an empty repo")
+	}
+}

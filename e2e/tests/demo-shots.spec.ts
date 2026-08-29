@@ -38,7 +38,7 @@ test.beforeAll(() => mkdirSync(DIR, { recursive: true }));
  * plugin cannot ship uncaptured. The coverage test below closes the other
  * direction: a page in the gallery that is not in this list fails.
  */
-const RECIPES = ["blogsite", "blogapp"];
+const RECIPES = ["blogsite", "blogapp", "relayboard"];
 const PLUGIN_SLUGS: string[] = (
   JSON.parse(readFileSync(join(__dirname, "..", "..", "plugins.json"), "utf8")) as {
     plugins: { name: string }[];
