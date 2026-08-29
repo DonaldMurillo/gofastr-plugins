@@ -86,14 +86,24 @@ function fl(page: Page) {
 // after the listeners were installed.
 const consoleErrors = new WeakMap<Page, string[]>();
 
+/**
+ * Change the producer's rate OUT OF BAND, through Playwright's request context
+ * rather than a fetch inside the page.
+ *
+ * Starting and stopping a synthetic producer is test control, not a user
+ * journey step, and it must not depend on the page having a free event loop —
+ * which during a 6,000 lines/s flood on a 2-core CI runner it does not. Routed
+ * through the page, the final "drop back to calm" timed out at 90 seconds
+ * while the flood it was trying to stop kept running (#54). The assertions
+ * still read page state; only the control path moved.
+ */
 async function setRate(page: Page, rate: "calm" | "fast"): Promise<void> {
-  await page.evaluate(async (r) => {
-    await fetch("/demo/logstream/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rate: r }),
-    });
-  }, rate);
+  const base = new URL(page.url()).origin;
+  const res = await page.request.post(`${base}/demo/logstream/rate`, {
+    headers: { "Content-Type": "application/json" },
+    data: { rate },
+  });
+  if (!res.ok()) throw new Error(`setRate(${rate}) failed: ${res.status()} ${await res.text()}`);
 }
 
 async function ready(page: Page): Promise<void> {
@@ -350,6 +360,19 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
   const withMarker = await frameState(page);
   expect(withMarker.stats!.lastMarker).toMatch(/⋯ [\d,]+ lines dropped/);
 
+  // Stop the flood BEFORE reading the bounds.
+  //
+  // Not a convenience: at 6,000 lines/s a 2-core CI runner cannot spare the
+  // host page's event loop, and reading the mirrors is a page.waitForFunction —
+  // so the read itself timed out at 90 seconds while the flood ran on (#54).
+  // The bounds are not momentary properties. Scrollback is trimmed as lines
+  // are written and stays trimmed; the in-flight window is a ceiling the host
+  // never exceeds. Both are exactly as true a moment after the flood as
+  // during it, and reading them in the calm regime measures the plugin instead
+  // of the runner.
+  await setRate(page, "calm");
+  await awaitCalmRegime(page);
+
   // The scrollback bound: the frame's own ack accounting (retained history =
   // buffer minus viewport rows) never exceeds the published cap, and the
   // in-flight window never exceeds its size.
@@ -358,7 +381,6 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
   expect(st.stats!.cap).toBe(SCROLLBACK_CAP);
   expect(st.inFlight).toBeLessThanOrEqual(MAX_IN_FLIGHT);
 
-  await setRate(page, "calm");
   const errors = consoleErrors.get(page) ?? [];
   expect(errors, errors.join("\n")).toEqual([]);
 });
