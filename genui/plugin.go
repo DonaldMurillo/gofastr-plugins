@@ -475,7 +475,11 @@ func (p *Plugin) handleCompose(w http.ResponseWriter, r *http.Request) {
 // stored tree is always the validated one — a composition that does not
 // pass [Validate] is never persisted, exactly as the contract demands.
 func (p *Plugin) runComposition(id, prompt string) {
-	comp, err := p.composer.Compose(context.Background(), prompt, DefaultRegistry())
+	// Carry the action allow-list to the composer. It takes a registry and not
+	// a plugin on purpose — a composer must not be able to reach into the
+	// plugin — so the one thing it legitimately needs to validate against
+	// rides on the context instead.
+	comp, err := p.composer.Compose(WithActionsContext(context.Background(), p.actions), prompt, DefaultRegistry())
 	if err != nil {
 		p.store.set(id, compositionRecord{state: stateFailed, err: err.Error()})
 		return
