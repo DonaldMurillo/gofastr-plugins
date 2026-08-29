@@ -11,6 +11,13 @@ import (
 
 func demoTheme() style.Theme {
 	t := style.DefaultTheme()
+	// The house amber, in both schemes — the same values the other demo pages
+	// set. Left on style.DefaultTheme() this page rendered with the framework's
+	// purple accent while every plugin beside it was amber, which reads as a
+	// different product rather than a different plugin.
+	t.Colors.Primary = style.Color{Name: "primary", Value: "oklch(0.82 0.155 78)"}
+	t.Colors.PrimaryFg = style.Color{Name: "primary-fg", Value: "oklch(0.14 0.005 75)"}
+	t.Colors.Accent = style.Color{Name: "accent", Value: "oklch(0.82 0.155 78)"}
 	t.DarkColors = map[string]string{
 		"background":    "#0B0B0E",
 		"surface":       "#18181B",
@@ -20,8 +27,8 @@ func demoTheme() style.Theme {
 		"text-subtle":   "#71717A",
 		"border":        "#27272A",
 		"border-strong": "#3F3F46",
-		"primary":       "#6366F1",
-		"primary-fg":    "#FFFFFF",
+		"primary":       "#E0A040",
+		"primary-fg":    "#18181B",
 		// The pin-popup Delete label. The light-mode red is unreadable on this
 		// surface (~3.4:1); map.css falls back to the same value when a host
 		// defines no danger token.
@@ -155,6 +162,36 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 #save-status{font-size:13px;color:var(--color-text-muted)}
 .side{display:flex;flex-direction:column;gap:10px}
 .side h2{font-size:13px;margin:0;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.04em}
+/* House classes shared with the other demo pages (docs/demo-page-design.md).
+   .card-info is named apart from .card because .card is already this page's
+   location buttons and the journeys select on it. */
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:24px;height:24px;flex:none;border-radius:var(--radii-md,8px);background:linear-gradient(135deg,var(--color-primary),color-mix(in srgb,var(--color-primary) 45%,var(--color-text)));box-shadow:0 2px 8px color-mix(in srgb,var(--color-primary) 45%,transparent)}
+.brand h1{font-size:15px;font-weight:600;margin:0}
+.brand-dim{color:var(--color-text-subtle);font-weight:500}
+.navlink{font-size:.875rem;text-decoration:none;color:var(--color-text-muted);padding:6px 12px;border-radius:999px;line-height:1.2}
+.navlink:hover{color:var(--color-text);background:var(--color-surface-soft)}
+.navlink.is-active{color:var(--color-text);background:var(--color-surface-soft);font-weight:600}
+.fui-btn{font:inherit;font-size:.875rem;padding:6px 12px;border:1px solid var(--color-border);border-radius:var(--radii-md,8px);background:var(--color-surface);color:var(--color-text);cursor:pointer}
+.fui-btn:hover{border-color:color-mix(in srgb,var(--color-primary) 45%,var(--color-border))}
+.hero{margin:clamp(28px,6vw,48px) 0 clamp(20px,4vw,28px)}
+.hero h2{font-size:clamp(28px,5vw,44px);line-height:1.1;letter-spacing:-.02em;margin:0 0 16px;font-weight:700}
+.lead{font-size:clamp(15px,2vw,17px);line-height:1.6;color:var(--color-text-muted);max-width:62ch;margin:0 0 20px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.badge{font-family:var(--font-mono,ui-monospace,monospace);font-size:12px;padding:5px 12px;border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-muted);background:var(--color-surface)}
+.badge-primary{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-primary-fg,#18181b);font-weight:600}
+.editor-card{border:1px solid var(--color-border);border-radius:var(--radii-lg,14px);overflow:hidden;background:var(--color-surface)}
+.editor-chrome{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--color-border);background:var(--color-surface-soft)}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot-r{background:#ff5f57}.dot-y{background:#febc2e}.dot-g{background:#28c840}
+.editor-title{font-family:var(--font-mono,ui-monospace,monospace);font-size:12px;color:var(--color-text-muted);margin-left:6px}
+.editor-mode{margin-left:auto;font-family:var(--font-mono,ui-monospace,monospace);font-size:11px;padding:3px 10px;border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:clamp(28px,5vw,40px) 0}
+.card-info{border:1px solid var(--color-border);border-radius:var(--radii-lg,12px);padding:20px;background:var(--color-surface)}
+.card-info h3{margin:0 0 10px;font-size:15px;font-weight:650}
+.card-info p{margin:0;font-size:14px;line-height:1.6;color:var(--color-text-muted)}
+footer{margin-top:clamp(28px,5vw,40px);padding-top:20px;border-top:1px solid var(--color-border);font-size:13px;color:var(--color-text-subtle)}
+footer a{color:var(--color-text-muted)}
 .card{display:grid;grid-template-columns:28px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;padding:10px 12px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);cursor:pointer;font:inherit;transition:transform .08s ease,border-color .12s ease}
 .card:hover{border-color:var(--color-primary);transform:translateY(-1px)}
 .card.active{border-color:var(--color-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--color-primary) 25%,transparent)}
@@ -173,11 +210,32 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 </head>
 <body>
 <header>
-  <h1>Geomap — Showcase</h1>
-  <div class="hgroup">
-    <button type="button" class="btn" id="fui-scheme-toggle" data-tip="Toggle light / dark">Toggle theme</button>
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <h1>GoFastr <span class="brand-dim">/ plugins / map</span></h1>
   </div>
+  <nav aria-label="Demo pages">
+    <a class="navlink" href="/">Gallery</a>
+    <a class="navlink is-active" href="/map" aria-current="page">Trusted</a>
+    <button type="button" class="fui-btn" id="fui-scheme-toggle" aria-label="Toggle color scheme">◐ Theme</button>
+  </nav>
 </header>
+
+<section class="hero">
+  <h2>Vector tiles need the network.<br>So this one is not in the cage.</h2>
+  <p class="lead">Every other plugin here runs in an opaque-origin iframe with
+  <code>connect-src 'none'</code>. A vector map cannot: MapLibre streams tiles from
+  <code>tiles.openfreemap.org</code>, and a frame that cannot fetch cannot draw a map. So this
+  one is a <strong>trusted host-page plugin</strong> — no iframe, no cage, running with the
+  page's own privileges because its job requires them. That is a trade the host makes
+  deliberately, and the badge below says so rather than implying otherwise.</p>
+  <p class="badges" aria-label="Facts">
+    <span class="badge badge-primary">trusted host page</span>
+    <span class="badge">MapLibre GL · vector</span>
+    <span class="badge">tiles.openfreemap.org</span>
+    <span class="badge">geocode via same-origin proxy</span>
+  </p>
+</section>
 
 <div class="toolbar" role="toolbar" aria-label="Map controls">
   <label class="ctl">Style
@@ -195,8 +253,15 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
 <main>
   <div class="map-area">
     <p class="hint">An OpenFreeMap <strong>vector</strong> map (MapLibre GL), running as a trusted host-page plugin. Click the map to drop a pin; click a pin to rename or delete it; drag pins to move them. Tiles stream directly from tiles.openfreemap.org — the host page CSP allows it (the opaque sandbox could not). Place search, when enabled, goes through the plugin's own same-origin proxy.</p>
-    <div id="map-mount">
-      {{MOUNT}}
+    <div class="editor-card">
+      <div class="editor-chrome" aria-hidden="true">
+        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+        <span class="editor-title">world.pins</span>
+        <span class="editor-mode">trusted host page</span>
+      </div>
+      <div id="map-mount">
+        {{MOUNT}}
+      </div>
     </div>
     <div class="saverow">
       <button type="button" class="btn primary" id="save">Save</button>
@@ -210,6 +275,32 @@ main{max-width:1280px;margin:0 auto;padding:16px 20px 40px;display:grid;grid-tem
     {{CARDS}}
   </aside>
 </main>
+
+<section class="grid" aria-label="How it works">
+  <article class="card-info">
+    <h3>🔓 Trusted, and it says so</h3>
+    <p>The chrome above reads <code>trusted host page</code>, not
+    <code>sandboxed iframe</code>. This plugin runs with the page's privileges: it can reach
+    the DOM, the network and host storage. Copying the sandboxed badge would be the one
+    dishonest thing a demo could do here.</p>
+  </article>
+  <article class="card-info">
+    <h3>🗺️ Why the cage does not fit</h3>
+    <p>The framed CSP sets <code>connect-src 'none'</code>. MapLibre needs to stream vector
+    tiles, so a sandboxed map renders nothing at all. The host's own CSP allows
+    <code>tiles.openfreemap.org</code>; the opaque frame never could.</p>
+  </article>
+  <article class="card-info">
+    <h3>📍 Pins are the host's data</h3>
+    <p>Markers live in the host page and persist through the plugin's save route. Search,
+    when enabled, goes through a <strong>same-origin proxy</strong> rather than letting the
+    map call a geocoder directly — the one network path the host keeps for itself.</p>
+  </article>
+</section>
+
+<footer>
+  gofastr-plugins · geomap 0.3.0 · <a href="/">all plugins →</a>
+</footer>
 
 <script>
 (function () {
