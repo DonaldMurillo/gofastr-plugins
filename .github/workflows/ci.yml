@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Daily, for the gofastr-latest job below. Drift against the framework is
+    # something that happens while nobody is looking, so something has to look.
+    - cron: "17 6 * * *"
 
 permissions:
   contents: read
@@ -21,6 +25,49 @@ env:
 jobs:
   # The root module, built the way a consumer gets it: GoFastr resolved from the
   # proxy at the version go.mod pins, not from a sibling checkout.
+  # Build and test against the LATEST gofastr release, not the pinned one.
+  #
+  # go.mod pins a version deliberately: a cross-repo demo that floats breaks
+  # without anyone touching it, and the posthog plugin sat blocked on exactly
+  # that. But a pin nobody revisits is how this repo ended up two releases
+  # behind (v0.71.2 against v0.73.0) without a single failing build — the pin
+  # made drift invisible rather than impossible.
+  #
+  # This job makes drift visible. It is deliberately NOT on pull_request: a
+  # third party publishing a release should not turn someone's unrelated PR
+  # red. It runs on main, on a schedule, and on demand — which is enough for
+  # drift to be a red build rather than a discovery months later.
+  gofastr-latest:
+    name: go (latest gofastr release)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Upgrade to the latest gofastr release
+        run: |
+          set -euo pipefail
+          latest=$(git ls-remote --tags --refs --sort=-v:refname \
+            https://github.com/DonaldMurillo/gofastr.git 'v*' \
+            | head -1 | sed 's|.*refs/tags/||')
+          echo "latest gofastr release: $latest"
+          pinned=$(go list -m -f '{{.Version}}' github.com/DonaldMurillo/gofastr)
+          echo "pinned in go.mod:       $pinned"
+          if [ "$latest" = "$pinned" ]; then
+            echo "already on the latest release"
+          else
+            echo "::notice::gofastr $latest is available; go.mod pins $pinned"
+            go get "github.com/DonaldMurillo/gofastr@$latest"
+          fi
+      - name: Build and test against it
+        run: go build ./... && go test ./... -count=1
+
   go:
     name: go (root module)
     runs-on: ubuntu-latest
