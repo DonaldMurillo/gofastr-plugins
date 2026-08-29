@@ -230,6 +230,58 @@ WebKit against real fixtures (`pdf/testdata/scan-jpx.pdf` went from 0 to 181,053
 non-white pixels; `scan-jbig2.pdf` renders at 316,750), both kept as regression
 fixtures. **This is why we did not need to ask core for `'wasm-unsafe-eval'`.**
 
+## Decision: a capability the cage cannot hold is delivered TO it (2026-08-29)
+
+Settled by the `scanner` plugin, and the shape generalises.
+
+An opaque-origin frame cannot have the camera. Measured four ways: a plain
+same-origin iframe gets it; `sandbox="allow-scripts"` is refused with
+`SecurityError: Invalid security origin`; adding `allow="camera *"` changes
+nothing; and only `allow-same-origin` works, which is the flag the platform
+bans. Upstream reached the same conclusion independently (gofastr#273).
+
+The rejected option was a `Permissions []string` manifest field. It would have
+shipped as a no-op — not because of the default `Permissions-Policy`, but
+because the frame cannot hold the feature at all. Adding a field that does
+nothing is worse than having no field, because it reads like a capability.
+
+**The decision: the host acquires the capability and streams its OUTPUT over the
+bridge.** The camera lives on the host page, where the permission prompt is
+against an origin a user can read; grayscale frames cross to the frame; the
+decode happens inside; the result comes back as text. Capture outside,
+processing inside, exfiltration still impossible.
+
+This is the same shape as pdf's document bytes and genui's composition tree, and
+it is now the answer for any capability in this class — geolocation, microphone,
+a native picker. The cage does not get widened to reach a device; the device's
+output is handed in.
+
+One consequence a host must know: the framework's default `Permissions-Policy`
+denies the camera to the **host document** too, so it fails there as a console
+error rather than a prompt. That is opt-in per host, and the manifest has no way
+to declare the requirement — filed as gofastr#294.
+
+## Decision: no `'unsafe-eval'`, ever, and what that costs (2026-08-29)
+
+The framed CSP grants no string eval, and the narrow wasm tier proposed in
+gofastr#255 deliberately does not either.
+
+The cost is concrete and worth stating rather than discovering: **a library that
+compiles at runtime cannot run in the cage, however it ships.** AlaSQL is pure
+JavaScript with no wasm anywhere and still cannot execute a query, because it
+builds queries with `new Function`. "Pure JS" is not the property that matters;
+"does not eval" is.
+
+Measured, in the cage, under the real framed CSP: `eval` and `new Function` both
+throw `EvalError`, with and without `'wasm-unsafe-eval'` — that tier grants
+WebAssembly compilation and nothing else. SQLite via `sql.js` runs under it
+(3.49.1, 9 ms init on chromium, 24 ms on webkit) and fails without it.
+
+So the ordering for an engine plugin is: wasm under the narrow tier if the
+engine has a wasm build, otherwise a library that does not compile at runtime,
+and never `'unsafe-eval'`. A plugin that needs the last one is a plugin this
+platform should not host.
+
 ## Open threads
 
 - **Upstream: capability-denied status code disagrees with itself.**
