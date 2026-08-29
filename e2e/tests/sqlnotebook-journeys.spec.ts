@@ -96,6 +96,26 @@ test("a broken query reports an error and keeps the last good result on screen",
   await expect(frame(page).locator("table").first()).toContainText(/\w/);
 });
 
+test("the schema sidebar tracks DDL, not just the seed", async ({ page }) => {
+  await ready(page);
+  const tables = frame(page).locator(".sqlnb-tables");
+  await expect(tables).toContainText("plugins");
+  await expect(tables).not.toContainText("notes");
+
+  await run(page, "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)");
+  await expect.poll(async () => (await readDebug(page))?.results ?? 0, { timeout: 15_000 }).toBeGreaterThan(0);
+
+  // The sidebar is this notebook's only map of the database, and DDL is
+  // ordinary in one. refreshSchema used to run once at boot and never again,
+  // so a created table stayed invisible for the rest of the session.
+  await expect(tables).toContainText("notes");
+  await expect(tables).toContainText("body");
+
+  await run(page, "DROP TABLE notes");
+  await expect(tables).not.toContainText("notes");
+  await expect(tables, "dropping one table must not blank the rest").toContainText("plugins");
+});
+
 test("the frame is sealed: opaque origin, and the tier grants only wasm", async ({ page, request, baseURL }) => {
   await ready(page);
 
