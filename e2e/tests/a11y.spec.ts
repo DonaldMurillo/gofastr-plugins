@@ -109,6 +109,22 @@ test("a11y: pdf demo page (host chrome + mount)", async ({ page }) => {
   await audit(page, "pdf demo");
 });
 
+test("a11y: scanner demo page (host chrome + mount)", async ({ page }) => {
+  await page.goto("/scanner");
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & { __scannerReady?: boolean }) | null;
+      return !!f && f.__scannerReady === true;
+    },
+    undefined,
+    { timeout: 25_000 }
+  );
+  // The file input is deliberately visually hidden behind a styled <label>, so
+  // this page is the one where a hidden-but-labelled control has to survive the
+  // audit rather than be waved through.
+  await audit(page, "scanner demo");
+});
+
 test("a11y: calendar demo page (host chrome + mount)", async ({ page }) => {
   await page.goto("/calendar");
   await page.waitForFunction(
@@ -256,7 +272,7 @@ const CONTRAST_PAIRS: [string, string, number][] = [
   ["--color-text-muted", "--color-surface", 4.5],
 ];
 
-for (const plugin of ["datagrid", "chart", "logstream", "imageedit", "formbuilder", "calendar"]) {
+for (const plugin of ["datagrid", "chart", "logstream", "imageedit", "formbuilder", "calendar", "scanner"]) {
   test(`contrast: ${plugin} frame tokens meet WCAG AA`, async ({ page }) => {
     await page.goto(`/${plugin}`);
     await page.waitForFunction(
