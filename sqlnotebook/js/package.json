@@ -1,0 +1,16 @@
+{
+  "name": "@gofastr-plugins/sqlnotebook-frame",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

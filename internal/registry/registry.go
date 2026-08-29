@@ -108,6 +108,21 @@ type Plugin struct {
 	// anything already in Capabilities.
 	OptionalCapabilities []string `json:"optionalCapabilities,omitempty"`
 
+	// CSP lists the opt-in Content-Security-Policy keywords the plugin's
+	// manifest adds to the framed policy's script-src. The framework's
+	// allowlist is closed and today has exactly one member,
+	// 'wasm-unsafe-eval', which lets a frame compile WebAssembly without
+	// gaining string eval. It is listed here because it is the one field that
+	// WIDENS the cage: a reader deciding whether to adopt a plugin should be
+	// able to see that from the index rather than from the source.
+	//
+	// Absent for every plugin that does not need it, which is all but one.
+	// Declaring it in a manifest is not enough to make it take effect — the
+	// host must also hand it to the AssetServer (DonaldMurillo/gofastr#300) —
+	// so this row describes intent, and the plugin's own test is what proves
+	// the served header carries it.
+	CSP []string `json:"csp,omitempty"`
+
 	// FrameworkCompat is a best-effort floor (a semver range), not a tested
 	// support matrix.
 	FrameworkCompat string `json:"frameworkCompat"`

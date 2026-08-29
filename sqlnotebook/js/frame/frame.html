@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+  GoFastr SQL notebook — opaque-origin sandboxed frame document
+  (sqlnotebook protocol v1, schema sqlnotebook.v1).
+
+  Served same-origin at /__gofastr/plugin/sqlnotebook/frame.html and loaded
+  inside an <iframe sandbox="allow-scripts"> (NO allow-same-origin). Under
+  that sandbox:
+    - the frame is an opaque origin; document.cookie / localStorage /
+      sessionStorage throw, and window.parent.document is unreachable.
+    - the framed CSP sets connect-src 'none': the frame can NEVER fetch.
+      That includes the engine: sql.js's documented `locateFile` option
+      makes it fetch sql-wasm.wasm over HTTP, which fails with "both async
+      and sync fetching of the wasm failed". The .wasm bytes therefore
+      arrive over the postMessage bridge (the HOST adapter fetches
+      same-origin and posts sqlnb/init with the ArrayBuffer), and this
+      frame calls initSqlJs({ wasmBinary }) — never locateFile.
+    - sql-wasm.js itself (the emscripten JS glue) IS loadable as a plain
+      <script src> from the frame's own origin; only the .wasm needs
+      delivering as bytes.
+    - wasm needs 'wasm-unsafe-eval' in the SERVED CSP — the Go side hands
+      the manifest CSP to the AssetServer; that is its half of the
+      contract, not this document's.
+
+  The build inlines notebook.css into a <style> block in the committed
+  assets/frame.html (this source keeps the <link> so it renders standalone
+  under js/frame/). Sub-resources are referenced by RELATIVE path so they
+  resolve under the plugin asset route prefix regardless of the
+  host-appended ?v= cache-buster.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>SQL notebook</title>
+    <link rel="stylesheet" href="./notebook.css" />
+  </head>
+  <body>
+    <div id="sqlnb-root" role="region" aria-label="SQL notebook">
+      <aside class="sqlnb-side" aria-label="Database schema">
+        <div class="sqlnb-side-title">Schema</div>
+        <div id="sqlnb-tables" class="sqlnb-tables">
+          <div class="sqlnb-hint">waiting for engine…</div>
+        </div>
+      </aside>
+      <section class="sqlnb-main">
+        <div class="sqlnb-bar">
+          <button id="sqlnb-run" type="button" title="Run (Ctrl/Cmd+Enter)">Run</button>
+          <span id="sqlnb-status" class="sqlnb-status" aria-live="polite"></span>
+        </div>
+        <textarea
+          id="sqlnb-sql"
+          class="sqlnb-sql"
+          rows="6"
+          spellcheck="false"
+          aria-label="SQL statement"
+          placeholder="-- SQL goes here; Ctrl/Cmd+Enter runs it"
+        ></textarea>
+        <div id="sqlnb-error" class="sqlnb-error" role="alert" hidden></div>
+        <div id="sqlnb-result" class="sqlnb-result">
+          <div class="sqlnb-hint">no query yet</div>
+        </div>
+      </section>
+    </div>
+    <!--
+      Order is load-bearing: sql-wasm.js defines the global initSqlJs that
+      notebook.js calls once the wasm bytes arrive over the bridge. No
+      inline JS (CSP script-src); notebook.js is the bundled controller.
+    -->
+    <script src="./sql-wasm.js"></script>
+    <script src="./notebook.js"></script>
+  </body>
+</html>
