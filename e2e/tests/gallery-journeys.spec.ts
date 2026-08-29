@@ -12,14 +12,21 @@ const navItem = (page: Page, slug: string) => page.locator(`.nav-item[data-slug=
 test("homepage shows the gallery: sidebar + a card per plugin, no demo framed yet", async ({ page }) => {
   await page.goto("/");
   await expect(sidebar(page)).toBeVisible();
-  // Thirteen plugins (richtext, mermaid, monaco, datagrid, chart, logstream,
-  // imageedit, formbuilder, calendar, whiteboard, pdf, tour, map) plus two
-  // recipes (blogsite, blogapp), which share the nav-item/card markup.
-  await expect(page.locator(".nav-item")).toHaveCount(15);
-  await expect(page.locator(".home .card")).toHaveCount(15);
+  // Fourteen plugins (richtext, mermaid, monaco, datagrid, chart, logstream,
+  // imageedit, formbuilder, calendar, whiteboard, pdf, tour, map, scanner)
+  // plus two recipes (blogsite, blogapp), which share the nav-item/card markup.
+  //
+  // The count is deliberately exact rather than a floor: the sidebar and the
+  // home grid are built from ONE list, so a mismatch between them means the
+  // grid dropped an entry the sidebar kept, which is invisible by eye. Go's
+  // TestGalleryListsEveryShippedPlugin is what stops the list itself falling
+  // behind plugins.json; this is what stops the two renderings diverging.
+  await expect(page.locator(".nav-item")).toHaveCount(16);
+  await expect(page.locator(".home .card")).toHaveCount(16);
   // Name them rather than only counting: a count alone passes if a card is
   // renamed or duplicated, and this is the completeness canary for the gallery.
   await expect(navItem(page, "pdf")).toBeVisible();
+  await expect(navItem(page, "scanner")).toBeVisible();
   await expect(home(page)).toBeVisible();
   await expect(frame(page)).not.toHaveClass(/show/); // nothing framed on the home view
 });
