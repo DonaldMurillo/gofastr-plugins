@@ -1,0 +1,21 @@
+{
+  "name": "@gofastr/genui-bundle",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "In-frame renderer bundle for the GoFastr genui plugin. Builds a single IIFE (React + react-dom bundled, statically imported — no dynamic import, no lazy loading, the registry is compiled in and that is the containment story) that runs inside the opaque-origin sandboxed iframe and speaks protocol v1 to the host over postMessage. The composition tree arrives host-validated and is validated AGAIN here against the compiled-in registry before rendering: unknown components, undeclared props, unlisted actions and runaway depth/count are refused loudly in the UI, not dropped. connect-src 'none' still holds — the frame never talks to a model, holds a key, or opens a socket.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "esbuild": "0.25.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -265,3 +265,71 @@ func TestEveryChromedpAllocatorOverridesHeadlessDefaults(t *testing.T) {
 		t.Fatal("found no chromedp allocators at all; the guard is not testing anything")
 	}
 }
+
+// TestHostAdaptersDeclareEveryScreamingSnakeConstant catches a class of bug
+// that nothing else in this repo can see.
+//
+// Every host adapter is plain JavaScript, loaded by the browser and never by
+// Go, so no compiler reads it. `node --check` parses it and passes: an
+// identifier that is never declared is a runtime ReferenceError, not a syntax
+// error, and if it sits inside a function the file loads perfectly and fails
+// only when that path runs.
+//
+// genui's adapter shipped `POLL_TIMEOUT_MS` with no declaration. It parsed, it
+// loaded, the plugin mounted, and composing threw
+// "ReferenceError: POLL_TIMEOUT_MS is not defined" — found by an e2e journey,
+// which is several hours later than it should have been.
+//
+// These adapters declare their tunables as `var NAME = …` in SCREAMING_SNAKE at
+// the top of the IIFE, so that convention is checkable: every SCREAMING_SNAKE
+// identifier used must be declared in the same file, or be a browser/JS global.
+func TestHostAdaptersDeclareEveryScreamingSnakeConstant(t *testing.T) {
+	// Globals that are legitimately SCREAMING_SNAKE and not declared locally.
+	allowed := map[string]bool{
+		"NaN": true, "URL": true, "JSON": true, "DOM": true, "API": true,
+		"HTML": true, "CSS": true, "GET": true, "POST": true, "PUT": true,
+		"DELETE": true, "OK": true, "UTF": true, "ID": true, "URI": true,
+	}
+	ident := regexp.MustCompile(`\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b`)
+	declared := regexp.MustCompile(`\b(?:var|let|const|function)\s+([A-Z][A-Z0-9_]*)\b`)
+
+	matches, err := filepath.Glob(filepath.Join("*", "host", "*.js"))
+	if err != nil {
+		t.Fatalf("globbing adapters: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("found no host adapters at all; the guard is not testing anything")
+	}
+	for _, f := range matches {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Errorf("%s: %v", f, err)
+			continue
+		}
+		body := string(src)
+		have := map[string]bool{}
+		for _, m := range declared.FindAllStringSubmatch(body, -1) {
+			have[m[1]] = true
+		}
+		// Only BARE identifier reads count. Strip, in order: string and
+		// template literals (error codes like "E_BAD_IMAGE" live there),
+		// comments, and property accesses (obj.CONST). What is left is code
+		// that would actually resolve a name at runtime.
+		stripped := regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"`).ReplaceAllString(body, `""`)
+		stripped = regexp.MustCompile(`'(?:[^'\\\n]|\\.)*'`).ReplaceAllString(stripped, `''`)
+		stripped = regexp.MustCompile("`(?:[^`\\\\]|\\\\.)*`").ReplaceAllString(stripped, "``")
+		stripped = regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(stripped, " ")
+		stripped = regexp.MustCompile(`//[^\n]*`).ReplaceAllString(stripped, " ")
+		stripped = regexp.MustCompile(`\.[A-Za-z_$][\w$]*`).ReplaceAllString(stripped, ".")
+		seen := map[string]bool{}
+		for _, name := range ident.FindAllString(stripped, -1) {
+			if allowed[name] || have[name] || seen[name] {
+				continue
+			}
+			seen[name] = true
+			t.Errorf("%s uses %s but never declares it: a browser would throw "+
+				"ReferenceError the first time that line runs, and neither "+
+				"`node --check` nor any Go test would notice", f, name)
+		}
+	}
+}

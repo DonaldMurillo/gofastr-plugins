@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+  GoFastr genui — opaque-origin sandboxed frame document (protocol v1).
+
+  Served same-origin at /__gofastr/plugin/genui/genui.html and loaded inside
+  an <iframe sandbox="allow-scripts"> (NO allow-same-origin). Under that sandbox:
+    - the frame is an opaque origin; document.cookie / localStorage /
+      sessionStorage throw, and window.parent.document is unreachable.
+    - the framed CSP sets connect-src 'none': the frame can NEVER fetch. The
+      model runs in Go; a composition arrives host-validated over the bridge
+      and is validated AGAIN here against the compiled-in registry before
+      anything renders. The frame holds no key, opens no socket, and cannot
+      exfiltrate the document it is composing.
+    - react + react-dom are bundled into the one script below — no dynamic
+      import, no React.lazy, no runtime loading. The fixed registry compiled
+      into that bundle is the entire component vocabulary a composition can
+      draw from.
+  The UI is deliberately bare: #genui-root is the mount point React renders
+  the composition (or the pending skeleton, or the refusal panel) into. Every
+  control that starts or steers a generation lives on the host page.
+  Sub-resources are referenced by RELATIVE path so they resolve under the
+  plugin asset route prefix regardless of the host-appended ?v= cache-buster.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Generated UI</title>
+    <link rel="stylesheet" href="./genui.css" />
+  </head>
+  <body>
+    <div id="genui-root" role="region" aria-label="Generated UI"></div>
+    <!--
+      The ?v= on the iframe SRC is a host-appended cache-buster for
+      genui.html; sub-resource references stay relative and do not depend on
+      its value. The bundle is the ONLY script: no inline JS (CSP script-src
+      has no 'unsafe-inline'), React is bundled in.
+    -->
+    <script src="./genui.js"></script>
+  </body>
+</html>

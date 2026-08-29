@@ -126,6 +126,15 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed logstream/js/tsconfig.json
 //go:embed logstream/js/src
 //go:embed logstream/js/frame
+//go:embed genui/*.go
+//go:embed genui/assets
+//go:embed genui/host
+//go:embed genui/js/build.mjs
+//go:embed genui/js/package.json
+//go:embed genui/js/package-lock.json
+//go:embed genui/js/tsconfig.json
+//go:embed genui/js/src
+//go:embed genui/js/frame
 //go:embed scanner/*.go
 //go:embed scanner/assets
 //go:embed scanner/host

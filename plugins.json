@@ -304,6 +304,26 @@
       "schema": "scanner-v1",
       "minHeight": "460px",
       "docs": "docs/scanner.md"
+    },
+    {
+      "name": "genui",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/genui",
+      "version": "0.1.0",
+      "description": "Generative UI: a model composes a view out of a FIXED registry of React components, naming component ids and typed props — never markup, never CSS, never code. The bounded registry IS the containment story: eight components, each declaring a closed set of props, so there is no style, className or dangerouslySetInnerHTML for generated output to travel through. Compositions are validated twice on purpose — in Go before they are stored and served, and again in the frame before they are rendered, because \"the host already checked it\" is the assumption that turns one bug into a rendered payload. The model runs HOST-side in Go: the frame receives a finished tree over the postMessage bridge, holds no credentials, and keeps connect-src 'none', so a composer that could call a model could never also send it the document. Generated controls may only fire actions the host explicitly allow-listed. Async by design: a placeholder, then the finished view; no tokens streamed into the DOM.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "genui:compose",
+        "theme:read"
+      ],
+      "frameworkCompat": ">=0.28.0",
+      "routePrefix": "/__gofastr/plugin/genui",
+      "entry": "/__gofastr/plugin/genui/genui.html",
+      "schema": "genui-v1",
+      "minHeight": "360px",
+      "docs": "docs/genui.md"
     }
   ]
 }

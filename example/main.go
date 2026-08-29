@@ -27,6 +27,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/chart"
 	"github.com/DonaldMurillo/gofastr-plugins/datagrid"
 	"github.com/DonaldMurillo/gofastr-plugins/formbuilder"
+	"github.com/DonaldMurillo/gofastr-plugins/genui"
 	"github.com/DonaldMurillo/gofastr-plugins/geomap"
 	"github.com/DonaldMurillo/gofastr-plugins/imageedit"
 	"github.com/DonaldMurillo/gofastr-plugins/logstream"
@@ -184,6 +185,17 @@ func newApp() (*framework.App, error) {
 		logstream.WithDemoPage(),
 		logstream.WithSource(demoLogs.source),
 		logstream.WithDemoControlURL(demoLogControlPath),
+	))
+
+	// Generative UI — the plugin where the untrusted input is a MODEL'S
+	// OUTPUT. It composes from a fixed registry of components rather than
+	// emitting markup, and the composition is validated in Go before it is
+	// stored and again in the frame before it is rendered. The composer here
+	// is the deterministic fixture one: no key, no network, same answers every
+	// run. Demo at /genui.
+	app.RegisterPlugin(genui.New(
+		genui.WithDevGrantAll(),
+		genui.WithDemoPage(),
 	))
 
 	// The scanner — the plugin whose input is a DEVICE, and the one that
