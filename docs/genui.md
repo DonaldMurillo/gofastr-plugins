@@ -53,6 +53,50 @@ table with a fallback card. That is what the demo and **every test** use. A
 plugin whose tests need an API key is a plugin nobody can contribute to. A real
 client goes behind the same interface, and `WithComposer` swaps it in.
 
+## The real client
+
+`AnthropicComposer` talks to the Messages API over plain `net/http` — no SDK, so
+this module gains no dependency and no version to track for about forty lines of
+request building. A host that prefers an SDK implements `Composer` itself; that
+is what the interface is for.
+
+```go
+genui.New(genui.WithComposer(genui.NewAnthropicComposer(genui.AnthropicConfig{})))
+```
+
+The key comes from `APIKey` or `ANTHROPIC_API_KEY`, read at compose time rather
+than construction so a host that builds its plugin graph before loading secrets
+still works.
+
+Three properties worth stating, because they are what the tests pin:
+
+- **The tool call is forced.** Without `tool_choice` the model may answer in
+  prose containing JSON, and the caller is back to scraping. Forcing it makes
+  the answer arrive as a typed object.
+- **Model output is not trusted because it came from a model.** It goes through
+  the same `Validate` as everything else. A refusal is handed back verbatim —
+  the validator's message names the offending path, which is what a model needs
+  to correct it and what a human would need too — and the model gets one more
+  attempt.
+- **A composition that fails twice is an error, not a fallback.** Quietly
+  repairing bad output, or silently dropping to the fixture composer, would hide
+  exactly the case this plugin exists to demonstrate.
+
+The tool's JSON schema describes the *shape* and deliberately does not encode
+every per-component prop rule. A schema enumerating eight components' prop sets
+would be a second copy of the registry, drifting from the first. The schema gets
+the model into the right shape; the validator decides whether the answer is
+acceptable.
+
+Errors never carry the response body — an API error message can echo a key back
+— but they do carry the API's error type, so a 401 still says
+`authentication_error`.
+
+Every test runs against an `httptest` server with canned responses. No test
+calls a model: a test that did would depend on the model, and what is under test
+is what this code does with an answer, including answers a model should not have
+given.
+
 ## Actions are allow-listed
 
 A generated `Button` may carry an `action`, and validation rejects any name the
