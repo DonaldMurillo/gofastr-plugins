@@ -54,6 +54,15 @@ async function ready(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.goto(PDF);
   await ready(page);
+  // Scroll the mount into view before any journey touches it. The demo page
+  // has a hero above the frame, so on a 720px viewport the frame's lower half
+  // starts below the fold — and Playwright cannot bring an element that lives
+  // INSIDE the iframe into view by scrolling, because scrolling the frame's
+  // own document does not move the frame on the host page. Clicks on the
+  // redaction confirm and the occurrences button failed with "element is
+  // outside of the viewport" for exactly that reason. A user scrolls; so does
+  // the journey.
+  await page.locator(".editor-card").scrollIntoViewIfNeeded();
 });
 
 test("mounts in a genuinely opaque sandbox with no console/boot errors", async ({ page }) => {
