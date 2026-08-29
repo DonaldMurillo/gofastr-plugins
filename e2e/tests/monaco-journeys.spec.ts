@@ -67,7 +67,7 @@ test("a save conflict (409) surfaces a status line instead of a silent loss", as
 
 // --- Showcase: the control panel reconfigures the frame LIVE (postMessage) -----
 
-const toggle = (page: Page, opt: string) => page.locator(`.btn.toggle[data-opt="${opt}"]`);
+const toggle = (page: Page, opt: string) => page.locator(`.fui-btn.toggle[data-opt="${opt}"]`);
 
 test("control panel reconfigures the editor live: line numbers + font size", async ({ page }) => {
   // Line numbers are on by default → rendered in the gutter. Toggling the control

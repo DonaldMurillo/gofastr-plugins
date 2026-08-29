@@ -4,6 +4,38 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — five early demo pages brought up to the demo-page standard (2026-08-28)
+
+The mermaid, monaco, pdf, geomap and tour demos predate
+[docs/demo-page-design.md](docs/demo-page-design.md) and had drifted from it:
+thin shells (mermaid/monaco), grey prose and an indigo vendor accent bridged
+in from the demo theme (pdf), and missing beats (geomap/tour). All five now
+ship the shared shell the richtext and datagrid demos established — brand
+bar, a hero whose headline is a claim, fact chips with real values, the mount
+inside window chrome with an honest mode badge (`sandboxed iframe` vs
+`trusted host page`), an affordance strip, three feature cards, and a
+footer — on the same warm-amber token palette, with the light/dark toggle
+persisted to the same cookie as richtext's demo.
+
+Each page now also shows its proof live instead of asserting it in prose:
+the pdf demo displays a redaction receipt (armed count, pipeline state, and
+the export verifier's six checks) polled from the adapter's bridge mirrors;
+monaco's toolbar reconfigures the live editor over postMessage as before,
+now under the shell; geomap states the trusted-host trade it made and why,
+with a live pin count; mermaid seeds a default diagram so the render round
+trip is visible on first load; tour walks a demo surface inside the same
+window chrome. Two frame-side constraints surfaced during the retrofit and
+shaped the pages: mermaid and monaco parse bridged token values in
+JavaScript and reject oklch, so their demo themes bridge exact sRGB hex
+equivalents of the same palette; and pdf.js schedules its render loop on
+requestAnimationFrame, which headless Chrome starves for frames below the
+fold, so the pdf hero is tightened to keep the mount near the viewport (the
+plugin's chromedp gate loads the page at 756×413).
+
+e2e: monaco's toggle selector moved with the house class (`.btn.toggle` →
+`.fui-btn.toggle`); geomap's theme-toggle journey now asserts the scheme
+FLIPS rather than landing on "dark", because these pages default dark via
+the shared cookie like richtext's. No assertion was weakened.
 
 ### Added — whiteboard: collaboration without a socket in the cage (2026-08-28)
 
