@@ -371,3 +371,57 @@ func TestChangelogRecordsEveryShippedPlugin(t *testing.T) {
 		t.Fatal("the registry lists no plugins at all; this guard is not testing anything")
 	}
 }
+
+// The nightly gofastr-latest job asks the compare API whether the newest
+// gofastr tag contains each commit listed in .github/awaiting-upstream.tsv,
+// and reports which of our tickets that unblocks. A typo in a sha does not
+// fail that job: the compare call 404s, the row prints a warning, and the
+// ticket it guards stays "blocked" forever with nobody the wiser. So the
+// shape of the file is checked here, where a typo is a red PR instead of a
+// silent one. Also assert the file is non-empty of rows: an empty manifest
+// would make the job pass vacuously, which is the same failure wearing green.
+func TestAwaitingUpstreamManifestIsWellFormed(t *testing.T) {
+	const p = ".github/awaiting-upstream.tsv"
+
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read %s: %v", p, err)
+	}
+
+	var (
+		sha      = regexp.MustCompile(`^[0-9a-f]{8,40}$`)
+		upstream = regexp.MustCompile(`^gofastr#\d+$`)
+		issue    = regexp.MustCompile(`^#\d+$`)
+		rows     int
+	)
+
+	for n, line := range strings.Split(string(raw), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) != 4 {
+			t.Errorf("%s:%d: want 4 tab-separated fields, got %d: %q", p, n+1, len(f), line)
+			continue
+		}
+		if !sha.MatchString(f[0]) {
+			t.Errorf("%s:%d: %q is not a lowercase hex sha of 8-40 chars", p, n+1, f[0])
+		}
+		if !upstream.MatchString(f[1]) {
+			t.Errorf("%s:%d: %q is not a gofastr#N reference", p, n+1, f[1])
+		}
+		if !issue.MatchString(f[2]) {
+			t.Errorf("%s:%d: %q is not a #N reference to an issue in this repo", p, n+1, f[2])
+		}
+		if strings.TrimSpace(f[3]) == "" {
+			t.Errorf("%s:%d: the note is empty; say what the fix unblocks", p, n+1)
+		}
+		rows++
+	}
+
+	if rows == 0 {
+		t.Errorf("%s lists no awaited fixes; if nothing is awaited, delete the "+
+			"file and the CI step that reads it rather than leaving both to pass "+
+			"on an empty list", p)
+	}
+}
