@@ -210,6 +210,19 @@ jobs:
       - name: go test
         run: go test ./... -count=1
 
+      # The keystroke gate's numbers, per run, machine-readable. #71 asks
+      # whether p99 clusters near the ceiling, and that needs a distribution
+      # rather than one number: `gh run download <id> -n latency-gate` makes a
+      # sweep across runs possible. Uploaded even on failure, because a run
+      # that TRIPPED the ceiling is the most interesting point in the series.
+      - name: upload the latency gate reading
+        if: always() && hashFiles('example/latency-gate.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: latency-gate
+          path: example/latency-gate.json
+          retention-days: 90
+
   # The eject build canary gets its own runner because it is the one test that
   # competes for the machine. It ejects every plugin into a temp module and
   # runs a cold `go build` over it; sharing a two-core runner with the chromedp

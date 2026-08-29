@@ -4,6 +4,24 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — the latency gate's readings, per run, as a downloadable artifact (2026-08-29)
+
+The step summary from the previous entry fixed half the problem. It shows a
+human one run's numbers, and #71 asks whether p99 **clusters** near the ceiling,
+which nobody answers by opening twelve summary pages. GitHub also exposes no API
+for step summaries, so I could not verify from here that the change had actually
+taken effect, and machinery that has never been seen to fire is
+indistinguishable from machinery that cannot.
+
+The gate now also writes `example/latency-gate.json` (p50, p99, count, verdict,
+both thresholds, the commit sha and run id), and CI uploads it with
+`if: always()`, because a run that TRIPPED the ceiling is the most interesting
+point in the series. `gh run download <id> -n latency-gate` makes the sweep the
+ticket asks for possible, and makes the mechanism checkable rather than assumed.
+
+Second local sample, for the record: p50 6.40 ms, p99 8.60 ms, after 4.60 and
+8.40. Against the 59.80 ms p99 of the CI failure in #71.
+
 ### Fixed — the latency gate only reported its numbers when it failed (2026-08-29)
 
 #71 asks a question that turned out to be unanswerable: track the Phase 0

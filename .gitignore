@@ -33,3 +33,6 @@ pdf/js/*.pdf
 
 # Browser-automation debug artifacts (MCP console logs + screenshots)
 .playwright-mcp/
+
+# Written by the Phase 0 latency gate for CI to upload; never committed.
+example/latency-gate.json

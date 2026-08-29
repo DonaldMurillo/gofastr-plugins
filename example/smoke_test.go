@@ -456,6 +456,21 @@ func publishLatency(t *testing.T, p50, p99 float64, count int, verdict string) {
 	if path == "" {
 		return // local run: t.Logf under -v is enough
 	}
+	// Also drop a machine-readable copy. The step summary is for a human
+	// reading one run; #71 asks whether p99 CLUSTERS near the ceiling, and
+	// nobody answers that by opening twelve summary pages. CI uploads this as
+	// an artifact, so a later sweep can fetch the numbers per run and build
+	// the distribution the ticket actually asks for.
+	if blob, mErr := json.Marshal(map[string]any{
+		"p50": p50, "p99": p99, "count": count, "verdict": verdict,
+		"hardCeilingMS": hardCeilingMS, "strictMS": strictLatencyMS,
+		"sha": os.Getenv("GITHUB_SHA"), "runID": os.Getenv("GITHUB_RUN_ID"),
+	}); mErr == nil {
+		if wErr := os.WriteFile("latency-gate.json", blob, 0o644); wErr != nil {
+			t.Logf("latency gate: could not write latency-gate.json: %v", wErr)
+		}
+	}
+
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		t.Logf("latency gate: could not open GITHUB_STEP_SUMMARY: %v", err)
