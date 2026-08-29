@@ -272,32 +272,81 @@ const CONTRAST_PAIRS: [string, string, number][] = [
   ["--color-text-muted", "--color-surface", 4.5],
 ];
 
-for (const plugin of ["datagrid", "chart", "logstream", "imageedit", "formbuilder", "calendar", "scanner"]) {
-  test(`contrast: ${plugin} frame tokens meet WCAG AA`, async ({ page }) => {
-    await page.goto(`/${plugin}`);
-    await page.waitForFunction(
-      () => {
-        const f = document.querySelector("iframe") as (HTMLIFrameElement & Record<string, unknown>) | null;
-        if (!f) return false;
-        // Wait for the THEME, not merely the mount: tokens arrive after boot.
-        return Object.keys(f).some((k) => k.startsWith("__") && k.toLowerCase().includes("theme"));
-      },
-      undefined,
-      { timeout: 25_000 }
-    );
+/** Wait for the frame to have been handed a theme, not merely mounted. */
+async function waitForBridgedTheme(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const f = document.querySelector("iframe") as (HTMLIFrameElement & Record<string, unknown>) | null;
+      if (!f) return false;
+      return Object.keys(f).some((k) => k.startsWith("__") && k.toLowerCase().includes("theme"));
+    },
+    undefined,
+    { timeout: 25_000 }
+  );
+}
 
-    const names = [...new Set(CONTRAST_PAIRS.flatMap(([a, b]) => [a, b]))];
-    const rgb = await frameTokenRGB(page, names);
-
-    for (const [fg, bg, min] of CONTRAST_PAIRS) {
-      const f = rgb[fg];
-      const b = rgb[bg];
-      if (!f || !b) continue; // a plugin that does not use the token is not failing it
-      const ratio = contrast(f, b);
-      expect(
-        ratio,
-        `${plugin}: ${fg} on ${bg} is ${ratio.toFixed(2)}:1 (rgb ${f} on ${b}), want >= ${min}:1`
-      ).toBeGreaterThanOrEqual(min);
+/**
+ * Switch the host page's scheme and let the new tokens re-bridge.
+ *
+ * Returns the scheme actually in effect, which the caller must check: a test
+ * that asks for dark, silently gets light, and then passes is measuring the
+ * light theme twice.
+ */
+async function setScheme(page: Page, scheme: "light" | "dark"): Promise<string | undefined> {
+  const current = await page.evaluate(() => document.documentElement.dataset.colorScheme);
+  if (current !== scheme) {
+    const toggle = page.locator("#fui-scheme-toggle");
+    if (await toggle.count()) {
+      await toggle.first().click({ timeout: 5_000 });
+    } else {
+      await page.evaluate((sc) => {
+        document.documentElement.dataset.colorScheme = sc;
+      }, scheme);
     }
-  });
+    await page.waitForTimeout(500); // tokens re-bridge into the frame
+  }
+  return page.evaluate(() => document.documentElement.dataset.colorScheme);
+}
+
+for (const plugin of ["datagrid", "chart", "logstream", "imageedit", "formbuilder", "calendar", "scanner"]) {
+  // BOTH schemes, because the bug this exists to catch was a DARK one: a
+  // partial dark palette landing on the frame's light fallbacks rendered
+  // near-white text on white at 1.12:1, and a light-only check cannot see it
+  // (gofastr#271). calendar carried a hand-declared token block as the
+  // workaround; deleting that block is only safe because this runs dark.
+  for (const scheme of ["light", "dark"] as const) {
+    test(`contrast: ${plugin} frame tokens meet WCAG AA (${scheme})`, async ({ page }) => {
+      await page.goto(`/${plugin}`);
+      await waitForBridgedTheme(page);
+
+      const applied = await setScheme(page, scheme);
+      expect(applied, `asked for ${scheme}, page is in ${applied}`).toBe(scheme);
+      await waitForBridgedTheme(page);
+
+      const names = [...new Set(CONTRAST_PAIRS.flatMap(([a, b]) => [a, b]))];
+      const rgb = await frameTokenRGB(page, names);
+
+      // A token that does not resolve used to `continue`, which meant a frame
+      // receiving NO palette passed every pair by measuring nothing. The whole
+      // failure mode here is a palette arriving incomplete, so an unresolved
+      // token is the finding, not a reason to skip.
+      const unresolved = names.filter((n) => !rgb[n]);
+      expect(
+        unresolved,
+        `${plugin} (${scheme}): the frame resolved no value for ${unresolved.join(", ")}, ` +
+          `so the palette did not arrive intact`
+      ).toEqual([]);
+
+      for (const [fg, bg, min] of CONTRAST_PAIRS) {
+        const f = rgb[fg];
+        const b = rgb[bg];
+        if (!f || !b) continue; // unreachable: the assertion above already failed
+        const ratio = contrast(f, b);
+        expect(
+          ratio,
+          `${plugin} (${scheme}): ${fg} on ${bg} is ${ratio.toFixed(2)}:1 (rgb ${f} on ${b}), want >= ${min}:1`
+        ).toBeGreaterThanOrEqual(min);
+      }
+    });
+  }
 }

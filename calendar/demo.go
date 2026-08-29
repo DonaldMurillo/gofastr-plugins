@@ -194,39 +194,7 @@ const demoPage = `<!doctype html>
 // this demo's jump-button row. Token-driven throughout.
 const demoShellCSS = `
 * { box-sizing: border-box; }
-/* Every --color-* this page and its frame use, NAMED here on purpose.
- *
- * The host broker bridges tokens by first collecting custom-property NAMES
- * from document.styleSheets, then reading their computed values. A name it
- * never sees is never bridged — even though the host has a perfectly good
- * computed value for it. A stylesheet still loading when the frame boots
- * contributes no names, so the frame can receive a PARTIAL palette, and a
- * partial dark palette landing on light defaults renders near-white text on
- * white. CI caught that at 1.12:1 while it never reproduced locally, where
- * every sheet was already parsed.
- *
- * Declaring the names in this inline block, which is in the document from the
- * first byte, makes the set collectable no matter what else is still loading.
- * The VALUES here are only the light defaults; the cascade still resolves the
- * real theme, and the broker bridges whatever it resolves to.
- * See DonaldMurillo/gofastr#271.
- */
-:root {
-  --demo-measure: 66rem;
-  --demo-gutter: clamp(20px, 5vw, 32px);
-  --color-background: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-soft: #f4f4f5;
-  --color-border: #e4e4e7;
-  --color-border-strong: #a1a1aa;
-  --color-text: #18181b;
-  --color-text-muted: #52525b;
-  --color-text-subtle: #71717a;
-  --color-primary: #e0a040;
-  --color-primary-fg: #18181b;
-  --color-danger: #d1242f;
-  --color-warning: #b45309;
-}
+:root { --demo-measure: 66rem; --demo-gutter: clamp(20px, 5vw, 32px); }
 body { margin: 0; font-family: var(--font-body, 'Inter', system-ui, sans-serif); background: var(--color-background, #F9FAFB); color: var(--color-text, #18181B); line-height: 1.6; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 header { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md, 8px); padding-block: clamp(12px, 3vw, 18px); padding-inline: max(var(--demo-gutter), calc((100% - var(--demo-measure)) / 2)); border-bottom: 1px solid var(--color-border, #E4E4E7); background: color-mix(in srgb, var(--color-background, #F9FAFB) 85%, transparent); backdrop-filter: blur(8px); }
 .brand { display: flex; align-items: center; gap: var(--spacing-md, 8px); min-width: 0; }
