@@ -135,6 +135,7 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed scanner/js/tsconfig.json
 //go:embed scanner/js/src
 //go:embed scanner/js/frame
+//go:embed scanner/js/scripts
 //go:embed formbuilder/*.go
 //go:embed formbuilder/assets
 //go:embed formbuilder/host
