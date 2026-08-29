@@ -27,6 +27,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -38,6 +40,28 @@ const (
 	demoCalmLinesPerSec = 5
 	demoFastLinesPerSec = 6000
 )
+
+// fastLinesPerSec is the flood rate this process actually uses.
+//
+// 6,000 lines/s is the demo's headline and stays the default: it is four times
+// what the frame's render loop can absorb, which is what makes the backpressure
+// visible to a human watching the page.
+//
+// The e2e overrides it, because the journey's claim is "the producer outruns
+// the render loop, drops are counted and marked" — a property of being ABOVE
+// the ceiling, not of 6,000 specifically. On a two-core CI runner hosting this
+// producer, a browser and the Playwright driver at once, 6,000 lines/s pins the
+// whole machine hard enough that the test's own in-page waits time out, and the
+// run then measures the runner rather than the plugin. A rate still comfortably
+// past the ceiling proves the same thing without that (#66).
+func fastLinesPerSec() int {
+	if v := os.Getenv("GOFASTR_DEMO_FAST_LPS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return demoFastLinesPerSec
+}
 
 // demoLogControlPath is the example app's rate-switch route. It is owned by
 // the EXAMPLE, not the plugin: logstream is read-only (stream:read is its
@@ -209,7 +233,7 @@ func registerDemoLogControlRoute(rt interface {
 		case "calm":
 			demoLogs.setRate(demoCalmLinesPerSec)
 		case "fast":
-			demoLogs.setRate(demoFastLinesPerSec)
+			demoLogs.setRate(fastLinesPerSec())
 		default:
 			http.Error(w, `{"error":"E_BAD_RATE","message":"rate must be calm or fast"}`, http.StatusBadRequest)
 			return

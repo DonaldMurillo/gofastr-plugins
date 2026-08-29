@@ -44,7 +44,18 @@ export default defineConfig({
       command: "go run ./example",
       cwd: "..",
       port: PORT,
-      env: { PORT: String(PORT), GOFASTR_ISOLATION: "off" },
+      env: {
+        PORT: String(PORT),
+        GOFASTR_ISOLATION: "off",
+        // The logstream flood journey asserts a property of being ABOVE the
+        // frame's render ceiling (~1,480 lines/s), not of 6,000 specifically.
+        // At the demo's headline rate a two-core CI runner hosting this
+        // producer, a browser and the driver at once is pinned hard enough
+        // that the journey's own in-page waits time out — measuring the runner
+        // rather than the plugin (#66). 2,500 still overruns the ceiling by
+        // 1.7x. The demo binary keeps 6,000 for humans.
+        GOFASTR_DEMO_FAST_LPS: "2500",
+      },
       reuseExistingServer: false,
       timeout: 60_000,
     },
