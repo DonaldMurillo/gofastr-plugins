@@ -203,3 +203,42 @@ in one glance.
   without a reload; search reaching a line that scrolled out of the
   viewport but is still in scrollback; no console errors on a sandboxed
   mount without `allow-same-origin`.
+
+## What rate a host page can actually take
+
+The demo's flood control runs at 6,000 lines/s, which is four times what the
+frame's render loop absorbs and exists to make the backpressure visible. It is
+not a supported throughput figure, and the honest number is per engine.
+
+Measured on a two-core CI runner, both engines, same machine, same adapter:
+
+| engine | lines/s | host event-loop lag | server | `page.evaluate` |
+|---|---|---|---|---|
+| chromium | 6,877 | max **3 ms** | 3 ms | 12 ms |
+| webkit | 6,000 | — | — | **did not complete in 180 s** |
+
+The webkit row is the finding. What timed out was `apiRequestContext`, which is
+Playwright's own HTTP client and never touches the page's event loop — so on
+that runner the whole machine was pinned, not just the page.
+
+That rules out the host adapter: chromium runs the same per-line work, the same
+mirrors and the same `JSON.parse` at nearly 6,900 lines/s with 3 ms of lag. The
+cost that saturates the runner is **webkit processing the stream inside the
+frame**, and the two engines differ by more than an order of magnitude on
+identical hardware.
+
+What is known about the boundary:
+
+- **2,500 lines/s is fine on webkit** — the whole e2e suite runs there on the
+  same class of runner, every run.
+- **6,000 is not**, on two cores.
+
+The rate in between has not been narrowed, and the CI job takes an input for
+exactly that: run the `load-profile` job from the Actions tab with
+`load_profile_rate` set, and it reports both engines at that rate.
+
+The practical advice is the boring one. A host tailing thousands of lines a
+second should know which browsers its users have, and should not assume the
+number it measured on a developer laptop transfers to a small VM — the gap
+between those two machines is larger than the gap between the calm and flood
+rates.

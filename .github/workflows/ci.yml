@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      load_profile_rate:
+        description: "logstream lines/s for the manual load profile job"
+        required: false
+        default: "6000"
   schedule:
     # Daily, for the gofastr-latest job below. Drift against the framework is
     # something that happens while nobody is looking, so something has to look.
@@ -288,7 +293,11 @@ jobs:
         working-directory: e2e
         env:
           LOAD_PROFILE: "1"
-          GOFASTR_DEMO_FAST_LPS: "6000"
+          # Parameterised so the per-engine ceiling can be narrowed rather than
+          # argued about: webkit is stable at 2,500 (the whole e2e suite runs
+          # there) and saturates a two-core runner at 6,000, so the interesting
+          # rates are between.
+          GOFASTR_DEMO_FAST_LPS: ${{ inputs.load_profile_rate || '6000' }}
         run: npx playwright test logstream-loadprofile --reporter=list
       - uses: actions/upload-artifact@v4
         if: always()
