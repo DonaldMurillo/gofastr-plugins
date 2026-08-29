@@ -773,11 +773,21 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     }
 
     // Drag handle: visible on hover, hidden once the page scrolls.
+    //
+    // The hover is retried against FRESH geometry each attempt. Typing 14
+    // lines autoscrolls the page, and a box read while that scroll is still
+    // settling points at where the paragraph was, not where the pointer will
+    // land — so the mouse arrives over nothing and the handle stays hidden.
+    // That is the flake in #53: it never reproduced in isolation, only in the
+    // full suite, because only there is the scroll still moving. Re-reading
+    // the box per attempt tests the plugin instead of the runner's timing.
     const firstP = editor(page).locator("p").first();
-    const fb = (await firstP.boundingBox())!;
-    await page.mouse.move(fb.x + 40, fb.y + fb.height / 2);
     const handle = page.locator(".richtext-draghandle");
-    await expect(handle).toBeVisible();
+    await expect(async () => {
+      const fb = (await firstP.boundingBox())!;
+      await page.mouse.move(fb.x + 40, fb.y + fb.height / 2);
+      await expect(handle).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
     await page.mouse.wheel(0, 120);
     await expect(handle).toBeHidden();
 
@@ -787,10 +797,18 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     await expect(menu).toBeVisible();
     const before = (await menu.boundingBox())!;
     await page.mouse.wheel(0, -100); // scroll back up 100px
-    await page.waitForTimeout(250);
-    const after = (await menu.boundingBox())!;
-    const drift = Math.abs(after.y - (before.y + 100));
-    expect(drift, `menu drifted ${drift}px from its caret while scrolling`).toBeLessThanOrEqual(8);
+    // Poll rather than sleep: the claim is that the menu follows the caret,
+    // not that it does so inside 250ms on a loaded machine. The tolerance is
+    // unchanged, so a menu that does not follow still fails.
+    await expect
+      .poll(
+        async () => {
+          const after = (await menu.boundingBox())!;
+          return Math.abs(after.y - (before.y + 100));
+        },
+        { timeout: 5_000, message: "menu never re-anchored to its caret after the page scrolled" }
+      )
+      .toBeLessThanOrEqual(8);
   });
 
   test("theme tokens inherit natively: toggling the page theme restyles the editor with no plugin traffic", async ({ page }) => {
