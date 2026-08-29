@@ -22,7 +22,8 @@
  *      batch at or below that number;
  *   4. buffers what it cannot send in a BOUNDED line buffer. When the
  *      producer outruns the frame's render loop, the OLDEST buffered lines
- *      are dropped and counted — the count travels with the next batch and
+ *      are dropped and counted — the count is sent out of band immediately
+ *      (streamDropped) AND travels with the next batch, and
  *      the frame renders a visible "N lines dropped" marker. A gap the user
  *      cannot see is worse than a gap labelled "1,432 lines dropped".
  *
@@ -138,6 +139,16 @@
       maybeSend();
     }
 
+    // Out-of-band gap notice. Fire-and-forget: if the frame is gone, the same
+    // teardown path maybeSend uses will notice on the next attempt.
+    function notifyDropped() {
+      try {
+        api.sendEvent("streamDropped", { dropped: st.dropped, total: st.droppedTotal });
+      } catch (e) {
+        /* frame went away; maybeSend handles the teardown */
+      }
+    }
+
     // Push as many buffered batches as the window allows. The dropped count
     // travels with the FIRST batch sent after the drop (the lines were older
     // than that batch, so the marker lands above it in the terminal).
@@ -154,7 +165,11 @@
             first: first,
             last: last,
             lines: lines,
-            dropped: dropped
+            dropped: dropped,
+            // The running total lets the frame tell "this gap was already
+            // announced out of band" from "this is news", so the marker is
+            // written exactly once however the count reaches it.
+            droppedTotal: st.droppedTotal
           });
         } catch (e) {
           // The iframe went away between checks (SPA nav race): stop quietly.
@@ -187,6 +202,19 @@
         st.dropped += 1;
         st.droppedTotal += 1;
       }
+      // Tell the frame about a gap OUT OF BAND, immediately.
+      //
+      // The count used to travel only on the next batch, which under sustained
+      // backpressure is queued behind the very congestion it reports: the drop
+      // had happened, the frame had not been told, and on a slow machine that
+      // lag ran past 20 seconds while the counter beside it was already
+      // climbing. "Never a silent gap" has to mean now, not eventually.
+      //
+      // This is a control-plane fact about the stream rather than a line of
+      // it, so it does not wait its turn behind data. The count still also
+      // rides on the next batch: a frame that missed this event still learns,
+      // and the frame de-duplicates so the marker is written once.
+      if (st.dropped > 0) notifyDropped();
       maybeSend();
       if (!st.flushTimer && st.inFlight.length >= MAX_IN_FLIGHT) {
         // Window full: whatever survives the next ack release must still go

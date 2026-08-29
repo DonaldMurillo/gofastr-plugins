@@ -58,6 +58,7 @@ interface StreamBatch {
   last: number;
   lines: { seq: number; text: string }[];
   dropped: number;
+  droppedTotal: number;
 }
 
 // --- runtime state (module-scoped; single instance per frame) ---------------
@@ -85,6 +86,11 @@ const pending: StreamBatch[] = [];
  *  runner rather than the plugin. */
 let markersWritten = 0;
 let lastMarkerText = "";
+/** Highest cumulative drop total already written as a marker. The host reports
+ *  a gap TWICE on purpose — once out of band the moment it happens, once on
+ *  the next batch for a frame that missed the event — so the marker is written
+ *  for whichever arrives first and skipped for the other. */
+let droppedTotalMarked = 0;
 /** The pending queue's bound: a stalled frame must not hoard host memory. */
 const MAX_PENDING_BATCHES = 240;
 /** Highest sequence number actually written to the terminal. */
@@ -96,6 +102,22 @@ let drainScheduled = false;
 /** Narrow an untrusted postMessage params object to a string-keyed record. */
 function asRecord(v: unknown): Record<string, unknown> {
   return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+}
+
+/** Out-of-band gap notice: write the marker now, ahead of the batch that will
+ *  also carry the count. Whichever arrives first wins; the other is skipped. */
+function handleStreamDropped(params: unknown): void {
+  const p = params as { dropped?: unknown; total?: unknown } | null;
+  if (!p || typeof p.dropped !== "number" || typeof p.total !== "number") return;
+  if (!term || p.dropped <= 0 || p.total <= droppedTotalMarked) return;
+  const marker = dropMarker(p.dropped);
+  markersWritten += 1;
+  lastMarkerText = marker.replace(/[\r\n]+$/, "");
+  droppedTotalMarked = p.total;
+  term.write(marker, () => {
+    updateCount();
+    sendEvent("streamAck", ackParams());
+  });
 }
 
 /** Parse + bound one host-pushed streamBatch; null means "drop it silently"
@@ -115,6 +137,8 @@ function parseBatch(raw: unknown): StreamBatch | null {
     last: typeof p.last === "number" ? p.last : lines[lines.length - 1].seq,
     lines,
     dropped: typeof p.dropped === "number" && p.dropped > 0 ? Math.floor(p.dropped) : 0,
+    droppedTotal:
+      typeof p.droppedTotal === "number" && p.droppedTotal > 0 ? Math.floor(p.droppedTotal) : 0,
   };
 }
 
@@ -142,11 +166,12 @@ function drainOne(): void {
   const batch = pending.shift();
   if (!batch || !term) return;
   let out = "";
-  if (batch.dropped > 0) {
+  if (batch.dropped > 0 && batch.droppedTotal > droppedTotalMarked) {
     const marker = dropMarker(batch.dropped);
     out += marker;
     markersWritten += 1;
     lastMarkerText = marker.replace(/[\r\n]+$/, "");
+    droppedTotalMarked = batch.droppedTotal;
   }
   let written = 0;
   let i = 0;
@@ -410,6 +435,11 @@ function boot(): void {
     // Everything else (resize / focusChanged / hostPointerdown / bootError)
     // needs no action.
     streamBatch: handleStreamBatch,
+    // The gap notice, sent the moment the host drops rather than queued
+    // behind data. Under backpressure the carrying batch can be many seconds
+    // behind the drop it reports, which made "never a silent gap" untrue in
+    // exactly the moment it mattered.
+    streamDropped: handleStreamDropped,
   });
   window.addEventListener("message", messageListener);
   updateCount();

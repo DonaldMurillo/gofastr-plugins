@@ -75,7 +75,18 @@ The mechanism, end to end:
 2. One ack releases every in-flight batch at or below `lastSeq`.
 3. When the window is full, incoming lines wait in the bounded buffer. When
    the BUFFER is full, the **oldest** lines are dropped and counted.
-4. The count rides with the next batch, and the frame renders
+4. The count is sent OUT OF BAND the moment the host drops (`streamDropped`),
+   and also rides with the next batch. The frame writes the marker for
+   whichever arrives first and skips the other, comparing running totals.
+
+   Two paths on purpose: under sustained backpressure the next batch is queued
+   behind the congestion it would report, so a batch-only count lagged the drop
+   by tens of seconds on a slow machine — silent exactly when someone was
+   watching. A gap is a control-plane fact about the stream, not a line of it,
+   so it does not wait its turn. The batch copy remains so a frame that missed
+   the event still learns.
+
+   The frame renders
    `⋯ N lines dropped — producer outran the render loop ⋯` — never a silent
    gap.
 
