@@ -207,6 +207,52 @@ jobs:
 
   # Journeys run in WebKit as well as Chromium on purpose: several shipped bugs
   # were Safari-only and invisible to Chrome-based tests.
+  # Every demo page, both themes plus 390px, captured and uploaded.
+  #
+  # docs/demo-page-design.md opens with "look at all four. Not the DOM, the
+  # pixels", and every visual defect this repo has shipped was found that way
+  # and by nothing else — a pdf mount rendered inside its own fact-chip row, a
+  # scanner whose phone viewport showed toolbars and no document, a duplicated
+  # result line. All of them passed the entire test suite.
+  #
+  # This job cannot judge a design. It removes the excuse that looking was
+  # inconvenient: the artifact is on the run, so a reviewer can see what a
+  # change did to fifteen pages without checking anything out. It runs on PRs
+  # for that reason — the pixels are most worth seeing while a change is still
+  # a proposal.
+  shots:
+    name: demo screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: install
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: capture
+        working-directory: e2e
+        env:
+          SHOTS: "1"
+        run: npx playwright test demo-shots --project=shots
+      - uses: actions/upload-artifact@v4
+        # Uploaded even when the capture fails: a run that died halfway still
+        # has the pages it managed, and a blank page is itself the finding.
+        if: always()
+        with:
+          name: demo-screenshots
+          path: e2e/shots/
+          retention-days: 14
+
   e2e:
     name: e2e (${{ matrix.browser }} ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
