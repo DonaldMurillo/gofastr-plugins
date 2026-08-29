@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -330,6 +331,7 @@ func TestPhase0SmokeGate(t *testing.T) {
 	}
 	t.Logf("=== PHASE-0 LATENCY GATE === p50=%.2fms p99=%.2fms count=%d → %s",
 		metric.P50, metric.P99, metric.Count, verdict)
+	publishLatency(t, metric.P50, metric.P99, metric.Count, verdict)
 	if metric.P99 > hardCeilingMS {
 		t.Errorf("T8: p99=%.2fms exceeds hard ceiling %.0fms — the editing path is NOT usable (likely crossing the boundary per keystroke)", metric.P99, hardCeilingMS)
 	}
@@ -432,4 +434,38 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// publishLatency writes the gate's numbers somewhere a human will see them on
+// a PASSING run.
+//
+// t.Logf alone does not: `go test` swallows log output unless -v is set or the
+// test fails, and CI runs plain `go test ./... -count=1`. So the only runs that
+// ever showed a p50/p99 were the ones that failed. #71 asks to "track it across
+// runs and see whether p99 clusters near the ceiling", and that was impossible
+// to answer — I went looking for the history across twelve green main runs and
+// found no numbers at all, because green runs emit none.
+//
+// A gate whose measurement is invisible until it trips can only ever be
+// argued about after the fact. Writing to the step summary costs nothing, adds
+// no log noise, and turns the ceiling question into something with data behind
+// it.
+func publishLatency(t *testing.T, p50, p99 float64, count int, verdict string) {
+	t.Helper()
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" {
+		return // local run: t.Logf under -v is enough
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Logf("latency gate: could not open GITHUB_STEP_SUMMARY: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "### Phase 0 keystroke latency\n\n"+
+		"| p50 | p99 | samples | strict 16ms | hard ceiling %.0fms |\n"+
+		"|---|---|---|---|---|\n"+
+		"| %.2f ms | %.2f ms | %d | %s | %s |\n\n",
+		hardCeilingMS, p50, p99, count, verdict,
+		map[bool]string{true: "OVER", false: "ok"}[p99 > hardCeilingMS])
 }
