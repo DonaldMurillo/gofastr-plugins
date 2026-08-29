@@ -203,6 +203,65 @@ plain, with no CORP/CSP relaxation. They are same-origin and CSP-clean (external
 `<script src>`, no inline JS). These gotchas are recorded in
 [`DECISIONS.md`](DECISIONS.md) "Phase 0 — DONE".
 
+## What the cage can and cannot host — measured
+
+Before designing a plugin, this is the list to read. Every line was measured on
+this repo's own harness, on both engines, under the verbatim `framedCSP` above —
+not inferred from a spec. The issue number is where the run and its output live.
+
+| capability | in the cage? | what actually happens |
+|---|---|---|
+| network of any kind | **no** | `connect-src 'none'`. Even `WebAssembly.instantiateStreaming` fails on it. |
+| cookies, `localStorage`, parent DOM | **no** | `SecurityError`. Every plugin asserts all three on every run. |
+| camera / microphone | **no** | `getUserMedia` → `SecurityError: Invalid security origin` (#19) |
+| WebAssembly | **not today** | `CompileError`, both engines. One CSP token would fix it (gofastr#255) |
+| string `eval`, `new Function` | **no** | `EvalError`, and deliberately never granted |
+| a canvas, a worker-free renderer, a CRDT, a decoder | **yes** | pdf, whiteboard, scanner, mermaid all ship |
+
+### The four that surprise people
+
+**`allow="camera"` does nothing on an opaque origin.** Not "needs configuration"
+— nothing. A same-origin frame gets the camera; `sandbox="allow-scripts"` is
+refused; adding `allow="camera *"` is still refused; only `allow-same-origin`
+works, and that is the flag this platform exists to avoid. So a plugin that
+needs a device gets it the way `scanner` does: the **host** captures and pushes
+pixels over the bridge, and the cage decodes. Capture outside, processing
+inside, exfiltration still impossible. (#19, and gofastr#273 upstream.)
+
+**A pure-JS engine is not automatically cage-safe.** The instinct that "no wasm
+means no problem" is wrong, and expensively so. AlaSQL is pure JavaScript and
+still cannot run a query in the cage, because it compiles queries with
+`new Function` — it needs full `'unsafe-eval'`, which is strictly worse than the
+narrow wasm tier it appeared to avoid. Check what a library does at **runtime**,
+not what it ships. (#21.)
+
+**`script-src 'self'` refuses the frame's own script.** An opaque origin's
+`'self'` matches nothing, so the framed CSP names the concrete origin instead.
+This is why `assets.go` interpolates the request origin rather than writing the
+obvious keyword — WebKit blocks the bundle outright otherwise.
+
+**`requestAnimationFrame` does not fire in a frame that is never painted.** A
+mount below the fold, or in a headless window shorter than the page, simply does
+not render: the frame boots, the bridge answers, and the renderer never
+advances. pdf.js is driven by rAF and does nothing offscreen; the whiteboard
+shipped a latched rAF that left a joiner permanently blank. If a plugin renders
+on rAF, its tests need a real viewport, and a fallback timer is cheap insurance.
+(#25, #37.)
+
+### Throughput is per engine, not per plugin
+
+The one number people assume transfers and does not. Same machine, same adapter,
+same per-line work, streaming into a plugin frame:
+
+- **chromium**: 6,877 lines/s, host event-loop lag never past 3 ms
+- **webkit**: degrades from ~3,000 lines/s and cannot sustain 4,000 at all
+
+More than 2x apart on identical hardware. A rate measured on a developer laptop
+says nothing about a small VM, and the gap between those two machines is wider
+than the gap between a plugin's idle and flood rates. See
+[`logstream.md`](logstream.md) for the full table and the CI job that produced
+it.
+
 ## Theming across the boundary
 
 CSS custom properties do **not** inherit across an iframe boundary, so the host
