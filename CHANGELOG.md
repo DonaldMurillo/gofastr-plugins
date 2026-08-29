@@ -7,15 +7,22 @@ All notable changes to gofastr-plugins. Follows
 ### Fixed — the latency gate only reported its numbers when it failed (2026-08-29)
 
 #71 asks a question that turned out to be unanswerable: track the Phase 0
-keystroke p99 across runs and see whether it clusters near the 50 ms ceiling. I
-went looking for that history across twelve green main runs and found **no
-numbers at all**.
+keystroke p99 across runs and see whether it clusters near the 50 ms ceiling.
+There was no history to track.
 
 The gate reports through `t.Logf`, and `go test` swallows log output unless
 `-v` is set or the test fails. CI runs plain `go test ./... -count=1`. So the
 only runs that ever published a p50 or p99 were the ones that tripped the
 ceiling, and the ticket's own instruction to compare against a distribution had
-no distribution to compare against.
+no distribution to compare against. Verified by reading a passing run's job log
+directly: zero occurrences of the gate line.
+
+**A correction to how this was first established.** The sweep that sent me
+looking here queried `select(.name == "go")`, and the job is called
+`go (root module)`, so it matched nothing and skipped every run without
+fetching a single log. It returned "no numbers" for the wrong reason. The
+conclusion survived a proper check, but the evidence originally cited for it
+did not support it, and the difference is worth keeping in the record.
 
 The gate now also writes a small table to `GITHUB_STEP_SUMMARY` when it is set,
 so every CI run publishes its numbers whether it passes or not. Local runs are
