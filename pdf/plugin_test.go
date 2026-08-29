@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -519,4 +521,83 @@ func frameDiagnostics(ctx context.Context) string {
 		return fmt.Sprintf("(frame diagnostics unmarshalable: %v)", err)
 	}
 	return string(b)
+}
+
+// TestDemoPageStatesTheBundledLibraryVersions keeps the two version strings on
+// the demo page tied to what the bundle actually pins. mermaid's page shipped a
+// version twelve releases stale because nothing checks prose; both plugins that
+// name a library version now carry this guard, and so does this one.
+func TestDemoPageStatesTheBundledLibraryVersions(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("js", "package.json"))
+	if err != nil {
+		t.Fatalf("read js/package.json: %v", err)
+	}
+	var pkg struct {
+		Dependencies    map[string]string `json:"dependencies"`
+		DevDependencies map[string]string `json:"devDependencies"`
+	}
+	if err := json.Unmarshal(raw, &pkg); err != nil {
+		t.Fatalf("parse js/package.json: %v", err)
+	}
+	pinned := func(name string) string {
+		if v := pkg.Dependencies[name]; v != "" {
+			return v
+		}
+		return pkg.DevDependencies[name]
+	}
+	for _, c := range []struct{ dep, constant, value string }{
+		{"pdfjs-dist", "PdfjsVersion", PdfjsVersion},
+		{"pdf-lib", "PdfLibVersion", PdfLibVersion},
+	} {
+		got := pinned(c.dep)
+		if got == "" {
+			t.Errorf("js/package.json declares no %s dependency", c.dep)
+			continue
+		}
+		if strings.ContainsAny(got, "^~*") {
+			t.Errorf("%s is pinned loosely (%q); the demo page cannot state a version the build does not guarantee", c.dep, got)
+			continue
+		}
+		if got != c.value {
+			t.Errorf("%s = %q but js/package.json pins %s at %q", c.constant, c.value, c.dep, got)
+		}
+	}
+}
+
+// TestDemoPageMountsInsideTheEditorCard guards the ORDER of the demo page's
+// format arguments, which no other test can see.
+//
+// demoPage has eight %s slots and two of them are version strings that come
+// before the mount in the document. Passing the mount one position early put
+// the iframe inside the fact-chip row, with the version text stranded around
+// it as loose prose. Everything still passed: the frame mounted, rendered and
+// redacted from there. Only a screenshot showed it, and screenshots are not
+// part of CI — so assert the shape the page is supposed to have.
+func TestDemoPageMountsInsideTheEditorCard(t *testing.T) {
+	_, p := newTestApp(t, WithDevGrantAll(), WithDemoPage())
+	body := string(p.renderDemo(httptest.NewRequest(http.MethodGet, DemoURL, nil)))
+
+	marker := strings.Index(body, "data-fui-plugin=")
+	if marker < 0 {
+		t.Fatal("demo page has no mount marker at all")
+	}
+	chrome := strings.Index(body, `class="editor-chrome"`)
+	if chrome < 0 {
+		t.Fatal(`demo page has no editor chrome; the mount is supposed to sit in a card with a title bar`)
+	}
+	if marker < chrome {
+		t.Errorf("the mount marker (offset %d) comes BEFORE the editor chrome (offset %d): "+
+			"the format arguments are out of order and the frame is rendering somewhere "+
+			"other than its card", marker, chrome)
+	}
+	// And specifically not in the fact chips, which is where it landed.
+	badges := strings.Index(body, `class="badges"`)
+	badgesEnd := strings.Index(body[badges:], "</p>")
+	if badges >= 0 && badgesEnd >= 0 && marker > badges && marker < badges+badgesEnd {
+		t.Error("the mount marker is inside the fact-chip row")
+	}
+	// The version text must survive as text, not be consumed by another slot.
+	if want := "pdf.js " + PdfjsVersion + " · pdf-lib " + PdfLibVersion; !strings.Contains(body, want) {
+		t.Errorf("demo page never states %q; a format argument is in the wrong position", want)
+	}
 }
