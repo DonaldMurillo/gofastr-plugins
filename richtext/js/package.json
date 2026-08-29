@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
-    "esbuild": "0.23.1",
+    "esbuild": "0.25.0",
     "typescript": "^7.0.2"
   }
 }
