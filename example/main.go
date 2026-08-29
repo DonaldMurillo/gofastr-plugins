@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/mermaid"
 	"github.com/DonaldMurillo/gofastr-plugins/monaco"
 	"github.com/DonaldMurillo/gofastr-plugins/pdf"
+	"github.com/DonaldMurillo/gofastr-plugins/pluginhost"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/scanner"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
@@ -56,8 +58,13 @@ func newApp() (*framework.App, error) {
 			// rather than a prompt. A host that mounts the scanner has to opt
 			// in like this; docs/scanner.md says so, and nothing else here
 			// needs the camera, so the grant is 'self' and nothing wider.
+			//
+			// scanner's manifest DECLARES this requirement, and the boot check
+			// at the end of this function reports a host that has not met it.
+			// The declaration does not grant anything and cannot: this line is
+			// still what actually opens the camera.
 			SecurityHeaders: middleware.SecurityHeadersConfig{
-				PermissionsPolicy: "geolocation=(), microphone=(), camera=(self)",
+				PermissionsPolicy: examplePermissionsPolicy,
 			},
 		}),
 	)
@@ -286,7 +293,30 @@ func newApp() (*framework.App, error) {
 	registerDemoExportRoute(app.Router())
 	registerDemoLogControlRoute(app.Router())
 
+	// Report any plugin whose declared host-page requirement this app has not
+	// met. It logs and never fails, by upstream's design: a plugin must not be
+	// able to take an app down by declaring something. The value is that a host
+	// which forgets the Permissions-Policy above is told which plugin needs it,
+	// at boot, instead of meeting a getUserMedia error in the console with
+	// nothing naming the cause.
+	pluginhost.CheckHostRequirements(slog.Default(), examplePermissionsPolicy, hostRequirementModules()...)
+
 	return app, nil
+}
+
+// examplePermissionsPolicy is named rather than inline so the boot check above
+// and TestExamplePolicySatisfiesEveryDeclaredHostRequirement read the SAME
+// string the app serves. Two copies would let the test pass while the app
+// shipped a policy that denies the camera.
+const examplePermissionsPolicy = "geolocation=(), microphone=(), camera=(self)"
+
+// hostRequirementModules lists the plugins this app mounts that declare a
+// host-page requirement. Kept beside the registrations above rather than
+// derived, because framework.App exposes no module list to walk.
+func hostRequirementModules() []pluginhost.ClientModule {
+	return []pluginhost.ClientModule{
+		{Name: scanner.Name, Manifest: scanner.New().Manifest()},
+	}
 }
 
 // demoPlaces is the fixed dataset behind the geomap search box in this example.

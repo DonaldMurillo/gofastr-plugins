@@ -21,6 +21,7 @@ const (
 	DefaultSandbox         = pluginhost.DefaultSandbox
 	BrokerScriptURL        = pluginhost.BrokerScriptURL
 	BrokerRouteMethod      = pluginhost.BrokerRouteMethod
+	HostRequirementPrefix  = pluginhost.HostRequirementPrefix
 )
 
 // Manifest + registration types.
@@ -44,4 +45,5 @@ var (
 	Allow                 = pluginhost.Allow
 	Guard                 = pluginhost.Guard
 	WriteCapabilityDenied = pluginhost.WriteCapabilityDenied
+	CheckHostRequirements = pluginhost.CheckHostRequirements
 )
