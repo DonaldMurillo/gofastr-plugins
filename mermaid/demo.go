@@ -118,7 +118,7 @@ const demoPage = `<!doctype html>
     <p class="badges" aria-label="Facts">
       <span class="badge badge-primary">sandbox=&quot;allow-scripts&quot;</span>
       <span class="badge">connect-src 'none'</span>
-      <span class="badge">mermaid 11.4.1, bundled</span>
+      <span class="badge">mermaid 11.16.1, bundled</span>
       <span class="badge">3 grants: document:read · document:write · theme:read</span>
     </p>
   </section>
@@ -157,7 +157,7 @@ const demoPage = `<!doctype html>
     </article>
     <article class="card">
       <h3>📴 Offline by construction</h3>
-      <p>mermaid 11.4.1 is compiled into the frame as one IIFE, and the framed CSP says <code>connect-src 'none'</code> — no CDN, no font, no telemetry beacon. Diagrams render with the network unplugged.</p>
+      <p>mermaid 11.16.1 is compiled into the frame as one IIFE, and the framed CSP says <code>connect-src 'none'</code> — no CDN, no font, no telemetry beacon. Diagrams render with the network unplugged.</p>
     </article>
   </section>
 </main>

@@ -40,6 +40,10 @@ type Mirror = HTMLIFrameElement & {
   __logstreamDelivered?: number;
   __logstreamDropped?: number;
   __logstreamInFlight?: number;
+  // Host-side counters for the out-of-band gap notice, mirrored from the
+  // adapter's own state so a wedged frame cannot hide the round trip.
+  __logstreamNotices?: number;
+  __logstreamAcks?: number;
   __logstreamStats?: {
     lastSeq: number;
     rendered: number;
@@ -48,6 +52,8 @@ type Mirror = HTMLIFrameElement & {
     scrollback: number;
     cap: number;
     rows: number;
+    // Gap notices the FRAME reports receiving; compare with __logstreamNotices.
+    dropEvents?: number;
   };
 };
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -298,14 +304,49 @@ test("flood rate overruns the render loop: drops are counted, marked visibly, an
   // host now sends the gap notice out of band the moment it drops, so the
   // marker lands while the flood is still running, which is when a user is
   // actually looking at it.
-  await page.waitForFunction(
-    () => {
+  //
+  // On CI's webkit this wait is the one that fails, always at 20s, while the
+  // drop counter beside it climbs into the thousands (#54). The dump below
+  // exists to split the three causes apart, because the symptom is identical
+  // for all three: notices never sent, notices sent but never received, or
+  // received and acked without a marker ever being written.
+  try {
+    await page.waitForFunction(
+      () => {
+        const f = document.querySelector(".editor-card iframe") as Mirror | null;
+        return !!f && (f.__logstreamStats?.markers ?? 0) > 0;
+      },
+      undefined,
+      { timeout: 20_000 }
+    );
+  } catch (err) {
+    const diag = await page.evaluate(() => {
       const f = document.querySelector(".editor-card iframe") as Mirror | null;
-      return !!f && (f.__logstreamStats?.markers ?? 0) > 0;
-    },
-    undefined,
-    { timeout: 20_000 }
-  );
+      const rect = f?.getBoundingClientRect();
+      return {
+        noticesSentByHost: f?.__logstreamNotices ?? null,
+        acksReceivedByHost: f?.__logstreamAcks ?? null,
+        noticesSeenByFrame: f?.__logstreamStats?.dropEvents ?? null,
+        markersWritten: f?.__logstreamStats?.markers ?? null,
+        renderedByFrame: f?.__logstreamStats?.rendered ?? null,
+        deliveredByHost: f?.__logstreamDelivered ?? null,
+        droppedByHost: f?.__logstreamDropped ?? null,
+        inFlight: f?.__logstreamInFlight ?? null,
+        // An offscreen frame renders far slower (measured locally: 700 lines
+        // against 16,000), so the geometry is worth having in the record.
+        frameTop: rect?.top ?? null,
+        frameBottom: rect?.bottom ?? null,
+        viewportHeight: window.innerHeight,
+        hidden: document.hidden,
+      };
+    });
+    throw new Error(
+      `no drop marker was ever written.\n${JSON.stringify(diag, null, 2)}\n` +
+        `read it as: notices sent but none seen ⇒ the event is not crossing; ` +
+        `seen but no marker ⇒ the frame rejected it; ` +
+        `acks frozen ⇒ the frame stopped answering at all.\noriginal: ${String(err)}`
+    );
+  }
   const withMarker = await frameState(page);
   expect(withMarker.stats!.lastMarker).toMatch(/⋯ [\d,]+ lines dropped/);
 

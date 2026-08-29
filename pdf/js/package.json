@@ -10,7 +10,7 @@
     "gen-sample": "node scripts/gen-sample-pdf.mjs"
   },
   "dependencies": {
-    "pdfjs-dist": "6.1.200"
+    "pdfjs-dist": "6.2.108"
   },
   "devDependencies": {
     "esbuild": "0.25.0",

@@ -117,6 +117,157 @@ async function canvasDataUrl(page: Page): Promise<string> {
   );
 }
 
+export interface PixelDiff {
+  sameSize: boolean;
+  width: number;
+  height: number;
+  otherWidth: number;
+  otherHeight: number;
+  blocks: number;
+  blocksDiffering: number;
+  worstBlock: { x: number; y: number; a: number; b: number } | null;
+  pixelsDiffering: number;
+  maxChannelDelta: number;
+}
+
+/** A channel this far from the canvas background counts the pixel as ink. */
+const INK_DELTA = 48;
+/** Ink coverage is compared over blocks of this many pixels a side. Whole-block
+ *  coverage is what survives the disagreement in #37: two engines can shade the
+ *  edge pixels of a stroke differently, but they cannot disagree about how much
+ *  of a 16x16 block a stroke covers. */
+const BLOCK = 16;
+/** Two blocks differ when their ink coverage is this far apart. A stroke that
+ *  failed to replay empties its blocks — roughly 25 points of coverage for a
+ *  4px stroke crossing a 16px block. Edge shading moves a block by one or two. */
+const COVERAGE_TOLERANCE = 0.1;
+/** And this many blocks may differ before two pictures are called unequal. */
+const BLOCK_BUDGET = 8;
+
+/** Compare two canvas dataURLs by ink coverage per block.
+ *
+ *  The replicas live in separate browser contexts, so the bitmaps only meet if
+ *  one is carried across as a dataURL — small, because the board is mostly
+ *  empty. A scratch page in the host context decodes both and walks them
+ *  together; only the tallies come back.
+ *
+ *  Byte equality is what these journeys used to assert, and CI's webkit broke
+ *  it with every property the plugin promises equal (#37). A flat per-pixel
+ *  budget cannot replace it: three strokes ink 0.85% of this canvas, so one
+ *  lost stroke and a rasteriser disagreeing along every stroke edge move a
+ *  comparable number of pixels. Coverage per block separates the two by an
+ *  order of magnitude, and journey 4 proves on every run that it still can. */
+async function pixelDiff(host: BrowserContext, urlA: string, urlB: string): Promise<PixelDiff> {
+  const page = await host.newPage();
+  try {
+    return await page.evaluate(
+      async ([a, b, inkDelta, block, tolerance]) => {
+        const load = async (src: string): Promise<ImageData> => {
+          const img = new Image();
+          img.src = src;
+          await img.decode();
+          const c = document.createElement("canvas");
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          const ctx = c.getContext("2d");
+          if (!ctx) throw new Error("no 2d context in the scratch page");
+          ctx.drawImage(img, 0, 0);
+          return ctx.getImageData(0, 0, c.width, c.height);
+        };
+        const ia = await load(a as string);
+        const ib = await load(b as string);
+        const base = {
+          sameSize: false,
+          width: ia.width,
+          height: ia.height,
+          otherWidth: ib.width,
+          otherHeight: ib.height,
+          blocks: 0,
+          blocksDiffering: 0,
+          worstBlock: null as { x: number; y: number; a: number; b: number } | null,
+          pixelsDiffering: 0,
+          maxChannelDelta: 0,
+        };
+        if (ia.width !== ib.width || ia.height !== ib.height) return base;
+
+        const ink = inkDelta as number;
+        const size = block as number;
+        const tol = tolerance as number;
+        // The top-left pixel is board background on any non-degenerate render.
+        const bgA = [ia.data[0], ia.data[1], ia.data[2], ia.data[3]];
+        const bgB = [ib.data[0], ib.data[1], ib.data[2], ib.data[3]];
+        const isInk = (d: Uint8ClampedArray, i: number, bg: number[]): boolean => {
+          for (let ch = 0; ch < 4; ch++) if (Math.abs(d[i + ch] - bg[ch]) > ink) return true;
+          return false;
+        };
+
+        let pixelsDiffering = 0;
+        let maxChannelDelta = 0;
+        let blocks = 0;
+        let blocksDiffering = 0;
+        let worstBlock: { x: number; y: number; a: number; b: number } | null = null;
+        let worstGap = 0;
+
+        for (let by = 0; by < ia.height; by += size) {
+          for (let bx = 0; bx < ia.width; bx += size) {
+            const x1 = Math.min(bx + size, ia.width);
+            const y1 = Math.min(by + size, ia.height);
+            let inkA = 0;
+            let inkB = 0;
+            let count = 0;
+            for (let y = by; y < y1; y++) {
+              for (let x = bx; x < x1; x++) {
+                const i = (y * ia.width + x) * 4;
+                count++;
+                if (isInk(ia.data, i, bgA)) inkA++;
+                if (isInk(ib.data, i, bgB)) inkB++;
+                let delta = 0;
+                for (let ch = 0; ch < 4; ch++) {
+                  const d = Math.abs(ia.data[i + ch] - ib.data[i + ch]);
+                  if (d > delta) delta = d;
+                }
+                if (delta > maxChannelDelta) maxChannelDelta = delta;
+                if (delta > ink) pixelsDiffering++;
+              }
+            }
+            blocks++;
+            const ca = inkA / count;
+            const cb = inkB / count;
+            const gap = Math.abs(ca - cb);
+            if (gap > tol) blocksDiffering++;
+            if (gap > worstGap) {
+              worstGap = gap;
+              worstBlock = { x: bx, y: by, a: Number(ca.toFixed(3)), b: Number(cb.toFixed(3)) };
+            }
+          }
+        }
+        return { ...base, sameSize: true, blocks, blocksDiffering, worstBlock, pixelsDiffering, maxChannelDelta };
+      },
+      [urlA, urlB, INK_DELTA, BLOCK, COVERAGE_TOLERANCE] as [string, string, number, number, number]
+    );
+  } finally {
+    await page.close();
+  }
+}
+
+/** Assert two replicas rendered the same picture, allowing rasterisation
+ *  noise but not a difference in what was drawn. Returns the diff so a caller
+ *  can make further claims about it. */
+async function expectSamePicture(host: BrowserContext, a: string, b: string, what: string): Promise<PixelDiff> {
+  const diff = await pixelDiff(host, a, b);
+  expect(
+    diff.sameSize,
+    `${what}: canvases differ in size, ${diff.width}x${diff.height} vs ${diff.otherWidth}x${diff.otherHeight}`
+  ).toBe(true);
+  expect(
+    diff.blocksDiffering,
+    `${what}: ${diff.blocksDiffering}/${diff.blocks} blocks differ in ink coverage by more than ` +
+      `${COVERAGE_TOLERANCE * 100} points (worst ${JSON.stringify(diff.worstBlock)}; ` +
+      `${diff.pixelsDiffering} px over the channel threshold, worst channel delta ${diff.maxChannelDelta})`
+  ).toBeLessThanOrEqual(BLOCK_BUDGET);
+  return diff;
+}
+
 /** Poll until fn's promise resolves truthy (expect.poll over async page state). */
 async function until(page: Page, fn: (p: Page) => Promise<unknown>, what: string, timeout = 15_000): Promise<void> {
   await expect
@@ -175,7 +326,7 @@ test("mounts sandboxed (allow-scripts, no allow-same-origin) with no console err
 
 // ─── 2. THE claim: a stroke drawn in one window appears in the other ───────
 
-test("a stroke drawn in one browser context appears in the other, rendered to identical pixels", async ({ browser }) => {
+test("a stroke drawn in one browser context appears in the other, rendered to the same picture", async ({ browser }) => {
   const room = freshRoom("two");
   const ctxA = await browser.newContext(CTX_OPTS);
   const ctxB = await browser.newContext(CTX_OPTS);
@@ -204,12 +355,13 @@ test("a stroke drawn in one browser context appears in the other, rendered to id
     expect(dumpA).toBe(dumpB);
     expect(JSON.parse(dumpA)).toHaveLength(1);
 
-    // Identical document, identical pixels: same viewport + deterministic
-    // render ⇒ the two canvases must be byte-identical images.
+    // Identical document, identical picture. Compared by ink coverage rather
+    // than byte for byte: engines disagree about edge shading (#37), never
+    // about what was drawn.
     const imgA = await canvasDataUrl(pageA);
     const imgB = await canvasDataUrl(pageB);
-    expect(imgA).toBe(imgB);
     expect(imgA.length).toBeGreaterThan(1000); // not a blank canvas
+    await expectSamePicture(ctxA, imgA, imgB, "the relayed stroke");
 
     // The host relayed real bytes both ways is NOT required (B only
     // receives here), but B must have received the update via the host.
@@ -268,7 +420,8 @@ test("drawing offline on both sides converges after reconnect instead of last-wr
 
     const imgA = await canvasDataUrl(pageA);
     const imgB = await canvasDataUrl(pageB);
-    expect(imgA).toBe(imgB); // converged pixels, not just converged bookkeeping
+    // Converged picture, not just converged bookkeeping.
+    await expectSamePicture(ctxA, imgA, imgB, "the merged board");
 
     expectNoConsoleErrors([pageA, pageB]);
   } finally {
@@ -287,6 +440,11 @@ test("a joiner arriving after the drawing gets the existing board, not an empty 
     const pageA = await newRoomPage(ctxA, room);
     await drawStroke(pageA, 0.3, 0.3, 0.6, 0.6);
     await drawStroke(pageA, 0.6, 0.3, 0.3, 0.6);
+    await until(pageA, async (p) => JSON.parse(await strokeDump(p)).length === 2, "A has 2 strokes");
+    // Kept as the control for the picture comparison below: a board that is
+    // one stroke short of the one the joiner must replay.
+    const oneStrokeShort = await canvasDataUrl(pageA);
+
     await drawStroke(pageA, 0.45, 0.2, 0.5, 0.8);
     await until(pageA, async (p) => JSON.parse(await strokeDump(p)).length === 3, "A has 3 strokes");
 
@@ -300,24 +458,29 @@ test("a joiner arriving after the drawing gets the existing board, not an empty 
 
     // The replay must RENDER, and both replicas must paint in the same order.
     //
-    // This used to compare the two canvases byte for byte, which found two real
-    // bugs: strokes painted in CRDT map order (so replicas composited overlaps
-    // differently) and a latched requestAnimationFrame that left a joiner
-    // blank. It also failed on CI's webkit with everything equal that the
-    // plugin actually promises — identical ids, colours, sizes, point counts
-    // and point sums, and an identical canvas byte length — differing only in
-    // rendered pixels, which no amount of digging tied to plugin behaviour.
-    //
-    // So the two properties are asserted directly instead of inferred from a
-    // bitmap: replicas agree on paint order, and the joiner's canvas is not
-    // blank. Paint order is deterministic and engine-independent, so it catches
-    // the ordering regression the pixel compare was really guarding. See #37.
+    // Paint order is asserted from the frame rather than inferred from pixels:
+    // it is deterministic across engines, and it catches an ordering regression
+    // even between same-coloured strokes, where a bitmap compare sees nothing.
     const orderA = await paintOrder(pageA);
     const orderB = await paintOrder(pageB);
     expect(orderB, "replicas must paint strokes in the same order").toEqual(orderA);
 
+    const imgA = await canvasDataUrl(pageA);
     const imgB = await canvasDataUrl(pageB);
     expect(imgB.length, "the joiner's canvas rendered something").toBeGreaterThan(1000);
+
+    // Before trusting the comparison, prove it still has teeth ON THIS ENGINE:
+    // the same call must reject A's own board from one stroke earlier. Without
+    // this the tolerance could drift wide enough to pass anything, which is how
+    // a picture check quietly stops being one.
+    const control = await pixelDiff(ctxA, imgA, oneStrokeShort);
+    expect(
+      control.blocksDiffering,
+      `the picture comparison can no longer see a missing stroke: only ` +
+        `${control.blocksDiffering}/${control.blocks} blocks differ (budget ${BLOCK_BUDGET})`
+    ).toBeGreaterThan(BLOCK_BUDGET);
+
+    await expectSamePicture(ctxA, imgA, imgB, "the replayed board");
 
     expectNoConsoleErrors([pageA, pageB]);
   } finally {

@@ -97,6 +97,7 @@
       droppedTotal: 0,
       delivered: 0,
       acks: 0,
+      notices: 0,        // out-of-band gap notices sent to the frame
       paused: false,
       reconnects: 0,
       abort: null,
@@ -111,6 +112,12 @@
       mirror("__logstreamDropped", st.droppedTotal);
       mirror("__logstreamInFlight", st.inFlight.length);
       mirror("__logstreamPaused", st.paused);
+      // Both sides of the gap-notice round trip, mirrored from HOST state so a
+      // wedged frame cannot hide it: notices sent out of band, and acks that
+      // came back. A failure can then say whether the frame stopped answering
+      // or answered without ever writing the marker.
+      mirror("__logstreamNotices", st.notices);
+      mirror("__logstreamAcks", st.acks);
     }
 
     // Release every in-flight batch the ack covers, then top the window back
@@ -132,7 +139,11 @@
           lastMarker:
             typeof params.lastMarker === "string" ? params.lastMarker.slice(0, 200) : "",
           scrollback: typeof params.scrollback === "number" ? params.scrollback : 0,
-          cap: typeof params.cap === "number" ? params.cap : 0
+          cap: typeof params.cap === "number" ? params.cap : 0,
+          // How many gap notices the FRAME says it received. Compared against
+          // __logstreamNotices this separates "the event never arrived" from
+          // "it arrived and wrote no marker".
+          dropEvents: typeof params.dropEvents === "number" ? params.dropEvents : 0
         });
       }
       refreshMirrors();
@@ -143,6 +154,7 @@
     // teardown path maybeSend uses will notice on the next attempt.
     function notifyDropped() {
       try {
+        st.notices += 1;
         api.sendEvent("streamDropped", { dropped: st.dropped, total: st.droppedTotal });
       } catch (e) {
         /* frame went away; maybeSend handles the teardown */
@@ -325,6 +337,8 @@
           frame.__logstreamInFlight = 0;
           frame.__logstreamAcks = 0;
           frame.__logstreamStats = null;
+          frame.__logstreamNotices = 0;
+          frame.__logstreamAcks = 0;
           frame.__logstreamReconnects = 0;
           startStream(api);
           break;
