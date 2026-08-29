@@ -188,3 +188,100 @@ test("a11y: SSR read view", async ({ page, request, baseURL }) => {
   await page.goto("/__gofastr/plugin/richtext/read?doc=demo");
   await audit(page, "SSR read view");
 });
+
+// ─── in-frame contrast, computed from the bridged tokens ───────────────────
+//
+// axe reports color-contrast findings inside a sandboxed frame, and they are
+// not trustworthy: it resolves a background by walking ancestors, cannot walk
+// out of an opaque origin, and falls back to assuming a white canvas. That is
+// why those findings are filtered in `audit` above (#36).
+//
+// Filtering them left plugin frames with NO contrast coverage at all, which is
+// worse than a noisy check. This restores it by measuring the thing that
+// actually determines legibility: the token values the host bridged in.
+//
+// Colours arrive as oklch(), which neither engine serialises to rgb and which
+// hand-rolled parsers get wrong. So the frame paints each one to a 1x1 canvas
+// and reads the pixel back — the browser does the conversion, in whatever
+// colour space it actually renders, and the answer is true sRGB bytes.
+
+/** WCAG 2.1 relative luminance from sRGB bytes. */
+function luminance([r, g, b]: [number, number, number]): number {
+  const f = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Resolve the frame's :root tokens to sRGB bytes, via a 1x1 canvas. */
+async function frameTokenRGB(page: Page, names: string[]): Promise<Record<string, [number, number, number] | null>> {
+  return page
+    .frameLocator("iframe")
+    .locator("body")
+    .evaluate((_el, tokenNames: string[]) => {
+      const root = getComputedStyle(document.documentElement);
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const out: Record<string, [number, number, number] | null> = {};
+      for (const name of tokenNames) {
+        const value = root.getPropertyValue(name).trim();
+        if (!value || !ctx) {
+          out[name] = null;
+          continue;
+        }
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = "#000";
+        ctx.fillStyle = value; // ignored if unparseable, leaving the probe colour
+        ctx.fillRect(0, 0, 1, 1);
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        out[name] = [d[0], d[1], d[2]];
+      }
+      return out;
+    }, names);
+}
+
+const CONTRAST_PAIRS: [string, string, number][] = [
+  // [foreground, background, minimum ratio]
+  ["--color-text", "--color-surface", 4.5],
+  ["--color-text", "--color-background", 4.5],
+  // Muted text is still body text under WCAG; it gets the same floor.
+  ["--color-text-muted", "--color-surface", 4.5],
+];
+
+for (const plugin of ["datagrid", "chart", "logstream", "imageedit", "formbuilder", "calendar"]) {
+  test(`contrast: ${plugin} frame tokens meet WCAG AA`, async ({ page }) => {
+    await page.goto(`/${plugin}`);
+    await page.waitForFunction(
+      () => {
+        const f = document.querySelector("iframe") as (HTMLIFrameElement & Record<string, unknown>) | null;
+        if (!f) return false;
+        // Wait for the THEME, not merely the mount: tokens arrive after boot.
+        return Object.keys(f).some((k) => k.startsWith("__") && k.toLowerCase().includes("theme"));
+      },
+      undefined,
+      { timeout: 25_000 }
+    );
+
+    const names = [...new Set(CONTRAST_PAIRS.flatMap(([a, b]) => [a, b]))];
+    const rgb = await frameTokenRGB(page, names);
+
+    for (const [fg, bg, min] of CONTRAST_PAIRS) {
+      const f = rgb[fg];
+      const b = rgb[bg];
+      if (!f || !b) continue; // a plugin that does not use the token is not failing it
+      const ratio = contrast(f, b);
+      expect(
+        ratio,
+        `${plugin}: ${fg} on ${bg} is ${ratio.toFixed(2)}:1 (rgb ${f} on ${b}), want >= ${min}:1`
+      ).toBeGreaterThanOrEqual(min);
+    }
+  });
+}
