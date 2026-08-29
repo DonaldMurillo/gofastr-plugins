@@ -4,6 +4,68 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — `sqlnotebook`, and the answer to whether wasm runs in the cage (2026-08-29)
+
+A real SQLite engine, compiled to WebAssembly, running inside an opaque-origin
+frame that cannot open a socket. Measured on both engines: **SQLite 3.49.1,
+init 28 ms chromium and 26 ms webkit**, 658,410 engine bytes handed across the
+bridge, and zero network requests from the frame while a query runs.
+
+This closes a question that had been standing in for an answer since Phase 0.
+`pdf` runs pdf.js worker-free for exactly this reason. gofastr v0.74.0 shipped
+the narrow `'wasm-unsafe-eval'` tier (gofastr#255), and this is the first plugin
+to opt into it.
+
+**The tier must be handed to the AssetServer, not merely declared.** A manifest
+carrying `CSP` changes nothing on its own; the header is assembled by
+`AssetServer`, which never reads the manifest. So `handlers.go` threads it
+explicitly, and the test asserts the **served response header** rather than that
+`Validate()` passed. Checking the manifest would go green on a frame that
+refuses WebAssembly, which is the whole of gofastr#300. Verified it can fail:
+removing the `.WithCSP` call turns the served `script-src` back into
+`script-src <origin>` and the test red.
+
+**The engine cannot fetch itself.** sql.js's documented `locateFile` fails with
+`both async and sync fetching of the wasm failed`, because `connect-src 'none'`
+is real. The host adapter fetches the `.wasm` (the host page may) and posts the
+bytes in; the frame calls `initSqlJs({ wasmBinary })` and never fetches
+anything. A database that cannot phone home is the property that makes the tier
+worth granting.
+
+**Not DuckDB, on three independent grounds.** Its wasm is 35 MB against this
+repo's 20 MB embed cap, which 16.9 MB of was already spent. Its API needs a
+Worker, and chromium refuses to construct one from a same-origin script inside
+an opaque origin (`SecurityError`); webkit allows it, which is an engine
+divergence worth knowing on its own. And sql.js needs no worker at all. The
+whole plugin costs 705 KB, taking the embedded tree to 17.7 MB.
+
+`internal/registry` gains a `csp` key so `plugins.json` can express the tier at
+all: the parser rejects unknown fields, so the row was unrepresentable without
+it. It is the one field that WIDENS the cage, and a reader deciding whether to
+adopt a plugin should see that from the index rather than the source.
+
+## Two tests that lied, and what they cost
+
+Worth recording, because both nearly produced a confident wrong conclusion.
+
+**A journey probed `eval("1+1")` inside the frame and got `ALLOWED`** — which
+would mean the tier had granted string eval, a real security regression. The
+same probe against `pdf`, which has no tier at all, also returned `ALLOWED`.
+Playwright's `evaluate` runs in a context the page's CSP does not apply to. The
+fix was not to loosen the assertion: origin probes (`localStorage`,
+`document.cookie`, `window.parent.document`) ARE faithful and stayed, and the
+CSP half moved to the served header, where it can be asserted honestly. The test
+carries a comment so nobody re-adds the eval probe.
+
+**A teeth-test said the CSP header survived removing `.WithCSP`**, which briefly
+looked like evidence that gofastr#300 was wrong. The regex had matched the
+string inside a doc comment rather than the call, which is split across two
+lines; the code was never modified. #300 stands.
+
+Also: `pkill -f "go run ./example"` kills the wrapper and leaves the compiled
+binary serving. Five stale servers were holding the port, which is why a rebuilt
+bundle appeared not to take effect.
+
 ### Removed — the awaiting-upstream manifest, having done its job (2026-08-29)
 
 `.github/awaiting-upstream.tsv`, the nightly step that read it, and

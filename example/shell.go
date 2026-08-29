@@ -37,6 +37,7 @@ var demoEntries = []demoEntry{
 	{"calendar", "Calendar", "/calendar", "Month/week/day views written from scratch — recurrence, timezones and conflicts are answered in Go; the frame only renders what the server resolved.", "sandboxed", "📅"},
 	{"whiteboard", "Whiteboard", "/whiteboard", "Two windows, one board — Yjs CRDT updates relayed between browsers by the host while the frame keeps connect-src 'none'.", "sandboxed", "🖊️"},
 	{"genui", "Generative UI", "/genui", "A model composes the view from a fixed registry of components — anything outside it is refused twice, once in Go and again in the frame.", "sandboxed", "🪄"},
+	{"sqlnotebook", "SQL Notebook", "/sqlnotebook", "A real SQLite engine compiled to WebAssembly, running in a frame that cannot reach the network.", "sandboxed", "🗃️"},
 	{"scanner", "Scanner", "/scanner", "The camera is unreachable from the frame, so this page holds it and sends pixels down — the decode happens in the cage.", "sandboxed", "🔍"},
 }
 

@@ -38,6 +38,7 @@ import (
 	"github.com/DonaldMurillo/gofastr-plugins/pluginhost"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/scanner"
+	"github.com/DonaldMurillo/gofastr-plugins/sqlnotebook"
 	"github.com/DonaldMurillo/gofastr-plugins/tour"
 	"github.com/DonaldMurillo/gofastr-plugins/whiteboard"
 	"github.com/DonaldMurillo/gofastr/core/middleware"
@@ -214,6 +215,18 @@ func newApp() (*framework.App, error) {
 	app.RegisterPlugin(scanner.New(
 		scanner.WithDevGrantAll(),
 		scanner.WithDemoPage(),
+	))
+
+	// The SQL notebook — the only plugin here that opts into the
+	// 'wasm-unsafe-eval' tier, and the one that settled whether WebAssembly
+	// can run in the cage at all. A real SQLite engine compiles inside an
+	// opaque-origin frame with connect-src 'none', which means the frame
+	// cannot fetch its own engine: the host reads the .wasm and hands it
+	// across the bridge as bytes. A database that cannot phone home. Demo at
+	// /sqlnotebook.
+	app.RegisterPlugin(sqlnotebook.New(
+		sqlnotebook.WithDevGrantAll(),
+		sqlnotebook.WithDemoPage(),
 	))
 
 	// The image editor — the pdf plugin's design applied to a second file

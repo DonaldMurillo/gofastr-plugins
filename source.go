@@ -143,6 +143,16 @@ const ModulePath = "github.com/DonaldMurillo/gofastr-plugins"
 //go:embed scanner/js/package-lock.json
 //go:embed scanner/js/tsconfig.json
 //go:embed scanner/js/src
+
+//go:embed sqlnotebook/*.go
+//go:embed sqlnotebook/assets
+//go:embed sqlnotebook/host
+//go:embed sqlnotebook/js/build.mjs
+//go:embed sqlnotebook/js/package.json
+//go:embed sqlnotebook/js/package-lock.json
+//go:embed sqlnotebook/js/tsconfig.json
+//go:embed sqlnotebook/js/src
+//go:embed sqlnotebook/js/frame
 //go:embed scanner/js/frame
 //go:embed scanner/js/scripts
 //go:embed formbuilder/*.go

@@ -324,6 +324,28 @@
       "schema": "genui-v1",
       "minHeight": "360px",
       "docs": "docs/genui.md"
+    },
+    {
+      "name": "sqlnotebook",
+      "modulePath": "github.com/DonaldMurillo/gofastr-plugins/sqlnotebook",
+      "version": "0.1.0",
+      "description": "A SQL notebook running a real SQLite engine (sql.js, WebAssembly) inside the opaque-origin frame. Query a database in the browser that has no way to reach the network: connect-src 'none' means the frame cannot even fetch its own engine, so the host hands the .wasm across the bridge as bytes. This is the only plugin here that opts into the 'wasm-unsafe-eval' tier, and the tier grants exactly that: eval() and new Function() stay refused, storage and cookies stay unreachable, the origin stays opaque.",
+      "isolation": "sandbox-iframe-opaque",
+      "sandbox": [
+        "allow-scripts"
+      ],
+      "capabilities": [
+        "theme:read"
+      ],
+      "csp": [
+        "'wasm-unsafe-eval'"
+      ],
+      "frameworkCompat": ">=0.74.0",
+      "routePrefix": "/__gofastr/plugin/sqlnotebook",
+      "entry": "/__gofastr/plugin/sqlnotebook/frame.html",
+      "schema": "sqlnotebook.v1",
+      "minHeight": "360px",
+      "docs": "docs/sqlnotebook.md"
     }
   ]
 }
