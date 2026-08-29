@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -314,5 +317,41 @@ func TestSaveDeniedWithoutCapability(t *testing.T) {
 	}
 	if body.Error != "E_CAPABILITY_DENIED" {
 		t.Errorf("error=%q want E_CAPABILITY_DENIED", body.Error)
+	}
+}
+
+// The demo page states the bundled monaco version as prose, so nothing notices
+// when a dependency bump leaves it behind. Read the version out of the bundle's
+// package.json and require the page to agree. (mermaid carries the same guard;
+// its page shipped a stale version for exactly this reason.)
+func TestDemoPageStatesTheBundledMonacoVersion(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("js", "package.json"))
+	if err != nil {
+		t.Fatalf("read js/package.json: %v", err)
+	}
+	var pkg struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	if err := json.Unmarshal(raw, &pkg); err != nil {
+		t.Fatalf("parse js/package.json: %v", err)
+	}
+	version := pkg.Dependencies["monaco-editor"]
+	if version == "" {
+		t.Fatal("js/package.json declares no monaco-editor dependency")
+	}
+	if strings.ContainsAny(version, "^~*") {
+		t.Fatalf("monaco-editor is pinned loosely (%q); the demo page cannot state a version the build does not guarantee", version)
+	}
+
+	_, p := newTestApp(t)
+	body := string(p.renderDemo(httptest.NewRequest(http.MethodGet, "/monaco", nil)))
+	if want := "monaco " + version; !strings.Contains(body, want) {
+		var stale []string
+		for _, m := range regexp.MustCompile(`monaco \d+\.\d+\.\d+[\w.-]*`).FindAllString(body, -1) {
+			if m != "monaco "+Version {
+				stale = append(stale, m)
+			}
+		}
+		t.Errorf("demo page never names %q\nstale library versions still on the page: %v", want, stale)
 	}
 }

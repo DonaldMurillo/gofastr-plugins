@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "mermaid": "11.4.1"
+    "mermaid": "11.16.1"
   },
   "devDependencies": {
     "esbuild": "0.23.1",
