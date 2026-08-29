@@ -17,6 +17,29 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 8123);
+
+/**
+ * Sleep in the DRIVER, never through the page.
+ *
+ * `page.waitForTimeout` is implemented via the page, so it cannot resolve while
+ * the page's main thread is pinned — which is precisely the condition this file
+ * exists to measure. Using it here made the instrument depend on the thing it
+ * was measuring: on webkit at full rate the profile hit the 180s test timeout
+ * twice and produced no number at all, while chromium finished in 8s. A
+ * measurement that only works when there is nothing to measure is not a
+ * measurement.
+ */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Run a page-dependent call with a ceiling, returning null when the page could
+ * not answer in time. A pinned page is DATA here, not an error: "webkit could
+ * not evaluate 1+1 within 10s under flood" is the finding, and it belongs in
+ * the report rather than in a stack trace.
+ */
+async function bounded<T>(what: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([what.catch(() => null), sleep(ms).then(() => null)]);
+}
 type Mirror = HTMLIFrameElement & {
   __logstreamReady?: boolean;
   __logstreamDelivered?: number;
@@ -58,7 +81,7 @@ test("profile: host event-loop lag under a full-rate flood", async ({ page }, te
   });
 
   await setRate(page, "fast");
-  await page.waitForTimeout(1500); // let the flood reach steady state
+  await sleep(1500); // let the flood reach steady state
   await page.evaluate(() => {
     (window as unknown as { __lag: number[] }).__lag = [];
   });
@@ -72,10 +95,10 @@ test("profile: host event-loop lag under a full-rate flood", async ({ page }, te
     const t = Date.now();
     await page.request.get(`http://localhost:${PORT}/`);
     serverMs.push(Date.now() - t);
-    await page.waitForTimeout(1000);
+    await sleep(1000);
   }
 
-  const sample = await page.evaluate(() => {
+  const sample = (await bounded(page.evaluate(() => {
     const f = document.querySelector(".editor-card iframe") as Mirror | null;
     const lag = (window as unknown as { __lag: number[] }).__lag.slice().sort((a, b) => a - b);
     const at = (q: number) => (lag.length ? Math.round(lag[Math.floor(lag.length * q)]) : -1);
@@ -90,13 +113,17 @@ test("profile: host event-loop lag under a full-rate flood", async ({ page }, te
       dropped: f?.__logstreamDropped ?? 0,
       notices: f?.__logstreamNotices ?? 0,
     };
-  });
+  }), 15_000)) ?? {
+    // The page never answered. Record that, with sentinels, instead of dying.
+    ticks: -1, lagP50: -1, lagP95: -1, lagMax: -1, over50ms: -1, over500ms: -1,
+    delivered: 0, dropped: 0, notices: 0,
+  };
 
   // Can the page still run something trivial? This is the operation that
   // timed out at 90 seconds on CI, so it is the one worth timing.
   const t0 = Date.now();
-  await page.evaluate(() => 1 + 1).catch(() => null);
-  const evaluateMs = Date.now() - t0;
+  const answered = await bounded(page.evaluate(() => 1 + 1), 10_000);
+  const evaluateMs = answered === null ? -1 : Date.now() - t0;
 
   await setRate(page, "calm");
 
