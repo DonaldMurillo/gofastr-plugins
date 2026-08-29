@@ -124,7 +124,6 @@ jobs:
             exit 1
           fi
           echo "latest gofastr release: $latest"
-          echo "latest=$latest" >> "$GITHUB_ENV"
           pinned=$(go list -m -f '{{.Version}}' github.com/DonaldMurillo/gofastr)
           echo "pinned in go.mod:       $pinned"
           if [ "$latest" = "$pinned" ]; then
@@ -133,38 +132,6 @@ jobs:
             echo "::notice::gofastr $latest is available; go.mod pins $pinned"
             go get "github.com/DonaldMurillo/gofastr@$latest"
           fi
-      - name: Report which awaited upstream fixes this release carries
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          # `latest` is the newest gofastr TAG, resolved by the step above.
-          # .github/awaiting-upstream.tsv lists the commits we are waiting on
-          # and the ticket each unblocks. A commit is contained in a tag when
-          # the compare API answers "behind" or "identical"; "ahead" means the
-          # commit is on main but no release carries it yet.
-          blocked=0
-          while IFS=$'\t' read -r sha upstream issue note; do
-            case "$sha" in ''|\#*) continue ;; esac
-            # Named `rel` and not `status`: `status` is read-only in some
-            # shells and the loop dies on assignment.
-            rel=$(gh api "repos/DonaldMurillo/gofastr/compare/$latest...$sha" \
-              --jq '.status' 2>/dev/null || echo "unknown")
-            case "$rel" in
-              behind|identical)
-                echo "::notice::$latest carries $sha ($upstream); $issue is unblocked. $note"
-                ;;
-              ahead|diverged)
-                echo "waiting: $upstream ($sha) is not in $latest; $issue stays blocked. $note"
-                blocked=$((blocked + 1))
-                ;;
-              *)
-                echo "::warning::could not resolve $sha against $latest (compare said '$rel')"
-                ;;
-            esac
-          done < .github/awaiting-upstream.tsv
-          echo "$blocked awaited fix(es) still unreleased."
-
       - name: Build and test against it
         run: go build ./... && go test ./... -count=1
 
