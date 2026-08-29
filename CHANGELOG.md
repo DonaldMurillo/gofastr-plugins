@@ -4,6 +4,29 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Removed — the awaiting-upstream manifest, having done its job (2026-08-29)
+
+`.github/awaiting-upstream.tsv`, the nightly step that read it, and
+`TestAwaitingUpstreamManifestIsWellFormed` are gone. v0.74.0 released all four
+commits they tracked, so every row now fires "unblocked" every night, three of
+them for tickets that are already closed. That is noise, and noise in a daily
+job is how a real signal gets ignored.
+
+The guard's own failure message is what settled it: *"if nothing is awaited,
+delete the file and the CI step that reads it rather than leaving both to pass
+on an empty list."* Weakening a guard to keep inert machinery alive is the
+failure mode this repo spent the day removing, so following the instruction was
+the only consistent option.
+
+It was worth having for the six hours it existed. It is what caught that
+gofastr#255 had shipped, which is what prompted reading the wasm tier's
+implementation, which is what found gofastr#300. Bringing it back is one
+revert; the shape is a TSV of `sha / upstream / issue / note` plus a compare-API
+lookup against the newest tag.
+
+`gofastr-main`, the daily build against upstream main, stays. That one tracks
+drift rather than a list, so it has nothing to go stale.
+
 ### Changed — the e2e isolation workaround narrows, and turns out to have been inert (2026-08-29)
 
 `GOFASTR_ISOLATION=off` on all three e2e servers becomes
