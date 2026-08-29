@@ -4,6 +4,36 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.74.0, which unblocks four tickets at once (2026-08-29)
+
+The release the awaiting-upstream manifest was built to watch for. Every fix
+this repo was tracking is in it, checked against the compare API rather than
+inferred from the changelog:
+
+| awaited | upstream | in v0.74.0 | unblocks |
+|---|---|---|---|
+| `c0266af3` | gofastr#255, the `wasm-unsafe-eval` tier | yes | #21 |
+| `34300c92` | gofastr#268, `GOFASTR_ISOLATION_REWRITE=0` | yes | #78 |
+| `ad7a2168` | gofastr#271, token names from a loading stylesheet | yes | #81 |
+| `627bf1af` | gofastr#294, a manifest declaring a host permission | yes | #82 |
+
+The bump itself is quiet: builds clean, every Go test passes, and the only
+`go.sum` change is the gofastr line. That was not luck. This repo had already
+been run against the exact commit v0.74.0 was cut from, on both engines
+(chromium 211/211, webkit 211/211), by the drift check that became the
+`gofastr-main` job.
+
+**The one breaking change that reaches this repo does not break it.** 24
+`framework/ui` components now drop caller `ExtraAttrs` that override keys the
+component owns. All nine `ExtraAttrs` uses here were checked one by one:
+`recipes/blogsite` and `recipes/blogapp` both pass `{"value": query}` to
+`ui.SearchInput` to prefill the search box, and upstream deliberately left
+`value` unowned for exactly that pattern. The rest are `html.Input` or
+`ui.Form`, neither of which is in the contract.
+
+#78, #81 and #82 are now ordinary work rather than waiting, and #21 keeps only
+gofastr#300 in front of it.
+
 ### Fixed — relayboard was shipped and unlisted (2026-08-29)
 
 `recipes/relayboard` merged into `recipes/README.md` and this changelog while
