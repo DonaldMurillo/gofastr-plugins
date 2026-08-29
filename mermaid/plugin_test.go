@@ -6,6 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -222,4 +225,50 @@ func TestSaveDeniedWithoutCapability(t *testing.T) {
 	if body.Error != "E_CAPABILITY_DENIED" {
 		t.Errorf("error=%q want E_CAPABILITY_DENIED", body.Error)
 	}
+}
+
+// The demo page states the bundled mermaid version in two places. Both are
+// prose, so nothing else notices when a dependency bump leaves them behind —
+// which is exactly what the 11.4.1 → 11.16.1 bump did. Read the version out of
+// the bundle's package.json and require the page to agree with it.
+func TestDemoPageStatesTheBundledMermaidVersion(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("js", "package.json"))
+	if err != nil {
+		t.Fatalf("read js/package.json: %v", err)
+	}
+	var pkg struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	if err := json.Unmarshal(raw, &pkg); err != nil {
+		t.Fatalf("parse js/package.json: %v", err)
+	}
+	version := pkg.Dependencies["mermaid"]
+	if version == "" {
+		t.Fatal("js/package.json declares no mermaid dependency")
+	}
+	if strings.ContainsAny(version, "^~*") {
+		t.Fatalf("mermaid is pinned loosely (%q); the demo page cannot state a version the build does not guarantee", version)
+	}
+
+	app, p := newTestApp(t)
+	_ = app
+	body := string(p.renderDemo(httptest.NewRequest(http.MethodGet, "/mermaid", nil)))
+	want := "mermaid " + version
+	if n := strings.Count(body, want); n != 2 {
+		t.Errorf("demo page names %q %d times, want 2 (the fact chip and the offline card)\nstale library versions still on the page: %v",
+			want, n, staleVersions(body, version))
+	}
+}
+
+// staleVersions reports library version strings on the page that are neither
+// the pinned mermaid version nor the plugin's own — the failure message's
+// whole job is to point at the line that was left behind.
+func staleVersions(body, want string) []string {
+	var found []string
+	for _, m := range regexp.MustCompile(`mermaid \d+\.\d+\.\d+[\w.-]*`).FindAllString(body, -1) {
+		if m != "mermaid "+want && m != "mermaid "+Version {
+			found = append(found, m)
+		}
+	}
+	return found
 }
