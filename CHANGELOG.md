@@ -4,6 +4,28 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — what `origin` reports inside the cage, which is not what it reports outside (2026-08-29)
+
+`docs/plugin-platform.md` says an opaque-origin frame's origin is `"null"`, and
+it is right: `event.origin`, as the host sees it for a message from the frame,
+is `"null"` on both engines. Measured, not assumed.
+
+What is **not** `"null"` is `location.origin` read inside that frame. It returns
+the ordinary URL. Both values are correct answers to different questions, and
+the second is a trap: code inside the frame that checks `location.origin` to
+decide whether it is sandboxed gets a normal-looking origin and can conclude it
+is same-origin with the host. It is not, and `localStorage`,
+`document.cookie` and `window.parent.document` all throw `SecurityError` in the
+same frame to prove it. The reliable in-frame test is that those throw.
+
+I nearly filed this as a correction to the doc instead of an addition. An
+earlier reading of `location.origin` came through Playwright's `evaluate`,
+which is the same context that had already produced a false `eval()` result
+during the sqlnotebook build, so the number was not trustworthy. Re-measuring
+from genuine page script gave the same value, but reading what the paragraph
+actually claimed showed it was about `event.origin` and was correct. The
+finding was real; the correction would have been wrong.
+
 ### Added — the latency gate's readings, per run, as a downloadable artifact (2026-08-29)
 
 The step summary from the previous entry fixed half the problem. It shows a

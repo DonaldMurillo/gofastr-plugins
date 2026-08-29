@@ -116,6 +116,21 @@ checks would either always-fail or be bypassable. Source identity is the
 load-bearing check (GLM caught this in the pressure-test; see
 [`DECISIONS.md`](DECISIONS.md)).
 
+Measured, both engines, from genuine page script rather than a driver's
+injected context:
+
+| where | what it reports |
+|---|---|
+| `event.origin`, seen by the host, for a message from the frame | `"null"` |
+| `location.origin`, read **inside** the frame | the real URL, e.g. `http://localhost:8751` |
+
+Those are different values for different questions, and the second one is a
+trap. Code inside the frame that checks `location.origin` to work out whether
+it is sandboxed gets a normal-looking origin back and can conclude it is
+same-origin with the host. It is not: `localStorage`, `document.cookie` and
+`window.parent.document` all throw `SecurityError` in the same frame. The
+reliable in-frame test is that those throw, never what the origin string says.
+
 ## The capability model
 
 Capabilities **reuse** GoFastr's existing `resource:verb` auth-scope grammar —
