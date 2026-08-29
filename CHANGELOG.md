@@ -4,6 +4,34 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the latency gate only reported its numbers when it failed (2026-08-29)
+
+#71 asks a question that turned out to be unanswerable: track the Phase 0
+keystroke p99 across runs and see whether it clusters near the 50 ms ceiling. I
+went looking for that history across twelve green main runs and found **no
+numbers at all**.
+
+The gate reports through `t.Logf`, and `go test` swallows log output unless
+`-v` is set or the test fails. CI runs plain `go test ./... -count=1`. So the
+only runs that ever published a p50 or p99 were the ones that tripped the
+ceiling, and the ticket's own instruction to compare against a distribution had
+no distribution to compare against.
+
+The gate now also writes a small table to `GITHUB_STEP_SUMMARY` when it is set,
+so every CI run publishes its numbers whether it passes or not. Local runs are
+unchanged: `t.Logf` under `-v` is enough there.
+
+First passing measurement, recorded here because until now none existed:
+
+| | p50 | p99 | samples |
+|---|---|---|---|
+| this laptop | 4.60 ms | 8.40 ms | 100 |
+| the CI failure in #71 | 8.00 ms | **59.80 ms** | 100 |
+
+A **7x** gap in the tail on a p50 that barely moved, which is what #71 suspected
+and could not show. A gate whose measurement is invisible until it trips can
+only be argued about after the fact.
+
 ### Fixed — the load profile could not measure the engine it was built to measure (2026-08-29)
 
 The opt-in `LOAD_PROFILE=1` job timed out on webkit, twice, at the full 180
