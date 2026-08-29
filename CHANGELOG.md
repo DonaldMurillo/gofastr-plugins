@@ -4,6 +4,33 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — sqlnotebook's schema sidebar never noticed a table being created (2026-08-29)
+
+`refreshSchema()` ran once at boot and never again, so typing `CREATE TABLE` in
+the notebook left the sidebar showing the seed for the rest of the session. In a
+SQL notebook the sidebar is the only map of the database, and DDL is an ordinary
+thing to type into one. It now refreshes after any statement that succeeded: two
+small queries against an in-memory database, and not after a failure.
+
+Found by an adversarial read of the merged plugin rather than by anything
+failing. Worth recording what that read got wrong as well as what it got right,
+since the wrong part came first.
+
+**The hypothesis that did not survive.** `db.exec(sql)` materialises the whole
+result set and the 500-row cap is applied afterwards, which looked like it made
+`docs/sqlnotebook.md`'s claim false: that the cap means a runaway query "costs
+one bounded message instead of a hung frame". Measured instead of argued about:
+a recursive CTE producing **2,000,000** rows answered in 458 ms, and
+**20,000,000** rows in 5.8 s, both correctly truncated to 500 with the frame
+responsive throughout. The claim holds and the code was fine.
+
+**What the same read did find.** Message validation gates on
+`event.source === window.parent` and never consults `event.origin`, which is the
+platform contract. Identifier interpolation into `PRAGMA table_info` doubles
+embedded quotes, which is the correct SQLite escape, and a table named `od"d`
+round-trips. The stale sidebar was the one real defect, and a journey now covers
+CREATE and DROP on both engines.
+
 ### Added — what `origin` reports inside the cage, which is not what it reports outside (2026-08-29)
 
 `docs/plugin-platform.md` says an opaque-origin frame's origin is `"null"`, and

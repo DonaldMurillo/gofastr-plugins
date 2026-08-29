@@ -327,6 +327,13 @@ function runQuery(id: number, sql: string): void {
 
   renderResult(columns, shown, truncated, ms);
   if (errorEl) errorEl.hidden = true;
+
+  // The sidebar is this notebook's only map of the database, and DDL is
+  // ordinary in one: CREATE TABLE used to leave it showing the seed forever,
+  // because refreshSchema ran once at boot and never again. Two small queries
+  // against an in-memory database, and only after a statement that succeeded.
+  refreshSchema();
+
   sendEvent("sqlnb/result", {
     v: SQLNB_VERSION,
     id,
