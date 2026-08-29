@@ -85,6 +85,10 @@ const pending: StreamBatch[] = [];
  *  or a fill, so any assertion routed through the search box measures the
  *  runner rather than the plugin. */
 let markersWritten = 0;
+/** Out-of-band gap notices RECEIVED. Reported on every ack so a failure can
+ *  tell "the notice never arrived" from "it arrived and wrote no marker" —
+ *  the two have completely different causes and the CI symptom is identical. */
+let dropEventsSeen = 0;
 let lastMarkerText = "";
 /** Highest cumulative drop total already written as a marker. The host reports
  *  a gap TWICE on purpose — once out of band the moment it happens, once on
@@ -109,6 +113,7 @@ function asRecord(v: unknown): Record<string, unknown> {
 function handleStreamDropped(params: unknown): void {
   const p = params as { dropped?: unknown; total?: unknown } | null;
   if (!p || typeof p.dropped !== "number" || typeof p.total !== "number") return;
+  dropEventsSeen += 1;
   if (!term || p.dropped <= 0 || p.total <= droppedTotalMarked) return;
   const marker = dropMarker(p.dropped);
   markersWritten += 1;
@@ -214,6 +219,7 @@ function ackParams(): Record<string, unknown> {
     rendered,
     markers: markersWritten,
     lastMarker: lastMarkerText,
+    dropEvents: dropEventsSeen,
     scrollback,
     rows,
     cap: SCROLLBACK_LINES,
