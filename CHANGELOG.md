@@ -4,6 +4,37 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the load profile could not measure the engine it was built to measure (2026-08-29)
+
+The opt-in `LOAD_PROFILE=1` job timed out on webkit, twice, at the full 180
+second budget, having produced no number. Chromium finished the same job in 8
+seconds. So the one job whose entire purpose is measuring a saturated page could
+never report on the engine that actually saturates.
+
+The cause is worth naming precisely: **the instrument depended on the thing it
+was measuring.** `page.waitForTimeout` is implemented via the page, so it cannot
+resolve while the page's main thread is pinned, which is the exact condition
+being profiled. The file's own comment already said control "must not depend on
+it" and routed the rate change out of band through the request context. The
+timing loop and the final `page.evaluate` never got the same treatment.
+
+Sleeps are driver-side now, and every page-dependent call is bounded. A page
+that cannot answer is recorded as data, with sentinels, rather than killing the
+run: "webkit could not evaluate 1+1 within 10s under flood" is the finding, and
+it belongs in the report instead of a stack trace.
+
+With the instrument fixed, both engines report in about eight seconds each:
+
+| | lines/s | lag p95 | delivered | dropped |
+|---|---|---|---|---|
+| chromium | 6,013 | 1 ms | 10,852 | 25,223 |
+| webkit | 6,012 | 5 ms | 5,980 | 30,092 |
+
+Which refines what #66 concluded. On adequate hardware webkit does **not** stall
+under a 6,000 lines/s flood: its event loop stays within 5 ms and it keeps up,
+delivering about 55% of what chromium delivers from the same input. The
+saturation that raised the question is a property of a two-core runner hosting
+producer, browser and driver at once, not of the engine.
 ### Fixed — the upstream tripwire warned on every run, and documented limits that had expired (2026-08-29)
 
 Two things that had quietly stopped being true.
