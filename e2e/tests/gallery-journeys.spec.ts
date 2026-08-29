@@ -3,6 +3,7 @@
 // sidebar must work at all screen sizes (a persistent rail on desktop, a drawer
 // on mobile).
 import { test, expect, type Page } from "@playwright/test";
+import { PAGES, PLUGIN_SLUGS, RECIPES } from "./pages";
 
 const sidebar = (page: Page) => page.locator("aside#sidebar");
 const frame = (page: Page) => page.locator("iframe#frame");
@@ -12,22 +13,32 @@ const navItem = (page: Page, slug: string) => page.locator(`.nav-item[data-slug=
 test("homepage shows the gallery: sidebar + a card per plugin, no demo framed yet", async ({ page }) => {
   await page.goto("/");
   await expect(sidebar(page)).toBeVisible();
-  // Fifteen plugins (richtext, mermaid, monaco, datagrid, chart, logstream,
-  // imageedit, formbuilder, calendar, whiteboard, pdf, tour, map, scanner,
-  // genui) plus two recipes (blogsite, blogapp), sharing the nav-item markup.
+  // Every plugin in plugins.json plus every directory under recipes/, sharing
+  // the nav-item markup.
   //
   // The count is deliberately exact rather than a floor: the sidebar and the
   // home grid are built from ONE list, so a mismatch between them means the
   // grid dropped an entry the sidebar kept, which is invisible by eye. Go's
   // TestGalleryListsEveryShippedPlugin is what stops the list itself falling
   // behind plugins.json; this is what stops the two renderings diverging.
-  await expect(page.locator(".nav-item")).toHaveCount(17);
-  await expect(page.locator(".home .card")).toHaveCount(17);
+  //
+  // The number is DERIVED, not typed. It used to be a literal 17, which meant
+  // listing relayboard turned "the gallery grew" into a red suite — the test
+  // asserting the repo had not changed rather than that the gallery matched it.
+  const expected = PAGES.length; // plugins.json + recipes/
+  await expect(page.locator(".nav-item")).toHaveCount(expected);
+  await expect(page.locator(".home .card")).toHaveCount(expected);
   // Name them rather than only counting: a count alone passes if a card is
   // renamed or duplicated, and this is the completeness canary for the gallery.
-  await expect(navItem(page, "pdf")).toBeVisible();
-  await expect(navItem(page, "scanner")).toBeVisible();
-  await expect(navItem(page, "genui")).toBeVisible();
+  // Naming EVERY slug is what makes the derived count safe — a list that both
+  // renders 18 things and links the wrong 18 would otherwise pass.
+  const slugs = await page
+    .locator(".nav-item")
+    .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.slug ?? ""));
+  expect(new Set(slugs), `sidebar links ${slugs.join(", ")}`).toEqual(new Set(PAGES));
+  for (const slug of [...PLUGIN_SLUGS, ...RECIPES]) {
+    await expect(navItem(page, slug)).toBeVisible();
+  }
   await expect(home(page)).toBeVisible();
   await expect(frame(page)).not.toHaveClass(/show/); // nothing framed on the home view
 });

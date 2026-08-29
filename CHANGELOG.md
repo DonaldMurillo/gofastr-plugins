@@ -34,6 +34,16 @@ off-screen. The `pre` scrolls (`overflow-x:auto`), so nothing was clipped, but
 the useful half was out of view; the line is now short enough to read before
 the scroll edge.
 
+Listing relayboard then turned the suite red, which is the interesting part.
+`gallery-journeys.spec.ts` asserted `toHaveCount(17)` against a hand-counted
+list, so the gallery growing by one was a failure — the test pinned that the
+repo had not changed rather than that the gallery matched it. The count is now
+derived from `plugins.json` plus the directories under `recipes/`, shared with
+the screenshot sweep through `e2e/tests/pages.ts`, and the sidebar's slugs are
+compared as a set against that list so rendering eighteen of the wrong things
+cannot pass. Verified it can still fail: an extra directory under `recipes/`
+turns it red.
+
 ### Added — a daily tripwire against upstream gofastr main (2026-08-29)
 
 `gofastr-latest` answers "does the newest gofastr **release** still work here".
