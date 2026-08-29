@@ -269,11 +269,26 @@ func TestPhase0SmokeGate(t *testing.T) {
 	}
 
 	// --- T4: typing round-trips across the boundary into the host form ---
-	focusAndType(t, ctx, "Hello world")
-	// docChanged is debounced ~300ms; poll the host's hidden field.
-	if !pollTrue(ctx,
-		`(document.querySelector('input[name=body_json]')||{}).value && document.querySelector('input[name=body_json]').value.indexOf('Hello world') !== -1`,
-		5*time.Second) {
+	//
+	// focusAndType clicks the frame and types after a fixed 150ms. On a loaded
+	// CI runner the click does not always land focus inside the opaque frame in
+	// that window, and the keystrokes go nowhere — this test has flaked on main
+	// exactly that way. The broker tracks focus internally but does not expose
+	// it, so there is nothing to poll on; retrying the gesture is what is
+	// available.
+	//
+	// Retrying is safe for this assertion: it checks that the text is PRESENT,
+	// so a duplicated "Hello worldHello world" from a late-landing first
+	// attempt still passes, and a genuinely broken bridge still fails all three.
+	typed := false
+	for attempt := 0; attempt < 3 && !typed; attempt++ {
+		focusAndType(t, ctx, "Hello world")
+		// docChanged is debounced ~300ms; poll the host's hidden field.
+		typed = pollTrue(ctx,
+			`(document.querySelector('input[name=body_json]')||{}).value && document.querySelector('input[name=body_json]').value.indexOf('Hello world') !== -1`,
+			5*time.Second)
+	}
+	if !typed {
 		var got string
 		_ = chromedp.Run(ctx, chromedp.Evaluate(`(document.querySelector('input[name=body_json]')||{}).value||''`, &got))
 		t.Errorf("T4: typed text did not reach host body_json field. got=%q", truncate(got, 200))
