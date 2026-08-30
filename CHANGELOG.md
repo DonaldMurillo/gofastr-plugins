@@ -4,6 +4,34 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — a failed engine fetch left sqlnotebook's mount unable to recover (2026-08-29)
+
+The host adapter sets `frame.__sqlnbInitSent = true` **before** fetching the
+wasm, so a re-fired ready cannot post a second init. On failure that flag stayed
+set while nothing had been sent, so the guard claimed an init that never
+happened and any later ready returned early. The frame waited for an engine no
+one could ask for again.
+
+Measured by aborting only `sql-wasm.wasm` and leaving everything else alone:
+
+```
+initSent 0    fetchError "Failed to fetch"    __sqlnbInitSent true
+```
+
+Zero inits sent, and the guard saying otherwise. It now clears on failure, which
+is the invariant the guard actually wants: one **successful** init per mount.
+After the fix the same probe reports `__sqlnbInitSent false`, and with the road
+open again the engine comes up on both engines, SQLite 3.49.1 from 658,410
+bytes.
+
+A journey covers it, and asserts the degraded state is *honest* rather than
+merely empty: the frame must say "waiting for engine", `ready` must be null, and
+the guard must not claim a send that did not occur. 14/14 pass on both engines.
+
+Second defect from the same adversarial read as the schema sidebar. Both were
+in the failure paths rather than the happy path, which is where a merged plugin
+with green gates hides them.
+
 ### Fixed — sqlnotebook's schema sidebar never noticed a table being created (2026-08-29)
 
 `refreshSchema()` ran once at boot and never again, so typing `CREATE TABLE` in

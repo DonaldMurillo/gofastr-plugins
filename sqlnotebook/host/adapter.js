@@ -195,8 +195,17 @@
         });
       })
       ["catch"](function (e) {
-        // No sqlnb/init will ever arrive; record why where a test can see
-        // it. The frame keeps its "waiting for engine" hint visible.
+        // Nothing was sent, so the guard above must stop claiming otherwise.
+        // It is set BEFORE the fetch to keep a re-fired ready from posting a
+        // second init, but on failure that left the mount permanently unable
+        // to recover: initSent stayed 0 while __sqlnbInitSent stayed true, so
+        // a later ready returned early and the frame waited for an engine
+        // that could no longer be asked for. Clearing it keeps the invariant
+        // the guard actually wants, which is one SUCCESSFUL init per mount.
+        frame.__sqlnbInitSent = false;
+
+        // Record why where a test can see it. The frame keeps its
+        // "waiting for engine" hint visible.
         var msg = e && e.message ? e.message : String(e);
         debug.fetchError = msg;
         if (typeof console !== "undefined" && console.error) {
