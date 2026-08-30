@@ -4,6 +4,38 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the blogapp publish/unpublish journey raced its own POST (2026-08-29)
+
+`publish and unpublish move a post on and off the public site` has failed twice
+on CI webkit, both times on an unrelated PR, and passes locally every time
+(8 runs, two engines). The second failure named the cause: after unpublishing,
+the post's link was still on the homepage.
+
+The test clicked the status form's button and immediately called `page.goto`.
+The button submits a form, so the click starts a POST **and** a navigation, and
+the `goto` raced that round trip. On a loaded runner the homepage renders before
+the status change is committed.
+
+The part that makes it fail rather than flake-and-recover: `toHaveCount(0)`
+retries for five seconds, but a locator re-query does not reload the page. Once
+a stale homepage is loaded, no amount of retrying can see the new state. The
+assertion was retrying against a snapshot that could never change.
+
+It now waits for the POST response before navigating. Demonstrated rather than
+argued, by injecting a 2.5 s delay into the status route:
+
+```
+OLD  navigated away without awaiting the POST
+NEW  awaited the POST for 2536 ms before navigating (status 303)
+```
+
+Worth being precise: that shows the timing difference the fix makes, not a
+red-to-green reproduction of the original assertion, which needs the runner's
+own load to surface.
+
+Same shape as #71 and the load profile in #94: an assertion whose correctness
+quietly depends on the machine being fast enough. Three now, in three places.
+
 ### Changed — gofastr v0.75.0, and sqlnotebook builds its AssetServer from the module (2026-08-29)
 
 The release carrying the two bugs this repo filed today. Verified rather than
