@@ -202,6 +202,46 @@ test("a weekly series keeps its 9:00 wall clock on both sides of the fall-back, 
 
 // ─── 3. the money shot: drag across the spring-forward gap ─────────────────
 
+test("a move the server never receives is refused out loud, not applied silently", async ({ page, request, baseURL }) => {
+  await moveTo(request, baseURL!, "gapend", "2026-03-08", "2026-03-08T01:30");
+  await page.goto(GRID);
+  await ready(page);
+
+  // Every mutation in this plugin is an INTENT the server resolves; the frame
+  // renders what comes back. So a move the server never receives must not look
+  // like one it accepted. Break only that route.
+  let attempts = 0;
+  await page.route("**" + MOVE, (r) => {
+    attempts += 1;
+    return r.abort();
+  });
+
+  const chip = fl(page).locator(".cal-evtbox .cal-evt[aria-label*='Red-eye arrival']");
+  await chip.scrollIntoViewIfNeeded();
+  await expect(chip).toHaveAttribute("aria-label", /1:30 to 3:00/);
+
+  const box = await chip.boundingBox();
+  expect(box, "chip geometry").not.toBeNull();
+  const cx = box!.x + box!.width / 2;
+  const cy = box!.y + 8;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx, cy + 22, { steps: 4 });
+  await page.mouse.move(cx, cy + 44, { steps: 4 });
+  await page.mouse.up();
+
+  // Assert the drag actually asked. A journey that silently never fired the
+  // request would pass every assertion below by doing nothing, which is how
+  // two earlier attempts at this test fooled me.
+  await expect.poll(() => attempts, { timeout: 10_000 }).toBeGreaterThan(0);
+
+  await expect(fl(page).locator("#cal-status")).toContainText(/refused|failed/i, { timeout: 10_000 });
+
+  // And the chip must still show the server's last known truth rather than the
+  // position the pointer suggested.
+  await expect(chip).toHaveAttribute("aria-label", /1:30 to 3:00/);
+});
+
 test("dragging the 1:30 event one hour across the spring-forward gap lands at 3:30 — the server answers, not the frame", async ({ page, request, baseURL }) => {
   await moveTo(request, baseURL!, "gapend", "2026-03-08", "2026-03-08T01:30");
   await page.goto(GRID);
