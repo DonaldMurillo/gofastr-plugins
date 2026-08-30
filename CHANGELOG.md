@@ -4,6 +4,27 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.76.0 (2026-08-30)
+
+A quiet bump. Builds clean, the full Go suite passes, 232 chromium journeys
+pass, and `go.sum` moves only gofastr's own lines.
+
+Expected to be quiet, and checked rather than assumed. The 36 commits between
+v0.75.0 and this tag are Web Bot Auth and agent-surface work
+(`core/webbotauth`, `core/jcs`, `core/mcp`), an audit-tests branch of middleware
+and `uinoderender` hardening, and the release commit. **Nothing touched
+`framework/pluginhost`, `core-ui/style` or `framework/embed`**, which is the
+whole of this repo's exposure.
+
+One commit named "clear host theme state" and was worth opening for that reason,
+since token bridging is exactly what this repo depends on. It turned out to be
+`core/mcp/widgetclient.js`, the MCP Apps widget client, a different subsystem
+from pluginhost's bridge.
+
+The `gofastr-main` tripwire had already built this repo against `c9ffac5` and
+reported the third-party dependency set unchanged, so the tag arrived
+pre-verified.
+
 ### Added — a journey for mermaid's parse error, and a correction to the sweep's coverage map (2026-08-30)
 
 `mermaid` reports invalid syntax well, with a caret under the offending token,
