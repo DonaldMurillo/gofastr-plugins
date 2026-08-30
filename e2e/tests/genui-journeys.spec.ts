@@ -70,6 +70,41 @@ const mirror = (page: Page) =>
 
 // ─── 1. mount + sandbox + probes ────────────────────────────────────────────
 
+test("a compose the server never answers reports failure, not 'nothing composed yet'", async ({ page }) => {
+  // The composition is produced HOST-side, so the POST is the whole pipeline.
+  // Break only it.
+  let intercepted = 0;
+  await page.route(
+    (u) => u.pathname.endsWith("/genui/compose"),
+    (r) => {
+      intercepted += 1;
+      return r.abort();
+    }
+  );
+  await page.goto("/genui");
+  await page.locator("#genui-compose").click();
+
+  await expect.poll(() => intercepted, { timeout: 15_000 }).toBeGreaterThan(0);
+
+  // failGeneration was wired only to the polling paths, so the likeliest
+  // failure of all — the compose request not landing — reached nothing. The
+  // state stayed idle and the verdict kept reading "nothing composed yet",
+  // which says you never asked rather than that it failed.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const f = document.querySelector(".editor-card iframe") as (HTMLIFrameElement & { __genuiState?: string }) | null;
+          return f?.__genuiState ?? "";
+        }),
+      { timeout: 15_000 }
+    )
+    .toBe("failed");
+
+  await expect(page.locator(".verdict").first()).toContainText(/generation failed/i);
+  await expect(page.locator(".verdict").first()).not.toContainText(/nothing composed yet/i);
+});
+
 test("mounts sandboxed (allow-scripts, no allow-same-origin) with the frame's own isolation probes passing", async ({ page }) => {
   const frame = page.locator(".editor-card iframe");
   await expect(frame).toHaveAttribute("sandbox", "allow-scripts");

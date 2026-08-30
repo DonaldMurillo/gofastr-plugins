@@ -4,6 +4,35 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — genui reported a failed compose as "nothing composed yet" (2026-08-30)
+
+The composition is produced host-side, so `POST /compose` is the whole
+pipeline. `failGeneration` was wired only to `pollComposition`, so the likeliest
+failure of all, the compose request not landing, reached nothing: the promise
+chain rejected, `compose()` had no `catch`, the state stayed `idle`, and the
+demo's verdict kept reading **"nothing composed yet"**. The caller's
+`.catch(function () {})` swallowed the rejection, so not even a console line
+survived.
+
+A request that failed looked exactly like one never made.
+
+Measured, then fixed, then measured again on both engines:
+
+```
+before   blocked -> state idle      verdict "nothing composed yet"
+after    blocked -> state failed    verdict "generation failed"
+after    allowed -> state rendered  verdict "rendered 5 nodes"
+```
+
+The fix routes a rejected compose into the same `failed` state the polling
+paths already used, excluding `E_SUPERSEDED` because a newer prompt winning is
+not a failure. The plugin already had the state and the demo already had the
+message; nothing ever reached them.
+
+Third real defect from the #102 sweep, after pdf and imageedit, and the same
+shape every time: the failure path was designed, was documented, and was
+unreachable, because no journey ever drove it.
+
 ### Added — a journey for whiteboard drawing into a room it cannot reach (2026-08-30)
 
 The dangerous failure for a collaborative tool is not an error, it is silence:

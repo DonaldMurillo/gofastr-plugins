@@ -308,6 +308,20 @@
       return new Promise(function (resolve, reject) {
         pollComposition(body.id, myGen, resolve, reject, Date.now() + POLL_TIMEOUT_MS);
       });
+    })["catch"](function (err) {
+      // Route a failed POST into the SAME failed state the polling paths use.
+      //
+      // failGeneration was wired only to pollComposition, so the most likely
+      // failure of all — the compose request itself not landing — reached
+      // nothing: state stayed "idle", the demo's verdict kept reading
+      // "nothing composed yet", and the caller's .catch swallowed the
+      // rejection. A request that failed looked exactly like one never made.
+      //
+      // E_SUPERSEDED is not a failure, it is a newer prompt winning, and
+      // failGeneration already ignores a stale generation anyway.
+      var msg = err && err.message ? err.message : String(err);
+      if (msg !== "E_SUPERSEDED") failGeneration(myGen, msg);
+      throw err;
     });
   }
 
