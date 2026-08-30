@@ -4,6 +4,36 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — a journey for calendar's refused move, and the sweep's other half reframed (2026-08-29)
+
+`calendar` already refuses a failed move out loud: `move refused: ...` on the
+status line, with the chip left showing the server's last known truth rather
+than where the pointer suggested. Correct, and proved by nothing. Given this
+exact class has now recurred three times here (richtext fixed it once, then
+imageedit and pdf rebuilt it wrong), a plugin doing it right deserves a test
+that keeps it that way.
+
+The journey asserts the request was actually attempted before asserting
+anything about the outcome. That is not decoration: **two earlier ad-hoc
+attempts at this measurement fired no request at all** and reported a status
+line identical to the success case, which reads exactly like "the plugin says
+nothing on failure". The same thing happened while probing datagrid. A failure
+journey that silently never triggers the failure passes every assertion by
+doing nothing.
+
+## The ticket's framing was wrong, and doing the work is what showed it
+
+#102 proposed adding a `window.__<plugin>Debug` error mirror to every adapter so
+tests could observe failures. Having now written three of these journeys, that
+is the wrong instrument in most cases. pdf, imageedit and calendar are all
+asserted on **what the person actually sees**: a status line, an error banner.
+That is a better test than a debug counter, because a mirror can be correct
+while the user is told nothing, which was the whole defect in two of them.
+
+The mirror earns its place only where the observable is genuinely invisible,
+which so far is `sqlnotebook`'s wasm relay: a fetch the frame cannot make, whose
+failure has no natural UI. So the remaining sweep is cheaper than the ticket
+claimed: mostly journeys, rarely new product surface.
 ### Fixed — and the fix for that race introduced a second one (2026-08-30)
 
 Waiting on the POST response was half right. It removed the stale-homepage
