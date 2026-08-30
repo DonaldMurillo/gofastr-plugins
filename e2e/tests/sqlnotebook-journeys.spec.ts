@@ -16,6 +16,7 @@ type Debug = {
   queries: number;
   ready: { sqliteVersion: string; ms: number } | null;
   wasmBytes: number;
+  fetchError: string;
 };
 
 const readDebug = (page: Page) =>
@@ -25,6 +26,7 @@ const readDebug = (page: Page) =>
     return {
       initSent: g.initSent, results: g.results, errors: g.errors,
       queries: g.queries, ready: g.ready, wasmBytes: g.wasmBytes,
+      fetchError: g.fetchError ?? "",
     };
   }) as Promise<Debug | null>;
 
@@ -159,6 +161,42 @@ test("the frame is sealed: opaque origin, and the tier grants only wasm", async 
   expect(tokens, "the wasm tier must reach the frame (gofastr#300)").toContain("'wasm-unsafe-eval'");
   expect(tokens, "string eval must never be granted").not.toContain("'unsafe-eval'");
   expect(csp, "the frame must keep its network sealed").toContain("connect-src 'none'");
+});
+
+test("a failed engine fetch degrades honestly and does not brick the mount", async ({ page }) => {
+  // The engine's only road into the frame is the host adapter's fetch, since
+  // connect-src 'none' means the frame cannot get it itself. Block it.
+  let blocked = true;
+  await page.route("**/sql-wasm.wasm", (r) => (blocked ? r.abort() : r.continue()));
+  await page.goto("/sqlnotebook");
+
+  await expect
+    .poll(async () => (await readDebug(page))?.fetchError ?? "", { timeout: 20_000 })
+    .not.toBe("");
+
+  const failed = await readDebug(page);
+  expect(failed?.initSent, "nothing was handed to the frame").toBe(0);
+  expect(failed?.ready, "no engine can be ready without its bytes").toBeNull();
+
+  // The frame must say so rather than looking merely empty.
+  await expect(frame(page).locator("body")).toContainText(/waiting for engine/i);
+
+  // And the mount must not have recorded an init that never happened: the
+  // guard is set before the fetch to stop a re-fired ready posting twice, and
+  // leaving it set on failure made the frame wait forever for an engine no
+  // later ready could ask for again.
+  const claimed = await page.evaluate(() => {
+    const f = document.querySelector("iframe") as (HTMLIFrameElement & { __sqlnbInitSent?: boolean }) | null;
+    return !!f?.__sqlnbInitSent;
+  });
+  expect(claimed, "the guard must not claim an init that was never sent").toBe(false);
+
+  // With the road open again, the engine comes up.
+  blocked = false;
+  await page.reload();
+  const d = await ready(page);
+  expect(d.ready?.sqliteVersion).toMatch(/^3\.\d+\.\d+$/);
+  expect(d.wasmBytes).toBeGreaterThan(100_000);
 });
 
 test("the frame issues zero network requests while running a query", async ({ page }) => {
