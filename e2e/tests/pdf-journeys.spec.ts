@@ -84,6 +84,21 @@ test("mounts in a genuinely opaque sandbox with no console/boot errors", async (
   expect(errors.filter((e) => !/favicon/i.test(e))).toEqual([]);
 });
 
+test("a document the host cannot fetch is reported, not left as a blank page", async ({ page }) => {
+  // The frame cannot fetch its own document: connect-src 'none' means the host
+  // relays the bytes. Break only that relay and leave everything else alone.
+  await page.route("**/doc/**", (r) => r.abort());
+  await page.goto("/pdf");
+
+  // The adapter has always sent renderError on this path, and its comment has
+  // always claimed the frame turns it into a visible error. The frame had no
+  // handler, so the router dropped it: a full toolbar over an empty page,
+  // silent except for a console line. That reads as a broken plugin rather
+  // than a document that could not be loaded.
+  const body = page.frameLocator("iframe").locator("body");
+  await expect(body).toContainText(/failed|error|could not/i, { timeout: 20_000 });
+});
+
 test("renders real pixels, not just an error-free blank page", async ({ page }) => {
   expect(await mirror(page, "__pdfNonBlank")).toBe(true);
 
