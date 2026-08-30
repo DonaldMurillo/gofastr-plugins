@@ -720,6 +720,19 @@ function boot(): void {
     imageResult: (params: unknown) => handleBridgeResult("imageResult", params),
     uploadResult: (params: unknown) => handleBridgeResult("uploadResult", params),
     exportResult: (params: unknown) => handleBridgeResult("exportResult", params),
+    // The autosave's verdict. The adapter has always sent it and the frame
+    // never listened, so a save that failed looked exactly like one that
+    // worked: the status line was byte-identical either way, and the edits
+    // were gone on reload with nothing having said so. Success stays quiet on
+    // purpose, matching how this repo treats transient "Saved" chrome; a
+    // FAILURE is the thing a person has to be told, because only they can
+    // decide to retry or copy their work out.
+    saveResult: (params: unknown) => {
+      const p = asRecord(params);
+      if (p.ok === true) return;
+      const code = typeof p.code === "string" && p.code ? p.code : "E_SAVE";
+      setStatus("Not saved (" + code + "). Your edits are only in this tab.");
+    },
   });
   window.addEventListener("message", messageListener);
   announceReady();

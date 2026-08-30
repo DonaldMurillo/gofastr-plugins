@@ -4,6 +4,39 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — imageedit lost edits silently when the autosave failed (2026-08-29)
+
+The same shape as the pdf defect below, with higher stakes. `imageedit`'s
+adapter has always reported the autosave's verdict as `saveResult`
+(`{ok, status, code}`, including `E_NETWORK`), and the frame never listened, so
+the event was dropped by the router.
+
+Measured by aborting only `/imageedit/save` and rotating the image:
+
+```
+save blocked   status: "Image 960x640 resident, preview is local, export is server-side"
+save allowed   status: "Image 960x640 resident, preview is local, export is server-side"
+```
+
+**Byte-identical.** A person crops, annotates or redacts, the document fails to
+persist, and nothing anywhere says so. The work is gone on reload.
+
+The frame now surfaces a failure: `Not saved (E_NETWORK). Your edits are only in
+this tab.` Success stays quiet on purpose, matching how this repo already treats
+transient "Saved" chrome, because only a failure needs a decision from the
+person who made the edits.
+
+`datagrid` drops the same event and was checked too. There it is weaker: its
+`/save` carries view state, not cell data, and cell edits go through
+`requestCellWrite`, which the frame does handle. A silent failure costs a column
+layout rather than work, so it is left for the #102 sweep rather than fixed here.
+
+Fourth failure-path defect today, third found by the sweep that #102 proposes.
+The pattern is consistent enough to name: an adapter reports a failure
+correctly, the frame's half was never written, and the router drops the event
+without a sound. Nothing in review looks wrong, because the sending side reads
+exactly as intended.
+
 ### Fixed — pdf showed nothing when the host could not fetch the document (2026-08-29)
 
 `pdf/host/adapter.js` has always sent a `renderError` event when the document
