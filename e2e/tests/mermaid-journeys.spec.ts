@@ -32,6 +32,23 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   await ready(page);
 });
 
+test("invalid syntax reports a parse error instead of leaving the last good diagram up", async ({ page }) => {
+  await page.goto("/mermaid");
+  const frame = page.frameLocator("iframe");
+  const editor = frame.locator("textarea").first();
+  await expect(frame.locator("svg")).toHaveCount(1, { timeout: 25_000 });
+
+  await editor.click();
+  await editor.fill("graph TD\n  A --> ((((( unclosed");
+
+  // Two properties, and the second is the one that matters. Reporting the
+  // error is good; leaving the PREVIOUS diagram on screen while reporting it
+  // would be worse than either, because the picture would no longer describe
+  // the source and nothing would say which one to believe.
+  await expect(frame.locator("body")).toContainText(/parse error/i, { timeout: 15_000 });
+  await expect(frame.locator("svg"), "a stale diagram must not outlive its source").toHaveCount(0);
+});
+
 test("mounts sandboxed with no console errors and renders a diagram", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
