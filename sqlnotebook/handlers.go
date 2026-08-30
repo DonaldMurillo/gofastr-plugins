@@ -29,14 +29,20 @@ func (p *Plugin) Init(app *framework.App) error {
 	// relaxation and the fixed framedCSP (connect-src 'none', sandbox
 	// allow-scripts) to exactly these.
 	//
-	// .WithCSP(p.manifest.CSP) is the line gofastr#300 is about: the
-	// manifest's tier must be threaded into the server that assembles the
-	// frame's response headers. It takes the manifest's own slice, never a
-	// repeated literal — the manifest is the declaration, this is its only
-	// path into a response, and a second copy here is exactly how the two
-	// would drift apart.
-	srv := pluginhost.NewAssetServer(framedAssets(), RoutePrefix, assetSpecs()).
-		WithCSP(p.manifest.CSP)
+	// Built FROM THE MODULE, which is gofastr#300's fix (v0.75.0): the
+	// constructor reads the module's assets and threads Manifest.CSP through
+	// WithCSP itself, so the manifest that declares the wasm tier and the
+	// server that answers for the frame cannot disagree. The hand-threaded
+	// NewAssetServer(...).WithCSP(...) this replaces was correct, but it was
+	// correct by remembering a line, and forgetting it produced a frame that
+	// validated, mounted, and refused to compile WebAssembly with nothing
+	// naming the cause.
+	mod := pluginhost.ClientModule{
+		Name:     Name,
+		Manifest: p.manifest,
+		Assets:   framedAssets(),
+	}
+	srv := mod.AssetServer(RoutePrefix, assetSpecs())
 
 	// Host-page (non-framed) script: the adapter (embedded in assets.go, the
 	// same treatment pdf and calendar give theirs). No config.js — the only
