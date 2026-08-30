@@ -4,6 +4,41 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — and the fix for that race introduced a second one (2026-08-30)
+
+Waiting on the POST response was half right. It removed the stale-homepage
+problem and created a navigation collision: the POST answers **303**, the
+browser then navigates to `/admin`, and the caller's next `goto` raced that.
+CI named it precisely:
+
+```
+page.goto: Navigation to "http://localhost:8125/" is interrupted by
+another navigation to "http://localhost:8125/admin"
+```
+
+Which is why the test kept failing on the same shard after the first fix
+merged, on a PR that touched only calendar.
+
+It now waits for the **redirect to land** rather than for the response to
+arrive: `page.waitForURL(u => u.pathname.startsWith("/admin"))`. Landing on
+`/admin` implies the POST both completed and succeeded, so the explicit status
+assertion goes too.
+
+Verified against the same 2.5 s injected delay, on both engines:
+
+```
+webkit    waited 2577 ms for the redirect, then navigated cleanly
+chromium  waited 2542 ms for the redirect, then navigated cleanly
+```
+
+Both properties at once: it waits out a slow POST, and the following navigation
+does not collide.
+
+The honest shape of this: a real diagnosis, a fix that addressed it, and a
+second defect the fix itself introduced, caught by CI on the next run rather
+than by me. The first change was not wrong, it was incomplete, and "the tests
+pass locally" would have hidden the difference both times.
+
 ### Fixed — the blogapp publish/unpublish journey raced its own POST (2026-08-29)
 
 `publish and unpublish move a post on and off the public site` has failed twice
