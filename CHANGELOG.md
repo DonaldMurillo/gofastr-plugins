@@ -4,6 +4,33 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.75.0, and sqlnotebook builds its AssetServer from the module (2026-08-29)
+
+The release carrying the two bugs this repo filed today. Verified rather than
+assumed: `compare v0.75.0...06956a1a` answers `behind`, so the tag contains
+them.
+
+**gofastr#300** shipped as `ClientModule.AssetServer(prefix, specs)`, which
+reads the module's assets and threads `Manifest.CSP` through `WithCSP` itself.
+`sqlnotebook/handlers.go` now uses it. The hand-threaded
+`NewAssetServer(...).WithCSP(...)` it replaces was correct, but correct by
+remembering a line, and forgetting that line produced a frame that validated,
+mounted, and refused to compile WebAssembly with nothing naming the cause.
+
+**gofastr#303** now derives a missing `ContentType` from the filename. The five
+explicit ones in `assets.go` stay: the default is a safety net for what an
+author forgets, not a reason to stop saying what a file is, and
+`application/wasm` is worth stating out loud.
+
+`TestServedFrameHeaderCarriesWasmUnsafeEval` is the check that mattered through
+this change, and it still passes: the served `script-src` carries
+`'wasm-unsafe-eval'` after the swap. Asserting the manifest would have proved
+nothing, which was the whole of #300. Full Go suite green, 14/14 sqlnotebook
+journeys on both engines, no third-party dependency movement.
+
+Filed at roughly 06:00, fixed upstream by 19:19, released and adopted here the
+same day.
+
 ### Fixed — imageedit lost edits silently when the autosave failed (2026-08-29)
 
 The same shape as the pdf defect below, with higher stakes. `imageedit`'s
