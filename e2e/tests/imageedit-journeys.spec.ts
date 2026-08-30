@@ -318,6 +318,26 @@ function samplePoints(w: number, h: number, n: number): [number, number][] {
 
 // ─── 1. mount + sandbox + no console errors + no frame network ─────────────
 
+test("a failed autosave is reported, not swallowed", async ({ page }) => {
+  // The document autosaves over the bridge on every edit. Break only that
+  // route: everything else, including the image relay, still works.
+  await page.route("**/imageedit/save", (r) => r.abort());
+  await page.goto("/imageedit");
+
+  const frame = page.frameLocator("iframe");
+  const status = frame.locator("#ie-status");
+  await expect(status).toContainText(/resident/i, { timeout: 25_000 });
+
+  await frame.locator("#ie-rotate-r").click();
+
+  // The adapter has always sent saveResult and the frame never listened, so a
+  // save that failed looked exactly like one that worked: this line was
+  // byte-identical either way and the edits were gone on reload. Only the
+  // person editing can decide to retry or copy their work out, so only they
+  // can be told.
+  await expect(status).toContainText(/not saved/i, { timeout: 15_000 });
+});
+
 test("mounts sandboxed (allow-scripts, no allow-same-origin), no console errors, and the frame itself issues no network requests", async ({ page }) => {
   await openDemo(page);
 
