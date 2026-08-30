@@ -4,6 +4,37 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — a journey for mermaid's parse error, and a correction to the sweep's coverage map (2026-08-30)
+
+`mermaid` reports invalid syntax well, with a caret under the offending token,
+and removes the stale diagram rather than leaving it standing:
+
+```
+valid     "postMessage renders Host page Opaque-origin frame SVG diagram"
+invalid   "Parse error on line 2: ... Expecting 'AMP', 'COLON', 'PIPE'..."  svg count 0
+```
+
+The journey asserts both, and the second is the one that matters. Reporting the
+error is good; leaving the previous diagram up **while** reporting it would be
+worse than either, because the picture would no longer describe the source and
+nothing would say which to believe.
+
+## The coverage map I published was wrong
+
+The #102 sweep classified plugins by whether their spec calls `page.route`. That
+is one failure mechanism, not the definition, and it mislabelled at least two:
+
+- **scanner** was listed as having no failure journey. It has one. Camera
+  failure is a *state* there by deliberate design (`__scannerCameraState` is
+  `idle | live | denied | unsupported`, with a comment saying "CAMERA FAILURE IS
+  A STATE, NOT AN EXCEPTION"), and the spec asserts it. No route needed.
+- **mermaid** had a genuine gap, but not one a route sweep could ever find: its
+  failure is local, a parse error, with no request to intercept.
+
+So the detector answered a narrower question than the one I asked it, and I
+reported its answer as the coverage picture. The honest count is better than I
+said in one place and the gap was somewhere I was not looking.
+
 ### Fixed — genui reported a failed compose as "nothing composed yet" (2026-08-30)
 
 The composition is produced host-side, so `POST /compose` is the whole
