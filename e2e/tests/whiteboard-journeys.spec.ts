@@ -290,6 +290,33 @@ function freshRoom(prefix: string): string {
 
 // ─── 1. mount + sandbox + no console errors ────────────────────────────────
 
+test("a board that cannot reach the room says so instead of looking synced", async ({ page }) => {
+  // The dangerous failure for a collaborative tool is not an error, it is
+  // silence: you keep drawing, the strokes never leave, and the board looks
+  // exactly as it does when they do. Break only the room stream.
+  let intercepted = 0;
+  await page.route(
+    (u) => u.pathname.includes("/whiteboard/room/stream"),
+    (r) => {
+      intercepted += 1;
+      return r.abort();
+    }
+  );
+  await page.goto(`${BASE}/whiteboard`);
+
+  const status = page.frameLocator("iframe").locator("#wb-status");
+  await expect(status).toBeVisible({ timeout: 25_000 });
+
+  // Assert the stream was actually attempted: a route that never matches
+  // makes every assertion below pass by measuring an unbroken board. An
+  // earlier version of this probe used a glob that missed the query string
+  // and reported "no failure shown" while blocking nothing.
+  await expect.poll(() => intercepted, { timeout: 15_000 }).toBeGreaterThan(0);
+
+  await expect(status).toContainText(/offline/i, { timeout: 15_000 });
+  await expect(status, "an unreachable room must not read as synced").not.toContainText(/synced/i);
+});
+
 test("mounts sandboxed (allow-scripts, no allow-same-origin) with no console errors", async ({ page }) => {
   trackConsole(page);
   const room = freshRoom("mount");

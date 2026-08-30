@@ -4,6 +4,35 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — a journey for whiteboard drawing into a room it cannot reach (2026-08-30)
+
+The dangerous failure for a collaborative tool is not an error, it is silence:
+you keep drawing, the strokes never leave, and the board looks exactly as it
+does when they do.
+
+`whiteboard` already handles this, with the right words:
+
+```
+stream blocked   "offline — drawing locally"
+stream allowed   "synced · 1 participant"
+```
+
+Correct, and proved by nothing until now.
+
+The journey asserts the stream was actually intercepted before judging the
+status. That guard earned its place immediately: the first version of this
+probe used a glob (`**/whiteboard/room/stream`) that did not match the real
+request because of its `?docId=` query string, blocked nothing, and reported
+demo-page prose as the status. It looked exactly like "the plugin says nothing
+when it goes offline". A URL predicate matches; a glob did not.
+
+One observation rather than a claim: the pre-existing
+`drawing offline on both sides converges after reconnect` journey went flaky
+once in webkit during this work and passed on retry, then passed two further
+webkit runs cleanly with the new test present. It does not look related, and
+it is recorded here rather than dismissed because "did not reproduce locally"
+was also true of the blogapp race that then failed twice on CI.
+
 ### Added — a journey for formbuilder's refused save (2026-08-30)
 
 Same treatment as calendar, on the plugin where the schema **is** the document:
