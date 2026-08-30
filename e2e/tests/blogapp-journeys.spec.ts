@@ -251,6 +251,29 @@ test("the document survives a reload — the body is server-rendered back into t
   await deletePost(page, id);
 });
 
+/**
+ * Flip a post's published status and WAIT for the server to have done it.
+ *
+ * The button submits a form, so clicking it starts a POST and a navigation.
+ * Navigating on to the homepage without waiting races that round trip: on a
+ * loaded runner the homepage renders before the status change is committed,
+ * and the assertion then retries against a DOM snapshot that will never
+ * change, because a locator re-query does not reload the page. It failed
+ * twice that way on CI while passing every time locally.
+ */
+async function toggleStatus(page: Page, id: string): Promise<void> {
+  await page.goto(`${BLOGAPP}/admin`);
+  const [resp] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes(`/admin/posts/${id}/status`) && r.request().method() === "POST",
+      { timeout: 15_000 }
+    ),
+    page.locator(`form[action="/admin/posts/${id}/status"] button`).click(),
+  ]);
+  expect(resp.status(), `toggling status for ${id}`).toBeLessThan(400);
+  await page.waitForLoadState("load");
+}
+
 test("publish and unpublish move a post on and off the public site", async ({ page }) => {
   await login(page);
   const id = await newPost(page);
@@ -263,14 +286,12 @@ test("publish and unpublish move a post on and off the public site", async ({ pa
   await page.goto(`${BLOGAPP}/`);
   await expect(page.getByRole("link", { name: "Toggled visibility" })).toHaveCount(0);
 
-  await page.goto(`${BLOGAPP}/admin`);
-  await page.locator(`form[action="/admin/posts/${id}/status"] button`).click();
+  await toggleStatus(page, id);
   await page.goto(`${BLOGAPP}/`);
   await expect(page.getByRole("link", { name: /Toggled visibility/ }).first()).toBeVisible();
 
   // And back off again.
-  await page.goto(`${BLOGAPP}/admin`);
-  await page.locator(`form[action="/admin/posts/${id}/status"] button`).click();
+  await toggleStatus(page, id);
   await page.goto(`${BLOGAPP}/`);
   await expect(page.getByRole("link", { name: "Toggled visibility" })).toHaveCount(0);
 
