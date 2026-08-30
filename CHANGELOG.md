@@ -4,6 +4,34 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — pdf showed nothing when the host could not fetch the document (2026-08-29)
+
+`pdf/host/adapter.js` has always sent a `renderError` event when the document
+relay fails, and its comment has always said failures "surface as a renderError
+event the frame turns into a visible error rather than a blank page".
+
+The frame had no handler for it. Its router dispatches `init`, `themeChanged`,
+`loadBytes`, `documentBytes`, `requestSave`, `exportResult` and `teardown`, and
+dropped everything else, so the event went nowhere. `renderError` existed in the
+frame only as something it **sends upward**; the adapter was using it as a
+host-to-frame event and nothing on the receiving side had been written.
+
+Measured by aborting only `/doc/{id}`: 366 characters of toolbar, no error text
+anywhere on the page, and the only trace a console line nobody is watching. A
+full PDF toolbar over an empty document area reads as a broken plugin, not as a
+document that could not be loaded.
+
+The frame now handles it and routes the message to the same
+`toolbar.setStatus(msg, "error")` the assembler already uses for its own
+failures. Verified both engines: `host fetch failed: Failed to fetch` on
+chromium, `Load failed` on webkit. A journey covers it.
+
+Found by the sweep #102 describes, on the plugin that ticket nominated as
+worst-first. The adapter's half was correct and the intent was documented; only
+the frame's half was missing, which is why nothing looked wrong in review. The
+third failure-path defect today, after the two in sqlnotebook, and the first in
+a plugin that has been shipped for weeks.
+
 ### Fixed — a failed engine fetch left sqlnotebook's mount unable to recover (2026-08-29)
 
 The host adapter sets `frame.__sqlnbInitSent = true` **before** fetching the

@@ -1031,6 +1031,25 @@ class PdfViewer {
     this.pendingExports.get(reqId)!.watchdog = watchdog;
   }
 
+  /**
+   * A failure the HOST hit on the plugin's behalf, most often the document
+   * fetch the frame cannot perform itself.
+   *
+   * The adapter has always sent this, and its comment has always claimed the
+   * frame "turns it into a visible error rather than a blank page". The frame
+   * never had a handler for it, so the router dropped it: aborting /doc/{id}
+   * left a full toolbar over an empty page with nothing said, which reads as a
+   * broken plugin rather than a document that could not be loaded. The one
+   * place it showed up was a console line nobody is looking at.
+   */
+  onHostError(params: unknown): void {
+    if (!params || typeof params !== "object") return;
+    const p = params as { message?: unknown };
+    const message = typeof p.message === "string" && p.message ? p.message : "the host could not load this document";
+    state.error = message;
+    this.toolbar.setStatus(message, "error");
+  }
+
   onExportResult(params: unknown): void {
     if (!params || typeof params !== "object") return;
     const p = params as { reqId?: unknown; url?: unknown; error?: unknown };
@@ -1128,6 +1147,9 @@ function boot(): void {
     }),
     exportResult: (params) => {
       viewer.onExportResult(params);
+    },
+    renderError: (params) => {
+      viewer.onHostError(params);
     },
     teardown: () => ({}),
   };
