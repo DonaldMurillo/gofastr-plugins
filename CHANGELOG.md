@@ -4,6 +4,30 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Added — a journey for formbuilder's refused save (2026-08-30)
+
+Same treatment as calendar, on the plugin where the schema **is** the document:
+Go validates and stores every save and the frame keeps nothing durable, so a
+save the server never receives must not read like one it accepted.
+
+It already gets this right, and distinctly:
+
+```
+save blocked   "Refused by the server: E_NETWORK"
+save allowed   "Saved, Go validated 6 fields, 8 rules"
+```
+
+Correct and, until now, proved by nothing. The journey asserts the save was
+**attempted** before judging the outcome, and separately that a failure does not
+contain the word "Saved". Both halves matter: two earlier probes of other
+plugins fired no request at all and produced a status line identical to the
+success case, which reads exactly like a plugin that says nothing on failure.
+
+Running tally for the #102 sweep: two real defects fixed (pdf #103,
+imageedit #104), three plugins proved correct by journey (calendar, formbuilder,
+and richtext which already had one), one judgment call left open (datagrid's
+dead `saveResult`), and six plugins still without a failure journey.
+
 ### Added — a journey for calendar's refused move, and the sweep's other half reframed (2026-08-29)
 
 `calendar` already refuses a failed move out loud: `move refused: ...` on the

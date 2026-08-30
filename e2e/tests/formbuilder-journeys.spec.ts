@@ -124,6 +124,32 @@ async function waitForSaveRefusal(page: Page, code: string): Promise<void> {
 
 // ─── 1. the builder boots in the cage ────────────────────────────────────────
 
+test("a schema the server never receives is refused out loud, not silently lost", async ({ page }) => {
+  // The schema IS the document here: Go validates and stores every save, and
+  // the frame keeps nothing durable. So a save the server never receives must
+  // not read like one it accepted.
+  let attempts = 0;
+  await page.route("**/__gofastr/plugin/formbuilder/save", (r) => {
+    attempts += 1;
+    return r.abort();
+  });
+  await page.goto("/formbuilder");
+
+  const frame = fl(page);
+  const status = frame.locator("#fb-status");
+  await expect(status).not.toHaveText(/Loading/i, { timeout: 25_000 });
+
+  await frame.locator('[data-fui-fb-add="text"]').click();
+
+  // Assert the save was ATTEMPTED before judging the outcome: a journey that
+  // never fires the request passes every assertion below by doing nothing,
+  // which is how two earlier probes of other plugins fooled me.
+  await expect.poll(() => attempts, { timeout: 10_000 }).toBeGreaterThan(0);
+
+  await expect(status).toContainText(/refused|failed|error/i, { timeout: 10_000 });
+  await expect(status, "a failed save must not read as a saved one").not.toContainText(/Saved/i);
+});
+
 test("the builder boots inside the opaque sandbox, clean", async ({ page, request, baseURL }) => {
   await resetBaseline(request, baseURL);
   await page.goto(DESIGN);
