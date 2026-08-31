@@ -4,6 +4,44 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the load profile blamed the producer when the browser was the one that died (2026-08-31)
+
+CI went red on the opt-in profile job. The reading is the interesting part:
+
+```
+webkit    linesPerSec 0   ticks -1   evaluateMs -1   delivered 0   dropped 0
+          serverMs [15, 9, 10, 6, 9, 7]
+chromium  linesPerSec 6338   lagP95 2 ms   delivered 10948          PASS
+```
+
+The #94 fix worked exactly as designed: instead of hanging for the full 180 s,
+webkit recorded that the page never answered and finished in 44 s. On a two-core
+runner at 6,000 lines/s it is not slow, it is **completely pinned**: nothing
+delivered, and it cannot evaluate `1+1` within ten seconds.
+
+Then the one assertion in the file failed with **"the producer never reached
+flood rate"**, which is precisely backwards. `linesPerSec` is derived from
+counters read *out of the page*, so a pinned page reports zero for the same
+reason a dead producer does, and the assertion could not tell them apart. The
+`serverMs` values of 6 to 18 ms disprove it in the same JSON blob it printed.
+
+Now it distinguishes them. When the page answered, the original assertion is
+unchanged. When it did not, the test proves the producer was alive **from
+outside the page** and lets total saturation stand as the reading it is: the
+extreme measurement, not a missing one.
+
+Both branches verified by forcing the condition, because the new one only runs
+on hardware slow enough to pin webkit and this laptop is not:
+
+```
+pinned page + healthy server  -> passes, annotated "saturated"
+pinned page + slow server     -> fails, "this is a stalled producer,
+                                 not a saturated browser"
+```
+
+An escape hatch that could never fail would have been worse than the wrong
+assertion it replaced.
+
 ### Changed — gofastr v0.76.0 (2026-08-30)
 
 A quiet bump. Builds clean, the full Go suite passes, 232 chromium journeys

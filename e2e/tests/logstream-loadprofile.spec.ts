@@ -143,5 +143,31 @@ test("profile: host event-loop lag under a full-rate flood", async ({ page }, te
   // The only assertion: the flood actually happened. Without it a green run
   // could mean "the producer never started", and a measurement of nothing is
   // worse than no measurement — it looks like an answer.
-  expect(report.linesPerSec, "the producer never reached flood rate").toBeGreaterThan(1_000);
+  //
+  // But linesPerSec is derived from counters read OUT OF THE PAGE, so a pinned
+  // page reports 0 for the same reason a dead producer does. On a two-core
+  // runner webkit at full rate hits exactly that: delivered 0, dropped 0,
+  // ticks -1, evaluateMs -1, while the server answers in 6-18 ms. Blaming the
+  // producer there is precisely backwards, and it was the wrong half of the
+  // conflation that failed this job.
+  //
+  // So: when the page ANSWERED, assert the flood reached it. When it could
+  // not, prove the producer was alive from outside the page instead, and let
+  // total saturation stand as the reading it is — the extreme measurement,
+  // not a missing one.
+  const pageAnswered = report.ticks !== -1 && report.evaluateMs !== -1;
+  if (pageAnswered) {
+    expect(report.linesPerSec, "the producer never reached flood rate").toBeGreaterThan(1_000);
+  } else {
+    const slowestServer = Math.max(...report.serverMs);
+    expect(
+      slowestServer,
+      `the page never answered AND the server was slow (${report.serverMs.join(", ")} ms): ` +
+        "this is a stalled producer, not a saturated browser"
+    ).toBeLessThan(1_000);
+    testInfo.annotations.push({
+      type: "saturated",
+      description: `${report.engine} could not report its counters under the flood; server stayed healthy at ${slowestServer} ms`,
+    });
+  }
 });
