@@ -4,6 +4,41 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.77.0 (2026-08-31)
+
+84 commits, and unlike the last two bumps this one is not quiet upstream. The
+tag lands `ui.Menu` submenus, `menuitemradio` rows, combobox static filtering,
+a `ui.CommandPalette` close control, `ui.Tabs` porting knobs, and one
+deliberate behaviour change: Escape now closes the innermost open disclosure
+instead of every open one.
+
+None of it reaches this repo, and that is worth stating as a fact rather than
+a hope. The 87 distinct `framework/ui` symbols used across these 16 plugins
+and 3 recipes are `LinkButton`, `Stack`, `PageHeader`, `Card`, `Form`,
+`Cluster`, `Callout`, `EmptyState`, `SiteHeader`/`SiteFooter`, their configs
+and their enum constants. Static layout and forms, nothing interactive.
+`ui.Menu`, `ui.Combobox`, `ui.CommandPalette`, `ui.Tabs`, `ui.Sidebar` and the
+disclosure machinery appear **zero** times. So does
+`uihost.WithStrict`, whose new boot-time internal-link check would otherwise
+be the interesting risk in this tag: it refuses to serve an app whose chrome
+links to a path nothing registers.
+
+The four exposure files are byte-identical to v0.76.0:
+`framework/pluginhost/assets.go`, `manifest.go`, `host/pluginhost.js`, and
+`core-ui/style/tokennames.go`. `main` is exactly this tag (ahead_by 0), so the
+`gofastr-main` tripwire has nothing left to warn about.
+
+Gates: builds clean, `go vet` clean, the full Go suite passes, the example app
+boots and serves every demo and recipe page, and **484 of 484 Playwright
+journeys pass** across webkit, chromium, mobile-safari and mobile-chrome in
+10.5 minutes. `go.sum` moves only gofastr's own lines; `go mod tidy` also
+pruned four stale pins (v0.71.2, v0.73.0, v0.74.0, v0.75.0) that had
+accumulated across earlier bumps.
+
+One thing to adopt, filed as follow-up work rather than smuggled into a bump:
+v0.77.0 ships `uihost.ScreenStatusCode`, the seam `recipes/blogapp`
+hand-rolls today.
+
 ### Fixed — the load profile blamed the producer when the browser was the one that died (2026-08-31)
 
 CI went red on the opt-in profile job. The reading is the interesting part:
