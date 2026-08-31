@@ -96,8 +96,19 @@ entry pointing at it.
 The public post and tag routes are patterns, because the corpus changes at
 runtime — and a pattern matches slugs that name nothing. Serving a "not found"
 body at HTTP 200 is a soft 404: crawlers index it, and uptime checks pass while
-every link is broken. `resolveOr404` in `chrome.go` resolves the slug before the
-host routes and rewrites a miss to the `/404` screen with the real status.
+every link is broken.
+
+Each dynamic screen answers its own status. It embeds `missed`, calls
+`s.notFound(...)` on the branch where its entity is gone, and satisfies
+`uihost.ScreenStatusCode`, which the host reads after the body has rendered
+through the layout. The reader gets the full themed page and the crawler gets
+404, from one store lookup.
+
+An earlier version of this recipe did it with middleware that resolved every
+public path before the host routed, rewrote misses to `/404`, and wrapped the
+`ResponseWriter` to force the code. It worked, and it is worth knowing why it
+went: it re-parsed path prefixes the router had already matched, and it
+repeated the lookup the screen was about to do anyway.
 
 ## The auth here is a demo stand-in
 

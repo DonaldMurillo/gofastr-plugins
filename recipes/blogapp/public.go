@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -45,8 +46,10 @@ func renderBody(p *Post) render.HTML {
 // than at boot, because the admin can publish a post at any moment.
 type listScreen struct {
 	component.ContextOnly
-	app  *app
-	page int // 0 means "read it from the :n param"
+	app   *app
+	page  int  // 0 means "read it from the :n param"
+	paged bool // true only for the /page/:n registration, never for "/"
+	missed
 }
 
 func (s *listScreen) SetParams(params map[string]string) {
@@ -76,6 +79,11 @@ func (s *listScreen) RenderCtx(ctx context.Context) render.HTML {
 	totalPages := (len(posts) + postsPerPage - 1) / postsPerPage
 	if totalPages < 1 {
 		totalPages = 1
+	}
+	// /page/1 duplicates "/" and /page/99 is past the end. Both are misses.
+	// "/" itself never is, however few posts exist.
+	if s.paged && (s.page < 2 || s.page > totalPages) {
+		return s.notFound(s.app)
 	}
 
 	start := (page - 1) * postsPerPage
@@ -125,6 +133,7 @@ type postScreen struct {
 	component.ContextOnly
 	app  *app
 	slug string
+	missed
 }
 
 func (s *postScreen) SetParams(params map[string]string) { s.slug = params["slug"] }
@@ -147,11 +156,11 @@ func (s *postScreen) ScreenDescription() string {
 
 func (s *postScreen) RenderCtx(ctx context.Context) render.HTML {
 	p, err := s.app.store.BySlug(s.slug)
-	// resolveOr404 already rewrote unknown and unpublished slugs to /404, so
-	// reaching this branch means the post vanished between the middleware and
-	// the render. Rendering the not-found body keeps it from being a panic.
+	// A dynamic route matches any slug-shaped path, so an unknown slug lands
+	// here rather than on the host's 404. Drafts are unreachable in public,
+	// exactly like an unknown slug; the admin previews them from /admin.
 	if err != nil || !p.Published() {
-		return notFoundBody(s.app)
+		return s.notFound(s.app)
 	}
 
 	body := []render.HTML{
@@ -216,6 +225,7 @@ type tagScreen struct {
 	component.ContextOnly
 	app *app
 	tag string
+	missed
 }
 
 func (s *tagScreen) SetParams(params map[string]string) { s.tag = params["tag"] }
@@ -225,6 +235,10 @@ func (s *tagScreen) RenderCtx(context.Context) render.HTML {
 	posts, err := s.app.store.PublishedByTag(s.tag)
 	if err != nil {
 		return errorPanel(err)
+	}
+	// A tag nothing carries is not an empty tag page, it is a wrong address.
+	if len(posts) == 0 {
+		return s.notFound(s.app)
 	}
 	label := s.tag
 	if len(posts) > 0 {
@@ -336,10 +350,47 @@ func (s *searchScreen) RenderCtx(ctx context.Context) render.HTML {
 }
 
 // ─── 404 ─────────────────────────────────────────────────────────────
+//
+// This app's corpus lives in a database and changes at runtime, so its public
+// post and tag routes are dynamic. A registered route therefore matches an
+// unknown slug, and a screen that renders its own "not found" body would still
+// answer HTTP 200 — a soft 404, which crawlers penalise and monitoring never
+// notices.
+//
+// uihost.ScreenStatusCode is the seam for that: the host calls it after the
+// body has rendered through the layout, so a screen can serve the real page
+// and the real status. Each dynamic screen embeds `missed`, calls s.notFound()
+// on the branch where its entity is gone, and the status follows.
+//
+// This replaces a middleware that resolved every public path BEFORE the host
+// routed, rewrote misses to /404, and wrapped the ResponseWriter to force the
+// code. That worked, but it re-parsed path prefixes the router had already
+// matched and repeated the store lookup the screen was about to do anyway.
 
-// notFoundScreen is registered at /404 AND handed to uihost.WithNotFoundScreen,
-// so both routes into a miss — an unknown slug rewritten by resolveOr404, and a
-// path no route matches at all — render the same page.
+// missed is embedded by every screen whose route can match an address that
+// resolves to nothing. Screens are shallow-copied per request, so the flag is
+// private to one response.
+type missed struct{ gone bool }
+
+// notFound records the miss and returns the body to render for it.
+func (m *missed) notFound(a *app) render.HTML {
+	m.gone = true
+	return notFoundBody(a)
+}
+
+// ScreenStatusCode satisfies uihost.ScreenStatusCode. Zero keeps the default,
+// so a screen that found its entity says nothing and gets 200.
+func (m *missed) ScreenStatusCode() int {
+	if m.gone {
+		return http.StatusNotFound
+	}
+	return 0
+}
+
+// notFoundScreen is handed to uihost.WithNotFoundScreen, which answers every
+// path no route matches at all — including a literal /404, which is why this
+// screen is no longer registered at one. The dynamic screens above never route
+// here: they render notFoundBody in place and report the status themselves.
 type notFoundScreen struct {
 	component.ContextOnly
 	app *app
@@ -349,10 +400,10 @@ func (s *notFoundScreen) ScreenTitle() string { return "Not found" }
 
 func (s *notFoundScreen) RenderCtx(context.Context) render.HTML { return notFoundBody(s.app) }
 
-// RenderNotFound satisfies uihost.NotFoundRenderer. The path is ignored on
-// purpose: resolveOr404 rewrites the URL before the host sees it, so echoing
-// what the host was asked for would print "/404" back at a reader who typed
-// something else.
+// RenderNotFound satisfies uihost.NotFoundRenderer, which the host calls for a
+// path no route matches at all. The path argument is ignored on purpose: a
+// reader who mistyped a URL already knows what they typed, and printing it back
+// only puts a caller-chosen string on the page for nothing.
 func (s *notFoundScreen) RenderNotFound(string) render.HTML { return notFoundBody(s.app) }
 
 func notFoundBody(a *app) render.HTML {
@@ -387,11 +438,10 @@ func errorPanel(err error) render.HTML {
 // registerPublicScreens wires the reading side.
 func (a *app) registerPublicScreens(uiApp *appui.App, layout *appui.Layout) {
 	uiApp.Register("/", &listScreen{app: a, page: 1}, layout)
-	uiApp.Register("/page/:n:int", &listScreen{app: a}, layout)
+	uiApp.Register("/page/:n:int", &listScreen{app: a, paged: true}, layout)
 	uiApp.Register("/posts/:slug", &postScreen{app: a}, layout)
 	uiApp.Register("/tags", &tagIndexScreen{app: a}, layout)
 	uiApp.Register("/tags/:tag", &tagScreen{app: a}, layout)
 	uiApp.Register("/archive", &archiveScreen{app: a}, layout)
 	uiApp.Register("/search", &searchScreen{app: a}, layout)
-	uiApp.Register(notFoundPath, &notFoundScreen{app: a}, layout)
 }

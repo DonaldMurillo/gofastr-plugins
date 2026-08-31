@@ -115,10 +115,10 @@ func newApp(db *sql.DB) (*framework.App, *app, error) {
 	// is installed app-wide precisely so it also runs for the plugin's own
 	// /__gofastr/plugin/richtext/* endpoints.
 	//
-	// gateAdminScreens then protects the host-rendered /admin pages, and
-	// resolveOr404 turns a request for a post that does not exist into a real
-	// 404 before the host can answer 200 for it.
-	fw.Use(a.sessionMiddleware, a.gateAdminScreens, a.resolveOr404)
+	// gateAdminScreens then protects the host-rendered /admin pages. Nothing
+	// here has to police unknown slugs: each public screen answers its own
+	// status through uihost.ScreenStatusCode. See the 404 section in public.go.
+	fw.Use(a.sessionMiddleware, a.gateAdminScreens)
 
 	// No WithDevGrantAll here, unlike example/. That flag skips BOTH sides of
 	// the capability gate for unauthenticated demo pages; an app with a real
