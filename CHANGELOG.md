@@ -4,6 +4,43 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — blogapp answers its own 404s, now that gofastr has the seam (2026-08-31)
+
+`recipes/blogapp` had a middleware for soft 404s: `resolveOr404` resolved every
+public path before the host routed, rewrote a miss to `/404`, and wrapped the
+`ResponseWriter` in a `forcedStatus` shim so the rewritten page would not answer
+200. It worked, and it was the only thing available. It also re-parsed path
+prefixes the router had already matched, and repeated the `store.BySlug` lookup
+the screen was about to do a moment later.
+
+v0.77.0 ships `uihost.ScreenStatusCode`, which is the seam that was missing. The
+host calls it after the body has rendered through the layout, so a screen serves
+the real themed page **and** the real status. Each dynamic screen now embeds a
+two-line `missed` helper, calls `s.notFound(...)` on the branch where its entity
+is gone — a branch `postScreen` already had — and the status follows.
+
+Three behaviours changed, all of them the middleware's rules moved to where the
+data is:
+
+- An unknown tag used to be caught by a prefix match on `/tags/`. `tagScreen`
+  now decides it: zero posts is a wrong address, not an empty tag page.
+- `/page/1` and `/page/99` used to be arithmetic in `publicPathExists` that
+  duplicated the pagination maths in `listScreen`. There is one copy now.
+- `/404` is no longer registered as a route. Nothing rewrites to it, and
+  `uihost.WithNotFoundScreen` already answers a literal `/404` with the same
+  body and the same status.
+
+`TestUnknownPathsGetHardNotFound` grew from four paths to six, because the
+mechanisms behind them are no longer one middleware: a screen miss, a range
+miss, a literal `/404`, and a path that matches no route are four different
+code paths that must look identical to a crawler.
+
+The miss test alone cannot catch "always 404", so `TestPaginationInRangeStaysOK`
+publishes enough posts to earn a second page — the 4-post seed at 4 per page
+never had one — and walks the boundary. Both directions were verified by
+breaking them: neutering `ScreenStatusCode` turns three subtests red, and
+dropping the range check turns the new test red.
+
 ### Changed — gofastr v0.77.0 (2026-08-31)
 
 84 commits, and unlike the last two bumps this one is not quiet upstream. The

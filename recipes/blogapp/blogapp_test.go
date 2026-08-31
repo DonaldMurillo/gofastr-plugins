@@ -190,14 +190,57 @@ func TestDraftsAreInvisible(t *testing.T) {
 	}
 }
 
-// A dynamic route matches any slug-shaped path, so this asserts the middleware
-// that turns a miss into a real 404 is doing its job. A soft 404 (status 200
-// with a "not found" body) is the failure this guards against.
+// The 404-on-a-range-miss rule cuts both ways: a /page/N inside the range has
+// to stay a 200. The seed alone can never prove that — 4 posts at 4 per page is
+// one page — so this publishes enough to earn a second one, then walks the
+// boundary. Without it, "always 404" would pass the miss test above.
+func TestPaginationInRangeStaysOK(t *testing.T) {
+	srv, a := testApp(t)
+	c := client(t)
+
+	published, err := a.store.Published()
+	if err != nil {
+		t.Fatalf("published: %v", err)
+	}
+	// Two full pages plus one, so /page/2 is in range and /page/3 is not.
+	for i := len(published); i < postsPerPage+1; i++ {
+		p, err := a.store.Create(&Post{Title: fmt.Sprintf("Filler %d", i), Status: StatusPublished})
+		if err != nil {
+			t.Fatalf("create filler: %v", err)
+		}
+		if err := a.store.SetStatus(p.ID, StatusPublished); err != nil {
+			t.Fatalf("publish filler: %v", err)
+		}
+	}
+
+	for path, want := range map[string]int{
+		"/":       http.StatusOK,
+		"/page/2": http.StatusOK,
+		"/page/3": http.StatusNotFound,
+	} {
+		if status, _ := get(t, c, srv.URL+path); status != want {
+			t.Errorf("%s status = %d, want %d", path, status, want)
+		}
+	}
+}
+
+// A dynamic route matches any slug-shaped path, so this asserts each screen's
+// uihost.ScreenStatusCode is doing its job. A soft 404 (status 200 with a "not
+// found" body) is the failure this guards against.
+//
+// The four paths are four different mechanisms, which is the point of listing
+// them together: an unknown slug and an unknown tag are screen misses, /page/1
+// and /page/99 are range misses on a route that exists, /404 is a miss by
+// definition, and /nothing-here never matches a route at all so the host's own
+// WithNotFoundScreen answers it. All four must look identical to a crawler.
 func TestUnknownPathsGetHardNotFound(t *testing.T) {
 	srv, _ := testApp(t)
 	c := client(t)
 
-	for _, path := range []string{"/posts/no-such-post", "/tags/no-such-tag", "/page/99", "/nothing-here"} {
+	for _, path := range []string{
+		"/posts/no-such-post", "/tags/no-such-tag",
+		"/page/1", "/page/99", "/404", "/nothing-here",
+	} {
 		t.Run(path, func(t *testing.T) {
 			status, body := get(t, c, srv.URL+path)
 			if status != http.StatusNotFound {

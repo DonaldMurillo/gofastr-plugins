@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"unicode"
@@ -206,95 +205,4 @@ func pager(page, total int) render.HTML {
 			ui.Muted(render.Text(fmt.Sprintf("Page %d of %d", page, total))),
 			older,
 		))
-}
-
-// ─── Not-found plumbing ──────────────────────────────────────────────
-//
-// Unlike recipes/blogsite, this app's corpus lives in a database and changes at
-// runtime, so its public post and tag routes have to be dynamic (":slug"). That
-// creates a problem the static recipe never has: a registered route matches an
-// unknown slug, so the host has no reason to 404, and a screen that renders its
-// own "not found" body would answer HTTP 200 — a soft 404, which is the thing
-// crawlers penalize and monitoring never notices.
-//
-// The fix is a middleware that resolves the slug BEFORE the host routes: when
-// nothing matches it rewrites the path to the registered /404 screen and forces
-// the status code to 404. The reader gets the full themed page, the crawler
-// gets the truth.
-
-const notFoundPath = "/404"
-
-// forcedStatus overrides whatever status the wrapped handler writes. The /404
-// screen renders through the normal page pipeline, which would otherwise answer
-// 200 like any other screen.
-type forcedStatus struct {
-	http.ResponseWriter
-	status int
-	wrote  bool
-}
-
-func (f *forcedStatus) WriteHeader(int) {
-	if f.wrote {
-		return
-	}
-	f.wrote = true
-	f.ResponseWriter.WriteHeader(f.status)
-}
-
-func (f *forcedStatus) Write(b []byte) (int, error) {
-	if !f.wrote {
-		f.WriteHeader(f.status)
-	}
-	return f.ResponseWriter.Write(b)
-}
-
-// resolveOr404 rewrites requests for posts and tags that do not exist.
-func (a *app) resolveOr404(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.publicPathExists(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		rewritten := r.Clone(r.Context())
-		rewritten.URL.Path = notFoundPath
-		next.ServeHTTP(&forcedStatus{ResponseWriter: w, status: http.StatusNotFound}, rewritten)
-	})
-}
-
-// publicPathExists reports whether a dynamic public path resolves to something.
-// Paths this middleware does not own return true so they route normally.
-func (a *app) publicPathExists(path string) bool {
-	switch {
-	case strings.HasPrefix(path, "/posts/"):
-		slug := strings.TrimPrefix(path, "/posts/")
-		if slug == "" || strings.Contains(slug, "/") {
-			return false
-		}
-		p, err := a.store.BySlug(slug)
-		// Drafts are unreachable in public, exactly like an unknown slug — the
-		// admin previews them from inside /admin.
-		return err == nil && p.Published()
-
-	case strings.HasPrefix(path, "/tags/"):
-		tag := strings.TrimPrefix(path, "/tags/")
-		if tag == "" || strings.Contains(tag, "/") {
-			return false
-		}
-		posts, err := a.store.PublishedByTag(tag)
-		return err == nil && len(posts) > 0
-
-	case strings.HasPrefix(path, "/page/"):
-		n, err := strconv.Atoi(strings.TrimPrefix(path, "/page/"))
-		if err != nil || n < 2 {
-			return false
-		}
-		posts, err := a.store.Published()
-		if err != nil {
-			return false
-		}
-		return n <= (len(posts)+postsPerPage-1)/postsPerPage
-
-	default:
-		return true
-	}
 }

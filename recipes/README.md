@@ -55,8 +55,8 @@ Two things in it are worth reading even if you never want a blog:
   proves an anonymous save leaves the stored post untouched.
 - **A dynamic route matches an unknown slug.** Answering 200 with a "not found"
   body is a soft 404 — crawlers index it and uptime checks pass while every link
-  is broken. A middleware resolves the slug before routing and rewrites misses
-  to the 404 screen with the real status.
+  is broken. Each dynamic screen implements `uihost.ScreenStatusCode`, so the
+  miss branch it already renders also carries the real status.
 
 → [`recipes/blogapp`](blogapp/)
 
