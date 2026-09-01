@@ -4,6 +4,32 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — a 25 MB compiled binary was tracked in the repo root (2026-09-01)
+
+`git add -A` in 9ddbb9d swept in two files nobody meant to commit: `relayboard`,
+a 25 MB Mach-O arm64 executable left behind by `go build ./recipes/relayboard`
+with no `-o`, and `geomap-fixed.png`, a loose debug screenshot.
+
+The timing is the only lucky part. Both landed on 2026-08-28, two days after
+v0.4.1, so no published release carries them — but every module zip cut from
+`main` would have, and `go get` has no way to skip a file it does not need.
+
+Untracked, and `.gitignore` now names the three recipe binaries by the exact
+paths a bare `go build` produces, plus root-level `*.png`.
+
+`/example` is deliberately absent from that list, which is the part worth
+writing down. A root-anchored rule ignores a **directory's whole contents**, not
+just a file of that name, so `/example` would have silently hidden every new
+file added under `example/` — the same failure mode as the bug it was meant to
+prevent, pointed the other way. Verified by probe: a new file under `example/`
+is still visible to `git add`, and the three recipe binaries are still ignored.
+The collision also makes the rule pointless, since `go build ./example` refuses:
+`build output "example" already exists and is a directory`.
+
+Note this does not shrink an existing clone. The blob stays reachable from
+9ddbb9d and the 53 MB `.git` is unchanged; only a history rewrite removes it,
+which is not something to do quietly.
+
 ### Changed — gofastr v0.78.0, and the cage grows a directive (2026-09-01)
 
 109 commits, mostly queue/crud/battery hardening this repo does not touch. One

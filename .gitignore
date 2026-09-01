@@ -36,3 +36,21 @@ pdf/js/*.pdf
 
 # Written by the Phase 0 latency gate for CI to upload; never committed.
 example/latency-gate.json
+
+# Compiled recipe binaries. `go build ./recipes/relayboard` with no -o drops a
+# 26 MB Mach-O in the repo ROOT named after the package, where a `git add -A`
+# sweeps it straight in -- which is how one shipped in 9ddbb9d.
+#
+# Named individually rather than by pattern: the root also holds source.go and
+# plugins.json, and a blanket rule here is one typo away from ignoring those.
+# `example` is deliberately NOT listed. It names a real directory, and a
+# root-anchored rule ignores a DIRECTORY's whole contents, not just a file of
+# that name -- so `/example` would silently hide every new file added under
+# example/. The name collision also means `go build ./example` cannot write
+# that binary in the first place.
+/relayboard
+/blogsite
+/blogapp
+
+# Loose debug screenshots at the repo root, same sweep, same cause.
+/*.png
