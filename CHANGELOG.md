@@ -4,6 +4,40 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.78.0, and the cage grows a directive (2026-09-01)
+
+109 commits, mostly queue/crud/battery hardening this repo does not touch. One
+change lands inside the cage, and it is the good kind:
+
+**`form-action 'none'` is now in the framed CSP.** A form submits by
+*navigating*, which `connect-src 'none'` never sees, so a frame granted
+`allow-forms` could have POSTed whatever it had read to any origin it liked,
+straight around the fetch block that is the whole point of the cage. It costs
+nothing here: plugin assets are static and have no form target of their own.
+
+Nothing to adopt — the directive arrives with the AssetServer. What did need
+doing is the two places this repo makes a claim about the cage:
+
+- `datagrid/plugin_test.go` now asserts `form-action 'none'` next to
+  `connect-src 'none'` and `sandbox allow-scripts`. The three are halves of one
+  guarantee, and a regression in any of them would leave the other two looking
+  fine.
+- `docs/plugin-platform.md` had a stale CSP block. It quoted five directives and
+  the frame serves ten, so `connect-src 'none'` — the single most load-bearing
+  line in the document — was missing from the very block the capability table
+  points at with "under the verbatim `framedCSP` above". It now carries the
+  header a running server actually emits, with a note on what `Manifest.CSP`
+  appends and what it cannot touch, and the capability table gained a row for
+  form navigation.
+
+Checked and unaffected: `ui.SignOut` now scheme-checks its `Action`, and
+`recipes/relayboard` is the only caller — it passes `Next` and `Ctx` and no
+`Action` at all. The `Pagination`/`DataTable` placeholder fix and the six new
+repo analyzers touch code and tooling this repo does not use.
+
+Gates: build clean, vet clean, full Go suite, 484/484 Playwright journeys, and
+`go.sum` moves only gofastr's own lines.
+
 ### Changed — blogapp answers its own 404s, now that gofastr has the seam (2026-08-31)
 
 `recipes/blogapp` had a middleware for soft 404s: `resolveOr404` resolved every
