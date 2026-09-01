@@ -237,6 +237,12 @@ func TestInitServesAssetsWithCorrectContentTypes(t *testing.T) {
 // document, AND that the fixed framedCSP carries connect-src 'none' + sandbox
 // allow-scripts — the directives that make every page of rows cross the
 // bridge instead of being fetched by the frame.
+//
+// form-action is checked alongside them because it closes the one exfiltration
+// path connect-src cannot: a form submits by NAVIGATING, so a frame granted
+// allow-forms could POST what it had read to any origin it liked. The
+// directives are three halves of one guarantee, and a regression in any of
+// them would leave the other two looking fine.
 func TestFramedAssetsCarryHeaderRelaxation(t *testing.T) {
 	app, _, _ := fullTestApp(t)
 	srv := httptest.NewServer(app.Router())
@@ -258,6 +264,9 @@ func TestFramedAssetsCarryHeaderRelaxation(t *testing.T) {
 		}
 		if !strings.Contains(csp, "sandbox allow-scripts") {
 			t.Errorf("%s: framed CSP missing sandbox allow-scripts: %q", path, csp)
+		}
+		if !strings.Contains(csp, "form-action 'none'") {
+			t.Errorf("%s: framed CSP missing form-action 'none': %q", path, csp)
 		}
 		if resp.Header.Get("Cross-Origin-Resource-Policy") == "" {
 			t.Errorf("%s: missing CORP relaxation", path)

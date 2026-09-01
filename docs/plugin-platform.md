@@ -198,17 +198,35 @@ from fetching its own JS/CSS. So for exactly the **framed first-party assets**,
 3. **CORP** `cross-origin` — so the opaque frame may fetch these public,
    secret-free static assets.
 
-The framed-asset CSP is fixed:
+The framed-asset CSP is fixed. This is the header a plugin frame actually
+serves, copied from a running server rather than from the source:
 
 ```
-default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
-frame-ancestors 'self'; base-uri 'self'
+sandbox allow-scripts; default-src 'self'; script-src 'self';
+style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;
+connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'self'
 ```
 
+(`'self'` stands in for the host origin, which the header spells out in full.
+A plugin that declares `Manifest.CSP` gets its keywords appended to `script-src`
+and nothing else: sqlnotebook's frame reads `script-src 'self' 'wasm-unsafe-eval'`
+with every other directive byte-identical.)
+
+- `sandbox allow-scripts` as a **directive**, not just an iframe attribute. The
+  attribute only sandboxes the framed case; the directive also covers someone
+  navigating a victim straight to `editor.html`, which is served `text/html` and
+  would otherwise run as a first-class same-origin document.
 - `style-src 'unsafe-inline'` is required: ProseMirror sets inline style
   attributes and the theme bridge injects a `<style>:root{…}` token block.
 - `script-src` stays `'self'` — editor JS is an external same-origin script, so
   **script isolation holds**. No `'unsafe-inline'` for scripts.
+- `connect-src 'none'` — no fetch, XHR, or WebSocket. Data arrives over the
+  postMessage bridge and leaves the same way.
+- `form-action 'none'` closes the hole `connect-src` cannot see. A form submits
+  by **navigating**, so a frame granted `allow-forms` could have POSTed whatever
+  it had read to any origin it liked, straight around the fetch block. It costs
+  nothing here: plugin assets are static and have no form target of their own.
+  (gofastr v0.78.0.)
 - `frame-ancestors 'self'` permits the same-origin host page (and nothing else)
   to embed the frame; the frame's own opaque origin is irrelevant to
   `frame-ancestors`.
@@ -227,6 +245,7 @@ not inferred from a spec. The issue number is where the run and its output live.
 | capability | in the cage? | what actually happens |
 |---|---|---|
 | network of any kind | **no** | `connect-src 'none'`. Even `WebAssembly.instantiateStreaming` fails on it. |
+| a form that POSTs anywhere | **no** | `form-action 'none'`. A form navigates rather than fetches, so `connect-src` never saw it; this is the directive that does (gofastr v0.78.0) |
 | cookies, `localStorage`, parent DOM | **no** | `SecurityError`. Every plugin asserts all three on every run. |
 | camera / microphone | **no** | `getUserMedia` → `SecurityError: Invalid security origin` (#19) |
 | WebAssembly | **opt-in** | Refused by default; granted by `Manifest.CSP: ["'wasm-unsafe-eval'"]`, which the host must also pass to the AssetServer. sqlnotebook runs SQLite 3.49.1 this way, 28 ms chromium / 26 ms webkit (#21, gofastr#255) |
