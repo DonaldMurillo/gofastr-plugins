@@ -4,6 +4,23 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.79.0 (2026-09-01)
+
+A quiet bump, and this one earns the word. Ten commits, all of them in
+subsystems this repo has no line of code touching: A2A v1.0 task exchange,
+per-agent rate limits for verified Web Bot Auth traffic, a browser suite for
+the MCP Apps widget client, `ui.MenuItem.Action` for form-POST menu rows, and
+two interactive-component fixes (a menu whose trigger is a real `<button>`, a
+combobox option that is a plain anchor).
+
+All four exposure files are byte-identical to v0.78.0. `ui.Menu`, `ui.MenuItem`,
+`ui.Combobox` and the CRUD entity surface appear zero times here — the only
+grep hits for `a2a` in the whole repo are hex colours (`#2a2a30`) in two demo
+stylesheets, which is worth writing down so the next person does not chase them.
+
+Gates: build clean, vet clean, full Go suite, 484/484 Playwright journeys, and
+`go.sum` moves only gofastr's own lines.
+
 ### Fixed — a 25 MB compiled binary was tracked in the repo root (2026-09-01)
 
 `git add -A` in 9ddbb9d swept in two files nobody meant to commit: `relayboard`,
