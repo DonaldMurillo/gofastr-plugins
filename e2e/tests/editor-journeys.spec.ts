@@ -795,20 +795,46 @@ test.describe("trusted in-page mount (mode-specific)", () => {
     await page.keyboard.type("/");
     const menu = page.locator(".richtext-slash-menu");
     await expect(menu).toBeVisible();
+    // Guarantee there is room to scroll UP, then scroll a known distance.
+    //
+    // `mouse.wheel` is a request, not a movement. Near the top of the document
+    // the browser clamps it, and sometimes it lands before the page is
+    // scrollable and does nothing at all. Both were happening here: CI saw
+    // drifts of 26 and 18 px, which are exactly 74 px and 82 px of realized
+    // scroll — a menu that DID follow, measured against a 100 px scroll that
+    // never happened — and chromium locally saw a realized scroll of 0.
+    //
+    // The menu re-anchors on the `scroll` event (`ui.ts`: window scroll
+    // listener, capture + passive), so scrolling programmatically drives the
+    // exact same code path with none of the ambiguity.
+    await page.evaluate(() => {
+      if (window.scrollY < 150) window.scrollTo(0, 150);
+    });
+    await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(150);
+
     const before = (await menu.boundingBox())!;
-    await page.mouse.wheel(0, -100); // scroll back up 100px
-    // Poll rather than sleep: the claim is that the menu follows the caret,
-    // not that it does so inside 250ms on a loaded machine. The tolerance is
-    // unchanged, so a menu that does not follow still fails.
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => window.scrollBy(0, -100));
+
+    // Still measured against the scroll the page ACTUALLY performed. A menu
+    // that does not follow drifts by the whole realized scroll, so the 8 px
+    // tolerance catches the failure this test exists for.
+    let realized = 0;
     await expect
       .poll(
         async () => {
+          realized = scrollBefore - (await page.evaluate(() => window.scrollY));
           const after = (await menu.boundingBox())!;
-          return Math.abs(after.y - (before.y + 100));
+          return Math.abs(after.y - (before.y + realized));
         },
         { timeout: 5_000, message: "menu never re-anchored to its caret after the page scrolled" }
       )
       .toBeLessThanOrEqual(8);
+
+    // Without this the test passes vacuously when the page did not scroll:
+    // realized = 0 turns the assertion above into "the menu did not move",
+    // which is trivially true of a menu broken in exactly this way.
+    expect(realized, "the page never scrolled, so nothing was proven").toBeGreaterThan(40);
   });
 
   test("theme tokens inherit natively: toggling the page theme restyles the editor with no plugin traffic", async ({ page }) => {

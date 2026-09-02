@@ -4,6 +4,50 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — the overlay-anchor test measured a scroll that never happened (2026-09-02)
+
+Main went red on the v0.80.0 merge, on a test the PR run had passed. The
+numbers say exactly what went wrong:
+
+```
+CI, webkit:   Expected <= 8   Received 26   (then 18 on retry)
+teeth probe:  Expected <= 8   Received 100  (both engines)
+```
+
+`overlays stay anchored while the page scrolls` opened the slash menu, called
+`page.mouse.wheel(0, -100)`, and asserted the menu had moved 100 px. But
+`wheel` is a **request**, not a movement: near the top of the document the
+browser clamps it. Drifts of 26 and 18 are a 74 px and an 82 px realized
+scroll — a menu that tracked the caret perfectly, measured against a scroll
+that did not happen. A menu that genuinely fails to re-anchor drifts by the
+*whole* realized scroll, which is the 100 the teeth probe produced. The two
+failure signatures were never close.
+
+So the instrument was wrong, not the plugin — the third one of these in this
+repo, after the load profile that blamed the producer and the blogapp journey
+that raced its own POST.
+
+Two changes. The assertion now measures the scroll the page **actually**
+performed, and the scroll is driven with `window.scrollBy` rather than a wheel:
+the menu re-anchors on the `scroll` event (`ui.ts`, window listener, capture +
+passive), so this is the identical code path with none of the ambiguity, after
+first guaranteeing there is room to scroll up.
+
+The first draft of that fix immediately exposed a **second** latent flake: a
+chromium run where the wheel scrolled nothing at all, realized = 0. Under the
+old assertion that was indistinguishable from "the menu did not follow". There
+is now a guard, because `realized = 0` otherwise turns the assertion into "the
+menu did not move" — trivially true of a menu broken in exactly this way.
+
+Teeth proven by blocking `place()` from writing `style.top`, which is the only
+thing that moves a `position: fixed` menu: both engines fail at 100. (The first
+probe attempt set `top` with `!important` and the test still passed — not
+because it lacks teeth, but because `place()` assigns `style.top` directly and
+overwrites the priority. An ineffective probe reads exactly like a vacuous
+test.)
+
+10/10 repeats across both engines, then 484/484.
+
 ### Changed — gofastr v0.80.0 (2026-09-02)
 
 25 commits. The pluginhost delta looks alarming and is not: `assets.go`,
