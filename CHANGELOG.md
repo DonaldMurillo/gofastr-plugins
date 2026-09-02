@@ -4,6 +4,35 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.80.0 (2026-09-02)
+
+25 commits. The pluginhost delta looks alarming and is not: `assets.go`,
+`broker.go` and `frameclient.go` all changed, but the last two are one line
+each — `writeAsset(…, framed, csp)` became `writeAsset(…, responsePolicy{…})`.
+
+The real addition is **trusted host-page workers** (gofastr#380). `AddBytes`
+takes variadic options now; `WithWorkerCSP` marks a worker whose *own* response
+carries a narrow relaxation (allowlisted to `'unsafe-eval'`,
+`'wasm-unsafe-eval'`, `connect 'self'`), and `WithCache` picks a cache posture
+by enum. It does not touch the cage: `WithWorkerCSP` on a framed asset panics at
+registration with "the framed policy is fixed by the platform". So the
+capability table's `a Worker from a script URL | chromium: no` row still stands,
+and nothing in `docs/` needed changing.
+
+A CSP-plumbing refactor is exactly what 484 journeys cannot see, so the served
+header was captured from a running v0.80.0 server and diffed against the block
+`plugin-platform.md` records. Byte-identical, and sqlnotebook's differs only in
+`script-src 'self' 'wasm-unsafe-eval'`.
+
+(The first comparison printed DIFFER. That was a broken `sed` range in the
+check, not a regression — the end-pattern never matched, so it compared the
+header against the rest of the file. Worth writing down: a verification harness
+that fails open is worse than no harness, because it produces a confident wrong
+answer about a security header.)
+
+Gates: build clean, vet clean, full Go suite, 484/484 Playwright journeys,
+served CSP verified, and `go.sum` moves only gofastr's own lines.
+
 ### Fixed — five documented claims that had rotted (2026-09-01)
 
 Asked whether the plugins still need anything, I went looking rather than
