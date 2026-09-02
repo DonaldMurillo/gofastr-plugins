@@ -68,8 +68,8 @@ receives the bytes, the export `Kind`, a sanitised `Filename` hint, and the
 verification `Report`.
 
 A denied capability answers **403** with `E_CAPABILITY_DENIED` on every route.
-(`protocol-v1.md` describes 412; the platform's own `WriteCapabilityDenied`
-writes 403 and every shipped plugin calls it — see `DECISIONS.md`.)
+Early design drafts said 412. The framework reconciled on 403, matching
+`pluginhost.WriteCapabilityDenied`, which is what every shipped plugin calls.
 
 ## Modes
 

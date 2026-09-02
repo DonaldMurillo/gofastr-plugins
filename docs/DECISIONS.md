@@ -282,23 +282,34 @@ engine has a wasm build, otherwise a library that does not compile at runtime,
 and never `'unsafe-eval'`. A plugin that needs the last one is a plugin this
 platform should not host.
 
-## Open threads
+## Threads, and how they closed
 
-- **Upstream: capability-denied status code disagrees with itself.**
-  `docs/plugin-platform.md` (and `design/protocol-v1.md` §5) state that a denied
-  capability is "HTTP 412 on the route side", but the platform's own
-  `pluginhost.WriteCapabilityDenied` — the helper every shipped plugin calls —
-  writes **403**. The `pdf` plugin follows the implementation (403 on all three
-  routes) because uniformity matters more to a host writing one error branch
-  than either code does on its own; splitting the difference *within* a plugin
-  would be the worst outcome. Core should pick one and make prose and code
-  agree. Found 2026-07-26.
+Nothing in this section is open. It is kept struck-through rather than deleted
+because a decision log that silently drops what it once flagged is worth less
+than one that shows what turned out to be wrong.
+
+- ~~**Upstream: capability-denied status code disagrees with itself.**~~
+  **RESOLVED.** This page's prose said "HTTP 412 on the route side"; the
+  platform's own `pluginhost.WriteCapabilityDenied` — the helper every shipped
+  plugin calls — wrote **403**. (The original entry also blamed
+  `design/protocol-v1.md` §5. It never contained the string: `git log -S412`
+  finds it only in `plugin-platform.md`. Recorded because a wrong citation in a
+  decision log outlives the decision it cites.) The `pdf` plugin followed the implementation because uniformity
+  matters more to a host writing one error branch than either code does alone.
+  Core has since reconciled on 403 and says so in its own plugin-platform page
+  ("closed with `403 E_CAPABILITY_DENIED`. This is the reconciliation").
+  Found 2026-07-26, confirmed resolved against gofastr v0.79.0 on 2026-09-01.
 
 
-- **GPT-5.6-sol's crux take is PENDING** — its provider was rate-capped during
-  the session (openai-codex 5h window). Add it when the window reopens; a genuine
-  *alternative* isolation model would be more valuable than a third agreement.
-- **GitHub remote** not yet created (repo is local-only).
+- ~~**GPT-5.6-sol's crux take is PENDING**~~ — dropped 2026-09-01. It was parked
+  on a rate-capped provider window in July and never picked back up. The
+  isolation model it would have critiqued has since been validated the harder
+  way: measured on both engines, and recorded in
+  [`plugin-platform.md`](plugin-platform.md) § "What the cage can and cannot
+  host".
+- ~~**GitHub remote** not yet created (repo is local-only).~~ Created; the repo
+  publishes releases, with `plugins.json` as the asset hosts fetch. v0.5.0 is
+  current.
 - **Phases 1–3 COMPLETE (2026-07-13):**
   - Phase 1 — full editor + SSR read view + a11y gate (axe, zero
     serious/critical across framed/trusted/SSR + open menus) + mobile gate
@@ -312,4 +323,7 @@ platform should not host.
     with #37: grants reuse the battery/auth resource:verb scope grammar via
     auth.HasScope — no parallel registry); dogfood screenshots
     (light/dark × desktop/mobile × framed/trusted/SSR).
-  - Phase 4 (collaboration/CRDT, presence) remains future work by design.
+  - Phase 4 (collaboration/CRDT, presence) shipped as the `whiteboard` plugin:
+    the host owns the SSE fan-out, replay-on-join and presence, and the cage
+    collaborates with people it cannot reach. See
+    [`whiteboard.md`](whiteboard.md).

@@ -138,8 +138,9 @@ uihost.New(..., richtext.UIHostOption())
 
 Default grant set (`DefaultCapabilities`): `document:read`, `document:write`,
 `upload:images`, `theme:read`. Each RPC route gates on the matching scope via
-`pluginhost.Allow` → `auth.HasScope`. `navigation:intercept` is deferred to
-Phase 1. See [`plugin-platform.md`](plugin-platform.md#the-capability-model).
+`pluginhost.Allow` → `auth.HasScope`. `navigation:intercept` was never built
+and nothing is waiting on it. See
+[`plugin-platform.md`](plugin-platform.md#the-capability-model).
 
 ## Phase-0 latency result — gate CLEARED
 
