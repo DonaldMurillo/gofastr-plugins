@@ -4,6 +4,31 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.81.0 (2026-09-02)
+
+30 commits, largely a security-audit sweep. All four exposure files are
+byte-identical to v0.80.0, and the only non-test change anywhere in
+`framework/pluginhost` or `core-ui/style` is `FontFaceCSS`, which gained
+sanitising on the three single-quoted CSS slots it interpolates into (family
+name, file basename, url prefix). This repo never calls it.
+
+Two of the new upstream tests are worth naming, because they pin things this
+repo depends on rather than things it uses:
+
+- `TestAssetContentTypeNeverEmptyOrSniffable` is **gofastr#303**, filed from
+  here on 2026-08-29 — an `AssetSpec` with no `ContentType`, plus `nosniff`,
+  served a frame the browser silently refused to render. Fixed within hours at
+  the time; it now has a regression test, so it cannot come back quietly.
+- `TestFramedAssetsRefusePoisonedOrigin` pins the cage's least obvious
+  dependency. `script-src 'self'` matches nothing in an opaque origin, so
+  `assets.go` interpolates the concrete request origin into the framed CSP —
+  which makes the origin an input, and an input worth refusing to poison. This
+  repo has recorded the "`'self'` refuses the frame's own script" surprise since
+  Phase 0 without ever testing the other half of it. Upstream now does.
+
+Gates: build clean, vet clean, full Go suite, 484/484 Playwright journeys, and
+`go.sum` moves only gofastr's own lines.
+
 ### Fixed — the overlay-anchor test measured a scroll that never happened (2026-09-02)
 
 Main went red on the v0.80.0 merge, on a test the PR run had passed. The
