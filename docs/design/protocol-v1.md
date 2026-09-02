@@ -151,6 +151,11 @@ These map onto GoFastr's existing `auth.HasScope`/`RequireScope` checker — the
 handler for each RPC gates on the matching scope. (`navigation:intercept` is
 deferred to Phase 1.)
 
+> **As built:** this is the Phase-0 design record, kept as written.
+> `navigation:intercept` was never built and nothing waits on it, and a denied
+> capability answers **403**, not 412. See
+> [`../plugin-platform.md`](../plugin-platform.md).
+
 ---
 
 ## 6. Host broker (same-origin, injected via WithExtraScripts)

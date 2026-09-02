@@ -4,6 +4,52 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Fixed — five documented claims that had rotted (2026-09-01)
+
+Asked whether the plugins still need anything, I went looking rather than
+answering from memory. The code is fine: every upstream issue this repo filed is
+closed, there is not a single TODO or FIXME in the source, and the three open
+issues are all decisions rather than defects. The **documentation** was another
+matter.
+
+**A denied capability answers 403, not 412.** `docs/plugin-platform.md` stated
+412 as plain fact, in the protocol section a host reads to write its error
+branch. `pluginhost.WriteCapabilityDenied` has always written 403, every plugin
+here calls it, and `datagrid`/`imageedit` assert `http.StatusForbidden`
+explicitly. The framework has since reconciled its own prose on 403 — its page
+now says "closed with `403 E_CAPABILITY_DENIED`. This is the reconciliation" —
+so the open thread this repo logged on 2026-07-26 is closed. Corrected in
+`plugin-platform.md`, `pdf.md`, and `DECISIONS.md`.
+
+While correcting it I nearly repeated the original entry's own mistake. It
+blamed `design/protocol-v1.md` §5 alongside this repo's page. That file has
+never contained the string 412; `git log -S412` finds it only in
+`plugin-platform.md`. The wrong citation is now recorded next to the right one,
+because a bad reference in a decision log outlives the decision it cites.
+
+**`navigation:intercept` was never built.** The capability table carried it as
+"(deferred to Phase 1)" — a deferral to a phase that completed on 2026-07-13. It
+does not exist in `framework/pluginhost`, no plugin requests it, and nothing
+waits on it. It appears in the design notes as an example of the scope grammar,
+which the table now says.
+
+**Phase 4 shipped.** `DECISIONS.md` still called collaboration/CRDT/presence
+"future work by design" while `whiteboard.md` opened by saying it lands exactly
+that idea. The whiteboard plugin has been in `plugins.json` since August.
+
+**The repo is not local-only.** "GitHub remote not yet created" survived five
+published releases.
+
+**A July session artifact.** "GPT-5.6-sol's crux take is PENDING" was parked on
+a rate-capped provider window and never picked back up. Dropped; the isolation
+model it would have critiqued got validated the harder way, by measurement on
+both engines.
+
+The section holding these is renamed from "Open threads", since nothing under it
+is open. The entries are struck through rather than deleted: a decision log that
+quietly drops what it once flagged is worth less than one that shows what turned
+out to be wrong.
+
 ### Changed — gofastr v0.79.0 (2026-09-01)
 
 A quiet bump, and this one earns the word. Ten commits, all of them in

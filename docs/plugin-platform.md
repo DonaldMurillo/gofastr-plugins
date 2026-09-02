@@ -78,7 +78,10 @@ message in both directions is one structured-clone object:
 - **Correlation.** `request` → `response` matched by `id`. `event` is
   fire-and-forget. Requests carry a 5 s timeout (`E_TIMEOUT`).
 - **Capability errors.** A plugin→host request whose capability was not granted
-  gets `error.code = "E_CAPABILITY_DENIED"` (HTTP 412 on the route side).
+  gets `error.code = "E_CAPABILITY_DENIED"`, and **HTTP 403** on the route side.
+  An earlier draft of this page said 412. The framework reconciled on 403,
+  which is what `pluginhost.WriteCapabilityDenied` has always written and
+  therefore what every plugin here returns.
 
 ### Method tables (v1)
 
@@ -143,7 +146,12 @@ uses. There is **no parallel capability registry** invented for plugins.
 | `document:write` | host accepts `docChanged` / `save` | read-only |
 | `upload:images` | `requestUpload` honored (image mime only) | paste-image disabled |
 | `theme:read` | receives `tokens` + `themeChanged` | default tokens |
-| `navigation:intercept` | _(deferred to Phase 1)_ | — |
+| `navigation:intercept` | _never built_ | — |
+
+`navigation:intercept` appears in the design notes as an example of the scope
+grammar, not as something a plugin can ask for. It does not exist in
+`framework/pluginhost`, no plugin here requests it, and nothing is waiting on
+it. It is listed only because the design docs mention the name.
 
 The gate is one line — [`pluginhost.Allow`](#the-platform-api):
 
