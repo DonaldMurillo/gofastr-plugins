@@ -43,6 +43,7 @@ import (
 	"github.com/DonaldMurillo/gofastr/framework/uihost"
 	_ "github.com/DonaldMurillo/gofastr/sqlite/stdlib"
 
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogapp/siteheader"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
 	"github.com/DonaldMurillo/gofastr-plugins/richtext/ssr"
 )
@@ -80,7 +81,10 @@ func newApp(db *sql.DB) (*framework.App, *app, error) {
 	a := &app{store: store, sessions: newSessions()}
 
 	uiApp := appui.NewApp(siteName)
-	uiApp.WithTheme(uitheme.Default())
+	// siteheader owns one token of its own (the phone menu's stagger, in
+	// siteheader.tokens.css); the theme must carry it or the owned sheet's
+	// var() reads nothing.
+	uiApp.WithTheme(uitheme.Default().Extend(siteheader.Tokens))
 	layout := a.newLayout()
 	uiApp.SetDefaultLayout(layout)
 	a.registerPublicScreens(uiApp, layout)
@@ -251,7 +255,7 @@ func (a *app) gateAdminScreens(next http.Handler) http.Handler {
 		"/admin/logout":       true,
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/admin") && !open[r.URL.Path] {
+		if (r.URL.Path == "/admin" || strings.HasPrefix(r.URL.Path, "/admin/")) && !open[r.URL.Path] {
 			requireAdmin(next).ServeHTTP(w, r)
 			return
 		}
