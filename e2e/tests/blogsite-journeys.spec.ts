@@ -130,9 +130,9 @@ test("search finds a post and the empty state explains a miss", async ({ page })
 });
 
 test("search is reachable from the nav on any page", async ({ page }) => {
-  // Search is a nav LINK rather than a box in the header's Actions slot:
-  // SiteHeader renders Actions twice (desktop + mobile drawer), so a field with
-  // a fixed id there would be a duplicate element id.
+  // Search is a nav LINK rather than a box in the header: the recipe's
+  // siteheader renders its links twice (desktop bar + phone menu), so a field
+  // with a fixed id there would be a duplicate element id.
   await page.goto(`${BLOGSITE}/archive`);
   await page.getByRole("link", { name: "Search", exact: true }).first().click();
 
@@ -180,7 +180,7 @@ test("the theme toggle switches scheme and survives a navigation", async ({ page
   const scheme = () => page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"));
 
   const before = await scheme();
-  await page.locator("[data-fui-theme-toggle], button[aria-label*='theme' i], button[title*='theme' i]").first().click();
+  await page.getByRole("button", { name: "Toggle color scheme" }).click();
   await expect.poll(scheme).not.toBe(before);
 
   const chosen = await scheme();
