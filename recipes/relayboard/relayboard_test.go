@@ -190,7 +190,9 @@ func TestRegisterPinsWhoamiIdentity(t *testing.T) {
 
 	c := client(t)
 	// The account screen's form, posted the way a browser posts it.
-	// 303: form register auto-logins and redirects, session cookie set.
+	// 303 with NO session cookie: battery/auth's register stopped
+	// signing in (anti-enumeration — the free and taken branches must
+	// answer alike), so the visitor is as anonymous as before.
 	status := post(t, c, srv.URL+"/auth/register", url.Values{
 		"email":    {"demo@relayboard.test"},
 		"password": {"demo-password-1"},
@@ -199,12 +201,38 @@ func TestRegisterPinsWhoamiIdentity(t *testing.T) {
 		t.Fatalf("register status = %d, want 303", status)
 	}
 
-	// whoami now returns the registered user's id. That pins the GetID
+	// whoami still answers anonymous: the account exists, the session
+	// does not.
+	status, body := get(t, c, srv.URL+rb.phMount+"/whoami")
+	if status != http.StatusOK {
+		t.Fatalf("whoami status = %d, want 200", status)
+	}
+	var anon struct {
+		ID any `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(body), &anon); err != nil {
+		t.Fatalf("whoami body %q: %v", body, err)
+	}
+	if anon.ID != nil {
+		t.Fatalf("whoami id = %v after register, want null (register must not sign in)", anon.ID)
+	}
+
+	// The login form on the same screen, posted the way a browser
+	// posts it. 303: login sets the session cookie and redirects.
+	status = post(t, c, srv.URL+"/auth/login", url.Values{
+		"email":    {"demo@relayboard.test"},
+		"password": {"demo-password-1"},
+	})
+	if status != http.StatusSeeOther {
+		t.Fatalf("login status = %d, want 303", status)
+	}
+
+	// whoami now returns the logged-in user's id. That pins the GetID
 	// chain in the recipe's own context: SessionMiddleware annotated the
 	// context with the battery/auth user, and the posthog integration's
 	// default Identify resolved it through its GetID arm — the same id
 	// the flag store uses as its subject.
-	status, body := get(t, c, srv.URL+rb.phMount+"/whoami")
+	status, body = get(t, c, srv.URL+rb.phMount+"/whoami")
 	if status != http.StatusOK {
 		t.Fatalf("whoami status = %d, want 200", status)
 	}
@@ -215,6 +243,45 @@ func TestRegisterPinsWhoamiIdentity(t *testing.T) {
 		t.Fatalf("whoami body %q: %v", body, err)
 	}
 	if who.ID == nil || *who.ID == "" {
-		t.Fatalf("whoami id = %v after register, want the user id", who.ID)
+		t.Fatalf("whoami id = %v after login, want the user id", who.ID)
+	}
+}
+
+// TestRegisterReturnsToSignIn pins where register leaves a visitor:
+// back on /account with a notice to log in, since register no longer
+// signs in. The notice must not say whether the address was taken, so
+// a repeat registration lands on the same page with the same text.
+func TestRegisterReturnsToSignIn(t *testing.T) {
+	srv, _ := serve(t, config{})
+	c := client(t)
+
+	_, page := get(t, c, srv.URL+"/account")
+	if !strings.Contains(page, `name="next" type="hidden" value="/account?registered=1"`) {
+		t.Fatal("register form carries no next field back to /account")
+	}
+
+	form := url.Values{
+		"email":    {"again@relayboard.test"},
+		"password": {"demo-password-1"},
+		"next":     {"/account?registered=1"},
+	}
+	var notices []string
+	for range 2 { // the first creates the account, the second hits a taken address
+		resp, err := c.PostForm(srv.URL+"/auth/register", form)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if loc := resp.Header.Get("Location"); resp.StatusCode != http.StatusSeeOther || loc != "/account?registered=1" {
+			t.Fatalf("register = %d to %q, want 303 to /account?registered=1", resp.StatusCode, loc)
+		}
+		_, body := get(t, c, srv.URL+"/account?registered=1")
+		if !strings.Contains(body, "Now log in") {
+			t.Fatal("account page shows no log-in notice after register")
+		}
+		notices = append(notices, body[strings.Index(body, "Now log in"):][:200])
+	}
+	if notices[0] != notices[1] {
+		t.Fatalf("notice differs for a new and a taken address:\n%q\n%q", notices[0], notices[1])
 	}
 }

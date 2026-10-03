@@ -13,17 +13,20 @@
 //     and the strict default CSP needs no exceptions.
 //   - Identity is real. battery/auth backs the integration's whoami
 //     endpoint, so an anonymous visitor is a person without an id, and
-//     registering or logging in merges that visitor into the person
-//     PostHog already tracked anonymously.
+//     logging in merges that visitor into the person PostHog already
+//     tracked anonymously. Registering only creates the account:
+//     battery/auth's register no longer signs in (anti-enumeration).
 //   - Flags gate server-side. /beta asks PostHog, per request, through a
 //     featureflag.Store that is forty lines of stdlib HTTP.
 //   - Degradation is clean. With POSTHOG_KEY unset the app runs the
 //     same: no plugin, no flag store, /beta answers invite-only, and
 //     the A/B script no-ops because window.posthog never appears.
 //
-// Every visible surface composes framework/ui and core-ui/app: the app
-// ships zero CSS and zero hand-rolled structural markup. Identity comes
-// from theme tokens (ui/theme Overrides), never from local styles.
+// Every visible surface composes framework/ui and core-ui/app. The
+// only CSS the app ships is the owned sheets of its generated chrome
+// packages (siteheader, sitefooter, copied with `gofastr generate
+// package`); identity comes from theme tokens (ui/theme Overrides),
+// never from local styles.
 //
 // Run with:
 //
@@ -46,6 +49,8 @@ import (
 	"time"
 
 	"github.com/DonaldMurillo/gofastr-plugins/posthog"
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/relayboard/sitefooter"
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/relayboard/siteheader"
 	"github.com/DonaldMurillo/gofastr/battery/auth"
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
@@ -53,6 +58,7 @@ import (
 	"github.com/DonaldMurillo/gofastr/core/handler"
 	"github.com/DonaldMurillo/gofastr/core/render"
 	"github.com/DonaldMurillo/gofastr/framework"
+	"github.com/DonaldMurillo/gofastr/framework/headless"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
 	uitheme "github.com/DonaldMurillo/gofastr/framework/ui/theme"
 	"github.com/DonaldMurillo/gofastr/framework/uihost"
@@ -113,45 +119,49 @@ func openDB(path string) (*sql.DB, error) {
 
 // ─── chrome: header + footer ───────────────────────────────────────
 
-// siteHeader is the ctx-aware page header: the nav is the same for
-// everyone, the action cluster switches between "Sign in" and sign-out
-// on the session that auth.SessionMiddleware put in the context.
+// siteHeader is the ctx-aware page header, drawn by the recipe's own
+// siteheader package (copied from the canonical one with `gofastr
+// generate package siteheader` and owned below siteheader/). The nav
+// is the same for everyone plus an Account link for a signed-in
+// session; the call to action switches between "Sign in" and the
+// sign-out button. Both read the session that auth.SessionMiddleware
+// put in the context — the layout build hands its live request ctx
+// through, so the chrome is auth-aware without any adapter.
 func siteHeader(ctx context.Context) render.HTML {
-	nav := []ui.SiteHeaderLink{
+	links := []siteheader.Link{
 		{Label: "Pricing", Href: "/pricing"},
 		{Label: "Beta", Href: "/beta"},
 	}
-	var actions render.HTML
+	cta := siteheader.Link{Label: "Sign in", Href: "/account"}
+	actions := ui.ThemeToggle(ui.ThemeToggleConfig{Variant: ui.ThemeToggleIcon})
 	if u, ok := handler.GetUser(ctx); ok && u != nil {
-		nav = append(nav, ui.SiteHeaderLink{Label: "Account", Href: "/account"})
-		actions = ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter, NoWrap: true},
+		links = append(links, siteheader.Link{Label: "Account", Href: "/account"})
+		cta = siteheader.Link{}
+		actions = render.Join(
 			ui.SignOut(ui.SignOutConfig{Next: "/", Ctx: ctx}),
-			ui.ThemeToggle(ui.ThemeToggleConfig{Variant: ui.ThemeToggleIcon}),
-		)
-	} else {
-		actions = ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter, NoWrap: true},
-			ui.LinkButton(ui.LinkButtonConfig{Label: "Sign in", Href: "/account", Variant: ui.ButtonSecondary, Size: ui.ButtonSizeSmall}),
-			ui.ThemeToggle(ui.ThemeToggleConfig{Variant: ui.ThemeToggleIcon}),
+			actions,
 		)
 	}
-	return ui.SiteHeader(ui.SiteHeaderConfig{
-		Brand:    ui.Link(ui.LinkConfig{Href: "/", Text: "RelayBoard"}),
-		NavItems: nav,
-		Drawer:   ui.SiteHeaderDrawerSheet,
-		Actions:  actions,
-		Ctx:      ctx,
+	return siteheader.Render(siteheader.Config{
+		Ctx:     ctx,
+		Name:    "RelayBoard",
+		Links:   links,
+		CTA:     cta,
+		Actions: actions,
 	})
 }
 
+// siteFooter is the colophon, drawn by the recipe's own sitefooter
+// package (`gofastr generate package sitefooter`).
 func siteFooter() render.HTML {
-	return ui.SiteFooter(ui.SiteFooterConfig{
-		Lead: ui.Link(ui.LinkConfig{Href: "/", Text: "RelayBoard"}),
-		Columns: []ui.SiteFooterColumn{
-			{Title: "Product", Links: []ui.SiteFooterLink{
+	return sitefooter.Render(sitefooter.Config{
+		Name: "RelayBoard",
+		Columns: []sitefooter.Column{
+			{Title: "Product", Links: []sitefooter.Link{
 				{Label: "Pricing", Href: "/pricing"},
 				{Label: "Beta", Href: "/beta"},
 			}},
-			{Title: "Account", Links: []ui.SiteFooterLink{
+			{Title: "Account", Links: []sitefooter.Link{
 				{Label: "Sign in", Href: "/account"},
 			}},
 		},
@@ -180,7 +190,7 @@ func (*landing) Render() render.HTML {
 				ui.Card(ui.CardConfig{Heading: "First-party wire",
 					Description: "Analytics scripts and beacons ride your own origin through the relay. The strict CSP stays exactly as shipped."}),
 				ui.Card(ui.CardConfig{Heading: "Real identity",
-					Description: "Sign-ups merge the anonymous visitor into the person your vendor already tracked. No manual stitching."}),
+					Description: "Signing in merges the anonymous visitor into the person your vendor already tracked. No manual stitching."}),
 				ui.Card(ui.CardConfig{Heading: "Server-side gates",
 					Description: "Feature flags answer before the page renders, through a forty-line stdlib adapter. No flash of the wrong page."}),
 			),
@@ -218,9 +228,10 @@ func (*pricing) Render() render.HTML {
 // account renders per request: the signed-in view shows who the session
 // belongs to (the same identity the whoami endpoint hands posthog-js),
 // the anonymous view offers the two battery/auth forms. Both forms POST
-// to the core plugin's routes and work before any script loads; the
-// register/login handlers auto-login and redirect (303) with the
-// session cookie set.
+// to the core plugin's routes and work before any script loads.
+// Register answers the same 303 whether or not the address was free
+// and never signs in (anti-enumeration: no session cookie on either
+// branch); login sets the session and redirects (303).
 type account struct{}
 
 func (*account) ScreenTitle() string { return "Account" }
@@ -247,20 +258,32 @@ func (*account) RenderCtx(ctx context.Context) render.HTML {
 	}
 	emailField := func(id, autocomplete string) render.HTML {
 		return ui.FormField(ui.FormFieldConfig{Label: "Email", For: id, Required: true,
-			Input: html.Input(html.InputConfig{Type: "email", Name: "email", ID: id,
-				ExtraAttrs: html.Attrs{"required": "", "autocomplete": autocomplete}})})
+			Input: func(c headless.FieldControl) render.HTML {
+				return ui.Control(ui.ControlConfig{Field: c, Type: "email", Name: "email", AutoComplete: autocomplete})
+			}})
 	}
 	passwordField := func(id, autocomplete string) render.HTML {
 		return ui.FormField(ui.FormFieldConfig{Label: "Password", For: id, Required: true,
-			Input: html.Input(html.InputConfig{Type: "password", Name: "password", ID: id,
-				ExtraAttrs: html.Attrs{"required": "", "autocomplete": autocomplete}})})
+			Input: func(c headless.FieldControl) render.HTML {
+				return ui.PasswordInput(ui.PasswordInputConfig{Field: c, Name: "password", Autocomplete: autocomplete})
+			}})
+	}
+	// Register lands back here with ?registered=1. The notice reads the
+	// same for a new and a taken address, because the server's answer
+	// does too.
+	var registered render.HTML
+	if appui.QueryFromContext(ctx).Get("registered") == "1" {
+		registered = ui.Callout(ui.CalloutConfig{Title: "Now log in", Variant: ui.StatusInfo},
+			render.Text("If that address was new, the account exists. Log in with it below to merge your analytics profile."))
 	}
 	return render.Join(
 		ui.PageHeader(ui.PageHeaderConfig{Title: "Account",
-			Subtitle: "Registering merges your anonymous analytics profile into a real person."}),
+			Subtitle: "Logging in merges your anonymous analytics profile into a real person."}),
+		registered,
 		ui.Grid(ui.GridConfig{Min: "18rem"},
 			ui.Card(ui.CardConfig{Heading: "Create an account", HeadingLevel: 2},
 				ui.Form(ui.FormConfig{Action: "/auth/register", SubmitLabel: "Create account", Ctx: ctx},
+					html.Input(html.InputConfig{Type: "hidden", Name: "next", Value: "/account?registered=1"}),
 					emailField("reg-email", "email"),
 					passwordField("reg-password", "new-password"),
 				),
@@ -411,7 +434,7 @@ var abJS = []byte(`(function () {
     if (!ph || !ph.getFeatureFlag) return;
     var v = ph.getFeatureFlag('hero-copy-test');
     if (!v || location.pathname !== '/') return;
-    var h1 = document.querySelector('.ui-hero__title');
+    var h1 = document.querySelector('[data-fui-comp="ui-hero"] h1');
     if (!h1) return;
     h1.textContent = v === 'punchy' ? 'Ship analytics without leaving your origin' : 'RelayBoard';
     h1.setAttribute('data-ab-variant', v);
@@ -452,15 +475,20 @@ type relayboard struct {
 // are the same app either way.
 func newApp(db *sql.DB, cfg config) (*framework.App, *relayboard, error) {
 	uiApp := appui.NewApp("RelayBoard")
-	// Identity lives in theme tokens, never in CSS the app would ship.
+	// Identity lives in theme tokens, never in CSS the app would ship;
+	// the header package's own token (the phone menu's stagger) rides
+	// along through Extend.
 	uiApp.WithTheme(uitheme.Default(uitheme.Overrides{
-		Primary:    "#0F766E",
-		DarkColors: map[string]string{"primary": "#5EEAD4"},
-	}))
-	layout := appui.NewLayout("site").
-		WithContainer().
-		WithHeader(appui.NewContextComponent(siteHeader)).
-		WithFooter(appui.NewStaticComponent(siteFooter()))
+		Primary: "#0F766E",
+		Dark:    &uitheme.Overrides{Primary: "#5EEAD4"},
+	}).Extend(siteheader.Tokens))
+	layout := appui.NewLayout("site", appui.LayoutSpec{}, func(ctx context.Context, l *appui.LayoutTree) render.HTML {
+		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+			siteHeader(ctx),
+			ui.Container(ui.ContainerConfig{Width: ui.ContainerPage, Pad: ui.ContainerPadPage}, l.Primary()),
+			siteFooter(),
+		)
+	})
 	uiApp.SetDefaultLayout(layout)
 	// Screens register as pointers (&screen{}): the host resolves them
 	// through dependency injection, and a value screen fails that
