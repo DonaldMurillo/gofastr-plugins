@@ -12,6 +12,7 @@ import (
 
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
 	"github.com/DonaldMurillo/gofastr/core/render"
+	"github.com/DonaldMurillo/gofastr/framework/headless"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
 )
 
@@ -49,6 +50,7 @@ func RenderForm(action string, doc Doc, values url.Values, errs ui.FieldErrors) 
 	// submit. The page exists to prove the SERVER enforces the schema;
 	// letting the browser answer first would hide exactly that.
 	return ui.Form(ui.FormConfig{
+		ID:          "fb-live-form",
 		Action:      action,
 		Method:      "POST",
 		Errors:      errs,
@@ -58,8 +60,8 @@ func RenderForm(action string, doc Doc, values url.Values, errs ui.FieldErrors) 
 }
 
 // renderField maps one schema field onto the framework's own components:
-// ui.FormField + html.Input for the input types, ui.Select and ui.Checkbox
-// for the controls that own their label chrome. All doc data crosses through
+// ui.FormField + ui.Control for the input types; ui.TextArea, ui.Select and
+// ui.Checkbox for the controls that own their label chrome. All doc data crosses through
 // the framework's escaping renderers — the schema is data, and data never
 // becomes markup here.
 func renderField(f *Field, values url.Values, errs ui.FieldErrors) render.HTML {
@@ -91,23 +93,26 @@ func renderField(f *Field, values url.Values, errs ui.FieldErrors) render.HTML {
 			Checked: values.Has(f.Name),
 		})
 	case "textarea":
-		input := html.TextArea(html.TextAreaConfig{
-			Name: f.Name, ID: id, Content: value, Rows: 4,
-			Placeholder: f.Label,
-		})
-		return ui.FormField(ui.FormFieldConfig{
-			Label: f.Label, For: id, Help: help, Error: errMsg,
-			Required: f.Required, Input: input,
+		// Required is withheld for the same reason as select: ui.TextArea
+		// would emit the native attribute.
+		return ui.TextArea(ui.TextAreaConfig{
+			Name: f.Name, ID: id, Label: f.Label, Value: value, Rows: 4,
+			Placeholder: f.Label, Help: help, Error: errMsg,
 		})
 	default:
 		// text / email / number / date — one input, typed by the schema.
 		return ui.FormField(ui.FormFieldConfig{
 			Label: f.Label, For: id, Help: help, Error: errMsg,
 			Required: f.Required,
-			Input: html.Input(html.InputConfig{
-				Type: f.Type, Name: f.Name, ID: id, Value: value,
-				Placeholder: f.Label,
-			}),
+			Input: func(c headless.FieldControl) render.HTML {
+				// The label keeps its required mark; the control drops the
+				// native attribute the field would otherwise hand it.
+				c.Required = false
+				return ui.Control(ui.ControlConfig{
+					Field: c, Type: f.Type, Name: f.Name, Value: value,
+					Placeholder: f.Label,
+				})
+			},
 		})
 	}
 }
