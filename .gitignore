@@ -54,3 +54,7 @@ example/latency-gate.json
 
 # Loose debug screenshots at the repo root, same sweep, same cause.
 /*.png
+
+# Written by `gofastr verify` and `gofastr gen styles` for editor completion
+# (theme tokens as CSS); never served, regenerated on every run.
+/.gofastr/
