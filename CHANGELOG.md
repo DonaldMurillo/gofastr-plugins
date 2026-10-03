@@ -4,6 +4,43 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.86.0 (2026-10-02)
+
+v0.86.0 deletes the kit chrome the three recipes were built on
+(`ui.SiteHeader`, `ui.SiteFooter`, `ui.DocLayout`, and the
+`WithHeader`/`WithFooter`/`WithContainer` layout builders) and renames the
+kit's `ui-*` classes to `fui-*` (#124, gofastr#456).
+
+- **Recipes.** `blogsite`, `blogapp` and `relayboard` each build their shell
+  with `app.NewLayout(name, spec, build)` and render a `siteheader` and
+  `sitefooter` package copied in with `gofastr generate package`. blogsite also
+  copies `docpage`, edited so posts and pages with no nav or toc rail read in
+  one centred column. The copies are each recipe's own code; their styles live
+  in the `@scope`d `.style.css` beside them. The `staticHTML`/`ctxHTML`
+  adapters are gone: the build function's ctx is the live request, so blogapp's
+  Admin link reads the session there.
+- **Register no longer signs in.** battery/auth (since v0.83) answers a new and
+  a taken address with the same 303 and no session cookie. relayboard's
+  register form now returns to `/account` with a "Now log in" notice, and the
+  posthog identify-merge scenario logs in after registering.
+- **blogapp's admin gate** matches `/admin` and `/admin/…` instead of every
+  path starting `/admin`.
+- **formbuilder** builds its live-form controls through the
+  `FormFieldConfig.Input` builder, gives the form the `ID` an error summary now
+  needs, and drops its three `.ui-button` overrides.
+- **genui** reads `--color-warning`; the `--color-warn` alias is gone.
+
+`gofastr upgrade --from v0.81.0 --to v0.86.0` still lists 8 "Edit these" lines.
+All 8 are already-ported `NewLayout` and `FormFieldConfig.Input` calls: the
+scanner matches the symbol, not the old call shape.
+
+Gates: build, vet (plain and `-tags chromium`), full Go suite, the
+chromium-tagged recipe suites run alone, `gofastr verify --strict` in each
+recipe, and 484/484 Playwright journeys in WebKit and Chromium. The full run
+finished 482/484: the blogsite theme journey still looked for the retired
+`data-fui-theme-toggle` attribute. It now finds the button by its accessible
+name, and the two touched spec files pass 36/36 on a rerun.
+
 ### Changed — gofastr v0.81.0 (2026-09-02)
 
 30 commits, largely a security-audit sweep. All four exposure files are
