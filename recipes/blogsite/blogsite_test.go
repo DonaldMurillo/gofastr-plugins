@@ -403,10 +403,11 @@ func TestPaginationLinksChain(t *testing.T) {
 }
 
 // Duplicate element ids break label/control association and fail axe's
-// duplicate-id rule. They are easy to introduce here because ui.SiteHeader
-// renders its Actions slot TWICE — once in the desktop bar, once in the mobile
-// drawer — so anything with a fixed id placed there lands in the DOM twice.
-// This walks every public page rather than spot-checking one.
+// duplicate-id rule. They are easy to introduce here because the recipe's
+// generated siteheader renders its nav links TWICE — once in the desktop
+// bar, once in the phone menu — so anything with a fixed id inside a link
+// label lands in the DOM twice. This walks every public page rather than
+// spot-checking one.
 func TestNoDuplicateElementIDs(t *testing.T) {
 	srv, site := startServer(t)
 

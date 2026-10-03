@@ -18,11 +18,30 @@ blogsite/
 │   ├── posts/*.md      one file per post, frontmatter on top
 │   └── pages/*.md      standalone pages (about, colophon)
 ├── content.go          parse + index: ordering, tags, prev/next, search
-├── chrome.go           header, footer, and the shared post card
+├── chrome.go           the site shell, and the shared post card
 ├── screens.go          one screen per page type, and route registration
+├── siteheader/         the top bar (this recipe's own code)
+├── sitefooter/         the colophon (this recipe's own code)
+├── docpage/            the post/page reading layout (this recipe's own code)
 ├── feed.go             RSS 2.0 + JSON Feed
 └── main.go             wiring
 ```
+
+## The chrome is local
+
+`siteheader`, `sitefooter` and `docpage` were copied into this recipe with
+`gofastr generate package <name>` and are part of it, not framework code.
+Their markup is in each package's Go, and their look lives in the owned
+sheet beside it (`siteheader.style.css` and so on), which `gofastr
+generate styles` compiles into the `_style.gen.go` files. `docpage` was
+edited after the copy: this blog renders posts and standalone pages with
+no nav or table-of-contents rail, so its sheet collapses both empty rails
+into one centred reading column, and its page sits inside the layout's
+`ui.Container` rather than bringing its own measure. `sitefooter`'s
+columns take an 8rem minimum instead of 10rem, so the four link columns
+fit on one row beside the lead at desktop width. The theme picks the
+packages' tokens up in `main.go` with
+`theme.Default().Extend(siteheader.Tokens, docpage.Tokens)`.
 
 ## Frontmatter
 
