@@ -3,7 +3,7 @@ module github.com/DonaldMurillo/gofastr-plugins
 go 1.27.0
 
 require (
-	github.com/DonaldMurillo/gofastr v0.81.0
+	github.com/DonaldMurillo/gofastr v0.86.0
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 )
@@ -28,7 +28,9 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/image v0.45.0 // indirect
+	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
