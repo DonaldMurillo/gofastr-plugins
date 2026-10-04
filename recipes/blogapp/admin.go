@@ -25,6 +25,7 @@ import (
 	"github.com/DonaldMurillo/gofastr/core-ui/component"
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
 	"github.com/DonaldMurillo/gofastr/core/render"
+	"github.com/DonaldMurillo/gofastr/framework/headless"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
 
 	"github.com/DonaldMurillo/gofastr-plugins/richtext"
@@ -61,9 +62,14 @@ func (s *loginScreen) RenderCtx(ctx context.Context) render.HTML {
 		html.Input(html.InputConfig{Type: "hidden", Name: "next", Value: q.Get("next")}),
 		ui.FormField(ui.FormFieldConfig{
 			Label: "Password", For: "admin-password", Required: true,
-			Input: ui.PasswordInput(ui.PasswordInputConfig{
-				Name: "password", ID: "admin-password", Required: true, Autocomplete: "current-password",
-			}),
+			// Input is a builder over the field's wiring: the id the label
+			// points at, the described-by chain, required and invalid state
+			// all come from c, so the control cannot drift from its label.
+			Input: func(c headless.FieldControl) render.HTML {
+				return ui.PasswordInput(ui.PasswordInputConfig{
+					Field: c, Name: "password", Autocomplete: "current-password",
+				})
+			},
 		}),
 		ui.Button(ui.ButtonConfig{Label: "Sign in", Type: "submit", ID: "sign-in"}),
 	)
@@ -74,7 +80,7 @@ func (s *loginScreen) RenderCtx(ctx context.Context) render.HTML {
 			Subtitle: "The admin is where posts are written. Readers never need it.",
 		}),
 		form,
-		ui.Callout(ui.CalloutConfig{Title: "This is a demo credential", Variant: ui.StatusInfo, Landmark: inline},
+		ui.Callout(ui.CalloutConfig{Title: "This is a demo credential", Variant: ui.StatusInfo},
 			render.Text("The password is “demo” unless BLOG_ADMIN_PASSWORD says otherwise. "+
 				"A real app replaces session.go with battery/auth — accounts, reset, 2FA, the lot.")),
 	)
@@ -250,7 +256,7 @@ func (s *editScreen) RenderCtx(ctx context.Context) render.HTML {
 			Label: "View published post", Href: "/posts/" + p.Slug, Variant: ui.ButtonSecondary}))
 	}
 	head = append(head,
-		ui.Callout(ui.CalloutConfig{Title: "The editor autosaves", Variant: ui.StatusInfo, Landmark: inline},
+		ui.Callout(ui.CalloutConfig{Title: "The editor autosaves", Variant: ui.StatusInfo},
 			render.Text("Body changes save over the plugin bridge as you type. "+
 				"Save writes the fields above — title, slug, summary, tags, status.")),
 		form,

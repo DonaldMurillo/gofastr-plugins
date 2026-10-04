@@ -180,9 +180,16 @@ func (s *postScreen) RenderCtx(ctx context.Context) render.HTML {
 			ui.LinkButton(ui.LinkButtonConfig{Label: "Edit this post", Href: "/admin/posts/" + p.ID, Variant: ui.ButtonSecondary}))
 	}
 
-	return ui.DocLayout(ui.DocLayoutConfig{
-		Crumbs: []ui.DocCrumb{{Label: "Posts", Href: "/"}, {Label: p.Title}},
-	}, ui.Stack(ui.StackConfig{Gap: ui.GapLG}, body...))
+	// The post sits on a reading measure: a nested Container capped at the
+	// narrow width (~640px), which the ContainerConfig docs give for
+	// long-form prose. The crumbs share the column so they line up with
+	// the title.
+	crumbs := ui.Breadcrumbs(ui.BreadcrumbsConfig{
+		Items: []ui.Crumb{{Text: "Posts", Href: "/"}, {Text: p.Title}},
+	})
+	return ui.Container(ui.ContainerConfig{Width: ui.ContainerNarrow},
+		ui.Stack(ui.StackConfig{Gap: ui.GapLG}, append([]render.HTML{crumbs}, body...)...),
+	)
 }
 
 // ─── Tags ────────────────────────────────────────────────────────────

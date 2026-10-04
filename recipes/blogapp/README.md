@@ -22,13 +22,37 @@ It prints its URL. Sign in at `/admin/login` with the password `demo`.
 blogapp/
 ├── store.go      the posts + images tables, and every query
 ├── session.go    the admin gate (a demo stand-in — see below)
-├── chrome.go     shared shell, plus the resolve-or-404 middleware
+├── chrome.go     the site layout: header, footer, primary slot
+├── siteheader/   the top bar (an owned package — see below)
+├── sitefooter/   the colophon (an owned package — see below)
 ├── public.go     the reading side; renders stored documents via richtext/ssr
 ├── admin.go      login, the post list, and the edit screen that mounts the editor
 ├── feed.go       RSS + sitemap + robots.txt
 ├── seed.go       starter posts, written as real ProseMirror documents
 └── main.go       wiring, and the two gated plugin handlers
 ```
+
+## The site chrome is this recipe's own code
+
+gofastr v0.86 ships no site header or footer components. `gofastr generate
+package siteheader` and `gofastr generate package sitefooter` copied the
+canonical ones into `siteheader/` and `sitefooter/`, and from there they are
+part of this recipe, not the framework: edit them, and expect no upstream
+updates. `chrome.go` builds the site layout (`appui.NewLayout`) around
+`siteheader.Render` and `sitefooter.Render`, with the routed content in a
+`ui.Container` between them. The layout build receives the live request
+context, which is where the header's conditional Admin link reads the
+session.
+
+The look of each package lives in its owned style sheet,
+`siteheader/siteheader.style.css` and `sitefooter/sitefooter.style.css`.
+After editing a sheet, run `gofastr generate styles` to regenerate the
+matching `_style.gen.go`; never edit a `.gen.go` by hand. The header also
+owns one token of its own (`siteheader.tokens.css`, the phone menu's
+stagger); `main.go` adds it to the theme with
+`uitheme.Default().Extend(siteheader.Tokens)` so the sheet's `var()` reads
+something. The copied packages bring their own tests, including
+chromium-tagged ones, which run with `go test -tags chromium`.
 
 ## The capability gate is not an authentication gate
 

@@ -25,7 +25,7 @@
   --color-primary: #e0a040;
   --color-primary-fg: #ffffff;
   --color-success: #1a7f37;
-  --color-warn: #9a6700;
+  --color-warning: #9a6700;
   --color-danger: #cf222e;
   --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
@@ -174,9 +174,9 @@ body {
   border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
 }
 .gu-badge[data-tone="warn"] {
-  color: var(--color-warn);
-  background: color-mix(in srgb, var(--color-warn) 12%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--color-warn) 35%, var(--color-border));
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
 }
 .gu-badge[data-tone="bad"] {
   color: var(--color-danger);
@@ -279,8 +279,8 @@ body {
   background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
 }
 .gu-notice[data-tone="warn"] {
-  border-color: var(--color-warn);
-  background: color-mix(in srgb, var(--color-warn) 6%, var(--color-surface));
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-surface));
 }
 .gu-notice-title {
   font-weight: 700;

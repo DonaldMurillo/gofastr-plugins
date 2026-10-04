@@ -179,7 +179,7 @@ func TestDemoPagesContainMountBrokerAndLiveLink(t *testing.T) {
 	for _, want := range []string{
 		`id="fb-verdict" data-verdict="fresh"`,
 		"<form",
-		"ui-form",
+		"fui-form",
 	} {
 		if !strings.Contains(live, want) {
 			t.Errorf("live page missing %q", want)

@@ -706,9 +706,10 @@ func TestFeedAndSitemap(t *testing.T) {
 }
 
 // Duplicate element ids break label/control association and fail axe's
-// duplicate-id rule. The trap here is ui.SiteHeader, which renders its Actions
-// slot twice (desktop bar + mobile drawer), so a form control with a fixed id
-// placed there appears twice in the DOM. Covers the admin pages too, since the
+// duplicate-id rule. The trap here is the generated siteheader package,
+// which renders its nav links twice (desktop bar plus phone menu), so a
+// form control with a fixed id among them would appear twice in the DOM;
+// its Actions slot renders once. Covers the admin pages too, since the
 // edit form is where most of the ids live.
 func TestNoDuplicateElementIDs(t *testing.T) {
 	srv, a := testApp(t)

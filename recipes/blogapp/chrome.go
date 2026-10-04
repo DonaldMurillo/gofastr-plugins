@@ -10,10 +10,11 @@ import (
 	"unicode"
 
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
-	"github.com/DonaldMurillo/gofastr/core-ui/component"
-	"github.com/DonaldMurillo/gofastr/core-ui/html"
 	"github.com/DonaldMurillo/gofastr/core/render"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
+
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogapp/sitefooter"
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogapp/siteheader"
 )
 
 const (
@@ -27,82 +28,59 @@ const (
 	postsPerPage = 4
 )
 
-// staticHTML adapts pre-rendered markup to component.Component for the layout
-// header/footer slots.
-type staticHTML render.HTML
-
-func (s staticHTML) Render() render.HTML { return render.HTML(s) }
-
-var _ component.Component = staticHTML("")
-
-// ctxHTML renders per-request markup in a layout slot. The header needs it: the
-// "Admin" link only appears for a signed-in admin, and that is a per-request
-// fact the shared header instance cannot bake in.
-type ctxHTML func(ctx context.Context) render.HTML
-
-func (f ctxHTML) Render() render.HTML                       { return f(context.Background()) }
-func (f ctxHTML) RenderCtx(ctx context.Context) render.HTML { return f(ctx) }
-
-var _ component.ContextComponent = ctxHTML(nil)
-
+// newLayout builds the site shell: the recipe's own siteheader and
+// sitefooter packages (copied with `gofastr generate package`, then this
+// repo's to edit) around the routed content. The build function's ctx is
+// the live request context, so the header's "Admin" link — a per-request
+// fact — is read here, inside the build, rather than through an adapter.
 func (a *app) newLayout() *appui.Layout {
-	header := ctxHTML(func(ctx context.Context) render.HTML {
+	return appui.NewLayout("site", appui.LayoutSpec{}, func(ctx context.Context, l *appui.LayoutTree) render.HTML {
 		actions := []render.HTML{ui.ThemeToggle(ui.ThemeToggleConfig{})}
 		if isAdmin(ctx) {
 			actions = append(actions,
 				ui.LinkButton(ui.LinkButtonConfig{Label: "Admin", Href: "/admin", Variant: ui.ButtonSecondary, Size: ui.ButtonSizeSmall}))
 		}
-		return ui.SiteHeader(ui.SiteHeaderConfig{
-			Brand:        html.Link(html.LinkConfig{Href: "/", Text: siteName}),
-			MobileBrand:  html.Link(html.LinkConfig{Href: "/", Text: "Written"}),
-			NavUnderline: true,
-			NavItems: []ui.SiteHeaderLink{
-				{Label: "Posts", Href: "/"},
-				{Label: "Tags", Href: "/tags", MatchPrefix: true},
-				{Label: "Archive", Href: "/archive"},
-				// A nav link, not a search box in Actions: SiteHeader renders
-				// Actions twice (desktop bar + mobile drawer), so a form control
-				// with a fixed id there appears twice in the DOM — a duplicate-id
-				// a11y violation. Repeating a link href is harmless.
-				{Label: "Search", Href: "/search"},
-			},
-			Actions: ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter}, actions...),
-			MobileExtraLinks: []ui.SiteHeaderLink{
-				{Label: "RSS", Href: "/feed.xml"},
-				{Label: "Source ↗", Href: recipeSourceURL, External: true},
-			},
-		})
+		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+			siteheader.Render(siteheader.Config{
+				Ctx:  ctx,
+				Name: siteName,
+				Links: []siteheader.Link{
+					{Label: "Posts", Href: "/"},
+					{Label: "Tags", Href: "/tags", Section: true},
+					{Label: "Archive", Href: "/archive"},
+					// A nav link, not a search box in Actions: the links
+					// render twice (desktop bar plus phone menu), so a form
+					// control with a fixed id there would appear twice in
+					// the DOM — a duplicate-id a11y violation. Actions
+					// render once, but the search page is a destination
+					// either way, and repeating a link href is harmless.
+					{Label: "Search", Href: "/search"},
+				},
+				Actions: ui.Cluster(ui.ClusterConfig{Gap: ui.GapSM, Align: ui.AlignCenter}, actions...),
+			}),
+			ui.Container(ui.ContainerConfig{Width: ui.ContainerPage, Pad: ui.ContainerPadPage}, l.Primary()),
+			sitefooter.Render(sitefooter.Config{
+				Name:    siteName,
+				Tagline: tagline,
+				Columns: []sitefooter.Column{
+					{Title: "Read", Links: []sitefooter.Link{
+						{Label: "All posts", Href: "/"},
+						{Label: "Archive", Href: "/archive"},
+						{Label: "Tags", Href: "/tags"},
+					}},
+					{Title: "Subscribe", Links: []sitefooter.Link{
+						{Label: "RSS", Href: "/feed.xml"},
+						{Label: "Sitemap", Href: "/sitemap.xml"},
+					}},
+					{Title: "Write", Links: []sitefooter.Link{
+						{Label: "Admin", Href: "/admin"},
+						{Label: "Source on GitHub", Href: recipeSourceURL},
+					}},
+				},
+				Note: "Posts are stored as ProseMirror JSON and rendered server-side; readers load no editor.",
+			}),
+		)
 	})
-
-	footer := staticHTML(ui.SiteFooter(ui.SiteFooterConfig{
-		Lead: ui.Stack(ui.StackConfig{Gap: ui.GapXS},
-			html.Strong(html.TextConfig{}, render.Text(siteName)),
-			ui.Muted(render.Text(tagline)),
-		),
-		Columns: []ui.SiteFooterColumn{
-			{Title: "Read", Links: []ui.SiteFooterLink{
-				{Label: "All posts", Href: "/"},
-				{Label: "Archive", Href: "/archive"},
-				{Label: "Tags", Href: "/tags"},
-			}},
-			{Title: "Subscribe", Links: []ui.SiteFooterLink{
-				{Label: "RSS", Href: "/feed.xml"},
-				{Label: "Sitemap", Href: "/sitemap.xml"},
-			}},
-			{Title: "Write", Links: []ui.SiteFooterLink{
-				{Label: "Admin", Href: "/admin"},
-				{Label: "Source on GitHub", Href: recipeSourceURL},
-			}},
-		},
-		Bottom: []render.HTML{
-			ui.Muted(render.Text("Posts are stored as ProseMirror JSON and rendered server-side; readers load no editor.")),
-		},
-	}))
-
-	return appui.NewLayout("site").
-		WithHeader(header).
-		WithFooter(footer).
-		WithContainer()
 }
 
 // ─── Shared rendering ────────────────────────────────────────────────
@@ -173,11 +151,6 @@ func TagSlug(s string) string {
 	}
 	return strings.Trim(b.String(), "-")
 }
-
-// inline is ui.CalloutConfig.Landmark set to false: the callout is emphasis
-// inside the main flow, not a tangential region. A nested <aside> there trips
-// axe's landmark-complementary-is-top-level rule.
-var inline = func() *bool { b := false; return &b }()
 
 func plural(n int, one, many string) string {
 	if n == 1 {

@@ -617,9 +617,6 @@ kbd { font-family: var(--font-mono, monospace); font-size: var(--text-xs, .75rem
 .fui-btn:hover { background: var(--color-surface-soft, #F4F4F5); border-color: var(--color-border-strong, #A1A1AA); }
 .fui-btn-primary { background: var(--color-primary, #e0a040); color: var(--color-primary-fg, #fff); border-color: transparent; font-weight: 600; }
 .fui-btn-primary:hover { background: color-mix(in srgb, var(--color-primary, #e0a040) 92%, var(--color-text, #18181B)); border-color: transparent; }
-.live-form .ui-form__actions .ui-button { font: inherit; font-size: var(--text-sm, .875rem); font-weight: 600; padding: 10px 20px; border: 1px solid transparent; border-radius: var(--radii-md, 6px); background: var(--color-primary, #e0a040); color: var(--color-primary-fg, #fff); cursor: pointer; line-height: 1.4; }
-.live-form .ui-form__actions .ui-button:hover { filter: brightness(1.05); }
-.live-form .ui-form__actions .ui-button:focus-visible { outline: 2px solid var(--color-primary, #e0a040); outline-offset: 2px; }
 .save-status { font-size: var(--text-sm, .875rem); color: var(--color-text-muted, #52525B); }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--spacing-lg, 16px); margin: var(--spacing-sm, 4px) 0 clamp(32px, 5vw, 48px); }
 .card { border: 1px solid var(--color-border, #E4E4E7); border-radius: var(--radii-lg, 12px); padding: var(--spacing-xl, 24px); background: var(--color-surface, #fff); box-shadow: var(--shadow-sm, 0 1px 2px 0 rgba(0,0,0,.05)); }

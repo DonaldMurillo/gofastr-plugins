@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/docpage"
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
 	"github.com/DonaldMurillo/gofastr/core-ui/component"
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
@@ -41,10 +42,11 @@ func (s *postScreen) ScreenDescription() string { return s.post.Summary }
 func (s *postScreen) Render() render.HTML {
 	p := s.post
 
-	// DocLayout gives the article the reading measure, the breadcrumb trail,
-	// and the prev/next footer. Nav and Toc are left empty, which puts it in
-	// its single-column narrow mode — a blog post has no sibling rail.
-	pager := &ui.DocPager{
+	// docpage gives the article the breadcrumb trail and the prev/next
+	// footer. Nav and Toc are left empty — a blog post has no sibling
+	// rail — and this recipe's copy of the package collapses both empty
+	// rails into a single centred reading column.
+	pager := docpage.PagerConfig{
 		PrevHref: "/", PrevLabel: "All posts",
 	}
 	if p.Prev != nil {
@@ -72,13 +74,14 @@ func (s *postScreen) Render() render.HTML {
 		)
 	}
 
-	return ui.DocLayout(ui.DocLayoutConfig{
-		Crumbs: []ui.DocCrumb{
-			{Label: "Posts", Href: "/"},
-			{Label: p.Title},
-		},
-		Pager: pager,
-	}, ui.Stack(ui.StackConfig{Gap: ui.GapLG}, body...))
+	return docpage.Render(docpage.Config{
+		Crumbs: ui.Breadcrumbs(ui.BreadcrumbsConfig{},
+			ui.Crumb{Text: "Posts", Href: "/"},
+			ui.Crumb{Text: p.Title},
+		),
+		Body:  ui.Stack(ui.StackConfig{Gap: ui.GapLG}, body...),
+		Pager: docpage.Pager(pager),
+	})
 }
 
 // ─── Post listing (homepage + /page/N) ───────────────────────────────
@@ -263,11 +266,14 @@ func (s *pageScreen) ScreenTitle() string       { return s.page.Title }
 func (s *pageScreen) ScreenDescription() string { return "" }
 
 func (s *pageScreen) Render() render.HTML {
-	return ui.DocLayout(ui.DocLayoutConfig{},
-		ui.Stack(ui.StackConfig{Gap: ui.GapLG},
+	// The same rail-less docpage shape as a post, with no crumbs and no
+	// pager: a standalone page is one body with a title.
+	return docpage.Render(docpage.Config{
+		Body: ui.Stack(ui.StackConfig{Gap: ui.GapLG},
 			ui.PageHeader(ui.PageHeaderConfig{Title: s.page.Title}),
 			s.page.HTML,
-		))
+		),
+	})
 }
 
 // ─── Search ──────────────────────────────────────────────────────────

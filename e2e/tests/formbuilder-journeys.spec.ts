@@ -304,10 +304,10 @@ test("submitting garbage: the SERVER rejects it, then accepts a clean submit", a
   await expect(page.locator("#fb-verdict")).toHaveAttribute("data-verdict", "rejected");
   await expect(page.locator("#fb-verdict")).toContainText("Server rejected — HTTP 422");
   // The form-level error summary and the per-field errors are the server's.
-  await expect(page.locator(".ui-form")).toContainText("does not match the required pattern");
-  await expect(page.locator(".ui-form")).toContainText("Enter a valid email address.");
-  await expect(page.locator(".ui-form")).toContainText("Must be at most 20.");
-  await expect(page.locator(".ui-form")).toContainText("This box must be checked.");
+  await expect(page.locator("#fb-live-form")).toContainText("does not match the required pattern");
+  await expect(page.locator("#fb-live-form")).toContainText("Enter a valid email address.");
+  await expect(page.locator("#fb-live-form")).toContainText("Must be at most 20.");
+  await expect(page.locator("#fb-live-form")).toContainText("This box must be checked.");
 
   // A crafted value cannot even sneak through select membership: the option
   // exists only client-side.
@@ -328,7 +328,7 @@ test("submitting garbage: the SERVER rejects it, then accepts a clean submit", a
     page.locator('button[type="submit"]').click(),
   ]);
   expect(rejectResp2.status()).toBe(422);
-  await expect(page.locator(".ui-form")).toContainText("Choose one of the listed options.");
+  await expect(page.locator("#fb-live-form")).toContainText("Choose one of the listed options.");
 
   // Clean values: accepted, with the submitted data echoed back.
   await page.locator('input[name="full_name"]').fill("Ada Lovelace");

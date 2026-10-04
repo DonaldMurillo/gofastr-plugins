@@ -26,6 +26,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/docpage"
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/siteheader"
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
 	"github.com/DonaldMurillo/gofastr/framework"
 	uitheme "github.com/DonaldMurillo/gofastr/framework/ui/theme"
@@ -58,7 +60,9 @@ func newApp(now time.Time) (*framework.App, *Site, error) {
 	}
 
 	uiApp := appui.NewApp(siteName)
-	uiApp.WithTheme(uitheme.Default())
+	// The owned chrome packages bring their own tokens (the header's
+	// menu stagger, the docpage's prose measure); Extend adds them.
+	uiApp.WithTheme(uitheme.Default().Extend(siteheader.Tokens, docpage.Tokens))
 	layout := newLayout(site)
 	uiApp.SetDefaultLayout(layout)
 	registerScreens(site, uiApp, layout)

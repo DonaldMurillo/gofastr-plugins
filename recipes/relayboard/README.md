@@ -27,8 +27,21 @@ no-ops because `window.posthog` never appears. One log line says so.
 ```
 relayboard/
 ├── main.go            screens, accounts, the flag store, the gate, the A/B script
+├── siteheader/        the top bar, copied by gofastr generate package siteheader
+├── sitefooter/        the colophon, copied by gofastr generate package sitefooter
 └── relayboard_test.go HTTP smoke tests against the real builder
 ```
+
+The header and footer are this recipe's own code, copied from the
+canonical packages with `gofastr generate package siteheader` /
+`sitefooter` and then wired in `main.go` (`siteHeader` /
+`siteFooter`). Their styles live in their owned sheets,
+`siteheader/siteheader.style.css` and `sitefooter/sitefooter.style.css`
+(compiled into each package's `*_style.gen.go` by `gofastr generate
+styles`), and `siteheader` adds one token of its own
+(`siteheader.tokens.css`) that `main.go` passes to the theme through
+`Extend`. They are not framework code: edit them here, and expect no
+upstream updates to them.
 
 ## The funnel, attributed
 
@@ -46,11 +59,17 @@ the `data-buy` / `data-price` attributes off the pricing buttons.
 `FormField` in cards; a signed-in session sees its identity and a
 sign-out instead), all posting to
 [`battery/auth`](https://github.com/DonaldMurillo/gofastr/tree/main/battery/auth)'s
-core plugin routes, backed by durable sqlite entity stores. The posthog
-integration's `whoami` endpoint answers from that session: anonymous
-visitors get `{"id":null}`, a logged-in user gets their id, and the
-bootstrap merges the anonymous person into the identified one on login.
-No analytics-side identity exists; the app's auth is the only source.
+core plugin routes, backed by durable sqlite entity stores.
+Registering creates the account and nothing else: it answers the same
+303 whether or not the address was free and never signs in
+(anti-enumeration). The form's `next` field brings the visitor back to
+`/account?registered=1`, where a notice says to log in; it reads the same
+for a new and a taken address. The
+posthog integration's `whoami` endpoint answers from the session:
+anonymous visitors get `{"id":null}`, a logged-in user gets their id,
+and the bootstrap merges the anonymous person into the identified one
+on login. No analytics-side identity exists; the app's auth is the
+only source.
 
 ## The A/B hero
 
@@ -110,8 +129,8 @@ URLs to try:
 
 - `/?utm_source=twitter&utm_campaign=launch` — the attributed landing
 - `/pricing` — the conversion buttons
-- `/account` — register, and watch the person merge in PostHog
-- `/beta` — the gate; register first and PostHog decides per user
+- `/account` — register, then log in, and watch the person merge in PostHog
+- `/beta` — the gate; log in first and PostHog decides per user
 
 ## Driving it with automation
 

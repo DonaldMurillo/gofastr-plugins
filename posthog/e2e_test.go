@@ -63,6 +63,7 @@ import (
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
 	"github.com/DonaldMurillo/gofastr/core/render"
 	"github.com/DonaldMurillo/gofastr/framework"
+	"github.com/DonaldMurillo/gofastr/framework/ui"
 	uitheme "github.com/DonaldMurillo/gofastr/framework/ui/theme"
 	"github.com/DonaldMurillo/gofastr/framework/uihost"
 	_ "github.com/DonaldMurillo/gofastr/sqlite/stdlib"
@@ -359,6 +360,22 @@ func (s *registerScreen) Render() render.HTML {
 		`</form>`)
 }
 
+// loginScreen backs "/login". battery/auth's register stopped minting a
+// session in gofastr v0.83 (a cookie on only the free-address branch would
+// reveal which addresses are taken), so a new account signs in here next.
+type loginScreen struct{}
+
+func (s *loginScreen) ScreenTitle() string { return "Sign in" }
+
+func (s *loginScreen) Render() render.HTML {
+	return render.HTML(`<h1>Sign in</h1>` +
+		`<form method="post" action="/auth/login">` +
+		`<input type="email" name="email" id="login-email" autocomplete="email" required>` +
+		`<input type="password" name="password" id="login-password" autocomplete="current-password" required>` +
+		`<button type="submit" id="login-submit">Sign in</button>` +
+		`</form>`)
+}
+
 // pageScriptJS is the host page script served the CSP-clean way (external,
 // via uihost.ScriptHandler + RegisterExternalScript — the strict default
 // CSP forbids inline). It carries the two page-side behaviors the README
@@ -414,12 +431,15 @@ func newE2EApp(t *testing.T, vendor *fakeVendor) *e2eApp {
 
 	uiApp := appui.NewApp("posthog-e2e")
 	uiApp.WithTheme(uitheme.Default())
-	layout := appui.NewLayout("main").WithContainer()
+	layout := appui.NewLayout("main", appui.LayoutSpec{}, func(_ context.Context, l *appui.LayoutTree) render.HTML {
+		return ui.Container(ui.ContainerConfig{Width: ui.ContainerPage, Pad: ui.ContainerPadPage}, l.Primary())
+	})
 	// Screens must be POINTERS: value screens fail DI at render and every
 	// page 404s.
 	uiApp.Register("/", &landingScreen{}, layout)
 	uiApp.Register("/pricing", &pricingScreen{}, layout)
 	uiApp.Register("/register", &registerScreen{}, layout)
+	uiApp.Register("/login", &loginScreen{}, layout)
 
 	host := uihost.New(uiApp, uihost.WithDescription("posthog e2e"))
 
@@ -684,9 +704,9 @@ func TestAttributionSurvivesSPAToPurchase(t *testing.T) {
 }
 
 // Scenario 3, the GetID fix end-to-end: the browser registers through the
-// REAL battery/auth form (clicking the button — the runtime's form
-// interceptor follows the 303), lands authenticated, and the bootstrap's
-// whoami refresh identifies. The $identify beacon must name the real
+// REAL battery/auth form (clicking the button), signs in through the real
+// login form, lands authenticated, and the bootstrap's whoami refresh
+// identifies. The $identify beacon must name the real
 // auth_users.id as distinct_id and carry $anon_distinct_id — the
 // anonymous→identified merge PostHog's person timeline is built from.
 func TestRealAuthIdentifyMerge(t *testing.T) {
@@ -709,22 +729,41 @@ func TestRealAuthIdentifyMerge(t *testing.T) {
 		t.Fatalf("fill and submit register form: %v", err)
 	}
 
-	// The 303 lands on "/" and the SPA navigate fires whoami refresh →
-	// identify. Wait for the redirect first so the sqlite read below is
-	// not racing the insert.
-	waitFor(t, "redirect to /", func() bool {
+	// Register's 303 lands on "/" still anonymous: battery/auth mints no
+	// session on register. Wait for the redirect first so the sqlite read
+	// below is not racing the insert.
+	atHome := func() bool {
 		var pathname string
 		if err := chromedp.Run(ctx, chromedp.Evaluate(`location.pathname`, &pathname)); err != nil {
 			return false
 		}
 		return pathname == "/"
-	})
+	}
+	waitFor(t, "redirect to / after register", atHome)
 
 	var userID string
 	waitFor(t, "auth_users row", func() bool {
 		_ = app.db.QueryRow(`SELECT id FROM auth_users WHERE email = ?`, "buyer@example.com").Scan(&userID)
 		return userID != ""
 	})
+	if n := len(vendor.eventsNamed("$identify")); n != 0 {
+		t.Fatalf("%d $identify events before sign-in; register must leave the visitor anonymous", n)
+	}
+
+	// Sign in with the new account. Login's 303 lands on "/" with a
+	// session, and the whoami refresh on that page identifies.
+	navigate(t, ctx, app.base+"/login")
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible("#login-email", chromedp.ByQuery),
+		chromedp.Click("#login-email", chromedp.ByQuery),
+		chromedp.SendKeys("#login-email", "buyer@example.com", chromedp.ByQuery),
+		chromedp.Click("#login-password", chromedp.ByQuery),
+		chromedp.SendKeys("#login-password", "correct-horse-battery", chromedp.ByQuery),
+		chromedp.Click("#login-submit", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("fill and submit login form: %v", err)
+	}
+	waitFor(t, "redirect to / after sign-in", atHome)
 
 	waitFor(t, "$identify event", func() bool { return len(vendor.eventsNamed("$identify")) > 0 })
 	id := vendor.eventsNamed("$identify")[0]

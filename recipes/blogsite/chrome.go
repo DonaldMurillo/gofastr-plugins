@@ -4,13 +4,14 @@ package main
 // render a post card or a tag chip the same way everywhere.
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/sitefooter"
+	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/siteheader"
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
-	"github.com/DonaldMurillo/gofastr/core-ui/component"
-	"github.com/DonaldMurillo/gofastr/core-ui/html"
 	"github.com/DonaldMurillo/gofastr/core/render"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
 )
@@ -22,95 +23,88 @@ const siteName = "Notes on a flat file"
 // tagline is the one-line description under the brand and in the feed.
 const tagline = "A blog that is a directory of markdown files."
 
-// staticHTML adapts pre-rendered HTML to component.Component so it can be
-// handed to Layout.WithHeader / WithFooter, which take components rather than
-// markup. The chrome is identical on every page, so it is built once at boot.
-type staticHTML render.HTML
-
-func (s staticHTML) Render() render.HTML { return render.HTML(s) }
-
-// newLayout builds the shell every screen renders inside. The nav is
-// data-driven: content pages that declare a `menu:` key appear in it, so
-// adding content/pages/uses.md with `menu: Uses` puts it in the header
-// without touching this file.
+// newLayout builds the shell every screen renders inside: the site's own
+// header and footer packages around the routed content, on one page-tall
+// stack that pins the footer to the bottom. The nav is data-driven: content
+// pages that declare a `menu:` key appear in it, so adding
+// content/pages/uses.md with `menu: Uses` puts it in the header without
+// touching this file.
 func newLayout(site *Site) *appui.Layout {
-	nav := []ui.SiteHeaderLink{
+	return appui.NewLayout("site", appui.LayoutSpec{}, func(ctx context.Context, l *appui.LayoutTree) render.HTML {
+		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+			siteheader.Render(siteheader.Config{
+				Ctx:  ctx,
+				Name: siteName,
+				// Search is a nav link rather than a box in the Actions
+				// slot. The siteheader renders its links TWICE — once in
+				// the desktop bar, once in the phone menu — which is
+				// harmless for links (a repeated href duplicates nothing
+				// that has to be unique) but wrong for a form control,
+				// whose fixed id would land in the DOM twice.
+				Links:   navLinks(site),
+				Actions: ui.ThemeToggle(ui.ThemeToggleConfig{}),
+			}),
+			ui.Container(ui.ContainerConfig{Width: ui.ContainerPage, Pad: ui.ContainerPadPage}, l.Primary()),
+			siteFooter(site),
+		)
+	})
+}
+
+// navLinks is the header's nav: the fixed sections plus every content page
+// that declares a `menu:` key.
+func navLinks(site *Site) []siteheader.Link {
+	nav := []siteheader.Link{
 		{Label: "Posts", Href: "/"},
-		{Label: "Tags", Href: "/tags", MatchPrefix: true},
+		{Label: "Tags", Href: "/tags", Section: true},
 		{Label: "Archive", Href: "/archive"},
-		// Search is a nav link rather than a box in the Actions slot. SiteHeader
-		// renders Actions TWICE — once in the desktop bar, once in the mobile
-		// drawer — so a form control with a fixed id there lands in the DOM
-		// twice, which is a duplicate-id a11y violation and breaks the
-		// label/control association for whichever copy loses. Nav items are
-		// links, and a repeated href is harmless.
 		{Label: "Search", Href: "/search"},
 	}
 	for _, p := range site.Pages {
 		if p.Menu != "" {
-			nav = append(nav, ui.SiteHeaderLink{Label: p.Menu, Href: "/" + p.Slug})
+			nav = append(nav, siteheader.Link{Label: p.Menu, Href: "/" + p.Slug})
 		}
 	}
+	return nav
+}
 
-	header := ui.SiteHeader(ui.SiteHeaderConfig{
-		Brand: html.Link(html.LinkConfig{Href: "/", Text: siteName}),
-		// The full name wraps awkwardly under 720px; the header swaps in
-		// the short mark rather than letting the identity push the nav off
-		// the screen.
-		MobileBrand:  html.Link(html.LinkConfig{Href: "/", Text: "Notes"}),
-		NavItems:     nav,
-		NavUnderline: true,
-		Actions:      ui.ThemeToggle(ui.ThemeToggleConfig{}),
-		MobileExtraLinks: []ui.SiteHeaderLink{
-			{Label: "RSS", Href: "/feed.xml"},
-			{Label: "Source ↗", Href: recipeSourceURL, External: true},
-		},
-	})
-
-	// The footer's tag column is the five busiest tags. Site.Tags is already
+// siteFooter is the colophon: the reading links, the five busiest tags, the
+// feeds, and where the code lives, over a quiet count of the corpus.
+func siteFooter(site *Site) render.HTML {
+	// The tag column is the five busiest tags. Site.Tags is already
 	// sorted by count, so this is a slice, not a sort.
-	tagLinks := make([]ui.SiteFooterLink, 0, 5)
+	tagLinks := make([]sitefooter.Link, 0, 5)
 	for _, t := range site.Tags {
 		if len(tagLinks) == 5 {
 			break
 		}
-		tagLinks = append(tagLinks, ui.SiteFooterLink{
+		tagLinks = append(tagLinks, sitefooter.Link{
 			Label: fmt.Sprintf("%s (%d)", t.Tag, t.Count),
 			Href:  "/tags/" + t.Slug,
 		})
 	}
 
-	footer := ui.SiteFooter(ui.SiteFooterConfig{
-		Lead: ui.Stack(ui.StackConfig{Gap: ui.GapXS},
-			html.Strong(html.TextConfig{}, render.Text(siteName)),
-			ui.Muted(render.Text(tagline)),
-		),
-		Columns: []ui.SiteFooterColumn{
-			{Title: "Read", Links: []ui.SiteFooterLink{
+	return sitefooter.Render(sitefooter.Config{
+		Name:    siteName,
+		Tagline: tagline,
+		Columns: []sitefooter.Column{
+			{Title: "Read", Links: []sitefooter.Link{
 				{Label: "All posts", Href: "/"},
 				{Label: "Archive", Href: "/archive"},
 				{Label: "Tags", Href: "/tags"},
 			}},
 			{Title: "Tags", Links: tagLinks},
-			{Title: "Subscribe", Links: []ui.SiteFooterLink{
+			{Title: "Subscribe", Links: []sitefooter.Link{
 				{Label: "RSS", Href: "/feed.xml"},
 				{Label: "JSON Feed", Href: "/feed.json"},
 				{Label: "Sitemap", Href: "/sitemap.xml"},
 			}},
+			{Title: "Project", Links: []sitefooter.Link{
+				{Label: "Source on GitHub", Href: recipeSourceURL},
+			}},
 		},
-		Bottom: []render.HTML{
-			ui.Muted(render.Text(fmt.Sprintf("%d posts, %d tags.", len(site.Posts), len(site.Tags)))),
-			html.Link(html.LinkConfig{Href: recipeSourceURL, Text: "Source on GitHub"}),
-		},
+		Note: fmt.Sprintf("%d posts, %d tags.", len(site.Posts), len(site.Tags)),
 	})
-
-	return appui.NewLayout("site").
-		WithHeader(staticHTML(header)).
-		WithFooter(staticHTML(footer)).
-		WithContainer()
 }
-
-var _ component.Component = staticHTML("")
 
 // ─── Shared pieces ───────────────────────────────────────────────────
 
