@@ -7,22 +7,29 @@
 // header and footer use.
 //
 // The regions are whatever the app passes in, so a layout can hand
-// it outlets and a route area: the TOC column collapses when its
-// region renders empty (an article with no headings), and below the
-// lg breakpoint it goes. Below md the page is one column and the nav
-// is the Sidebar's own phone drawer.
+// it outlets and a route area. A rail left unset, or holding an
+// empty element (an outlet with no fill), collapses and its column
+// goes; no rails at all is the narrow reading shape, one centred
+// column at the prose measure. Below lg the contents rail goes.
+// Below md the page is one column and the nav is the Sidebar's own
+// phone drawer.
 //
 // This package is the app's own code: edit it freely.
 package docpage
 
 import (
+	"context"
+
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
+	"github.com/DonaldMurillo/gofastr/core/i18n"
 	"github.com/DonaldMurillo/gofastr/core/render"
+	"github.com/DonaldMurillo/gofastr/framework/i18nui"
 )
 
 // Config holds the page's regions.
 type Config struct {
-	// Nav is the left rail: the article list.
+	// Nav is the left rail: the article list. Left unset, or holding
+	// an empty element, the rail collapses and its column goes.
 	Nav render.HTML
 	// Crumbs sits above the article body.
 	Crumbs render.HTML
@@ -30,8 +37,9 @@ type Config struct {
 	Body render.HTML
 	// Pager sits under the article (see Pager).
 	Pager render.HTML
-	// Toc is the right rail. When it renders an empty element (an
-	// outlet with no fill) the column collapses.
+	// Toc is the right rail: the table of contents. Left unset, or
+	// holding an empty element (an outlet with no fill), the rail
+	// collapses and its column goes.
 	Toc render.HTML
 }
 
@@ -52,10 +60,16 @@ func Render(cfg Config) render.HTML {
 // PagerConfig names the neighbouring pages. An empty href draws no
 // card on that side.
 type PagerConfig struct {
+	// Ctx resolves the pager's own words (the nav label and the
+	// direction defaults) through i18nui in the request's language. Left
+	// unset, they come from the app's default translator in its fallback
+	// locale, and English only when that has no entry or there is no
+	// translator; pass the request context to follow the reader.
+	Ctx                 context.Context
 	PrevHref, PrevLabel string
 	NextHref, NextLabel string
 	// PrevDir and NextDir are the small direction labels; they default
-	// to "Previous" and "Next".
+	// to "Previous" and "Next" in the request's language.
 	PrevDir, NextDir string
 }
 
@@ -64,11 +78,15 @@ func Pager(cfg PagerConfig) render.HTML {
 	if cfg.PrevHref == "" && cfg.NextHref == "" {
 		return render.HTML("")
 	}
+	ctx := cfg.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if cfg.PrevDir == "" {
-		cfg.PrevDir = "Previous"
+		cfg.PrevDir = i18nui.PaginationPrevious.Text(ctx)
 	}
 	if cfg.NextDir == "" {
-		cfg.NextDir = "Next"
+		cfg.NextDir = i18nui.PaginationNext.Text(ctx)
 	}
 	card := func(href, dir, label string, next bool) render.HTML {
 		return html.LinkHTML(html.LinkHTMLConfig{
@@ -87,5 +105,10 @@ func Pager(cfg PagerConfig) render.HTML {
 	if cfg.NextHref != "" {
 		next = card(cfg.NextHref, cfg.NextDir, cfg.NextLabel, true)
 	}
-	return html.Nav(html.NavConfig{Class: Style.Pager(), Label: "More posts"}, prev, next)
+	return html.Nav(html.NavConfig{Class: Style.Pager(), Label: MorePosts.Text(ctx)}, prev, next)
 }
+
+// MorePosts is the pager's nav label. This blog says "posts" where the
+// canonical copy says "articles" (i18nui.NavMoreArticles), so it keeps
+// its own catalog key.
+var MorePosts = i18n.Define("blogsite.nav.morePosts", "More posts")

@@ -38,6 +38,7 @@ import (
 	"strings"
 
 	appui "github.com/DonaldMurillo/gofastr/core-ui/app"
+	"github.com/DonaldMurillo/gofastr/core/textsafe"
 	"github.com/DonaldMurillo/gofastr/framework"
 	uitheme "github.com/DonaldMurillo/gofastr/framework/ui/theme"
 	"github.com/DonaldMurillo/gofastr/framework/uihost"
@@ -183,11 +184,17 @@ func (a *app) uploadImage(ctx context.Context, req richtext.UploadRequest) (rich
 	}
 	// The plugin already sniffed the bytes and rejected non-images before
 	// calling this, so req.Type is the detected type rather than the caller's
-	// claim.
+	// claim. The file name is the caller's, so it is checked like any
+	// other text bound into SQL. Base64 is always ASCII; the check on it
+	// costs one pass and says so to the analyzer.
+	data := base64.StdEncoding.EncodeToString(req.Bytes)
+	if !textsafe.Storable(req.Type) || !textsafe.Storable(req.Name) || !textsafe.Storable(data) {
+		return richtext.UploadResult{}, ErrNotStorable
+	}
 	id, err := a.store.PutImage(&Image{
 		Mime: req.Type,
 		Name: req.Name,
-		Data: base64.StdEncoding.EncodeToString(req.Bytes),
+		Data: data,
 	})
 	if err != nil {
 		return richtext.UploadResult{}, err
@@ -283,7 +290,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}
-	posts, _ := a.store.All()
+	posts, err := a.store.All()
+	if err != nil {
+		log.Fatalf("read posts: %v", err)
+	}
 	log.Printf("blogapp: %d posts in the database; sign in at /admin/login (password %q)",
 		len(posts), adminPassword())
 	fmt.Printf("blogapp listening on http://localhost:%d/\n", ln.Addr().(*net.TCPAddr).Port)

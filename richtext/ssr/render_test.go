@@ -106,7 +106,7 @@ func TestRenderFullDoc(t *testing.T) {
 	)
 	out := Render(d)
 
-	mustContain(t, out, `data-fui-comp="richtext-read"`)
+	mustContain(t, out, `data-cui-comp="richtext-read"`)
 	mustContain(t, out, "<h2>Title</h2>")
 	mustContain(t, out, "<strong>bold</strong>")
 	mustContain(t, out, `<a href="https://example.com" rel="noopener noreferrer" target="_blank">link</a>`)
@@ -291,7 +291,7 @@ func TestRenderJSONBadInput(t *testing.T) {
 func TestRenderEmptyDoc(t *testing.T) {
 	out := Render(map[string]any{"type": "doc", "content": []any{}})
 	mustContain(t, out, `class="richtext-read"`)
-	mustContain(t, out, "data-fui-comp")
+	mustContain(t, out, "data-cui-comp")
 }
 
 // --- Determinism: same input → identical bytes ---------------------------

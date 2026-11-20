@@ -1,4 +1,4 @@
-/* The app's top bar. It pins to the top of the page, and its
+/* The app's top bar. The page stack pins it (StickyHeader), and its
    translucent background blurs the content scrolling under it. The bar's
    content lines up with the page column. Below the md breakpoint the
    links and the call to action move into a full-width menu under the
@@ -8,10 +8,7 @@
    with --size-page-gutter outside it), the column ui.Container's page
    width gives main. */
 :scope {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: var(--z-sticky);
-  border-block-end: 1px solid var(--color-border);
+  border-block-end: var(--stroke-thin) solid var(--color-border);
 }
 /* The glass sits on a layer behind the bar, not on the bar itself:
    backdrop-filter on the bar would make it the containing block of
@@ -21,7 +18,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: color-mix(in srgb, var(--color-background) 82%, transparent);
+  background: color-mix(in oklab, var(--color-background) 82%, transparent);
   backdrop-filter: saturate(1.6) blur(12px);
 }
 
@@ -42,7 +39,7 @@
   flex-shrink: 0;
   color: var(--color-text);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-snug);
   text-decoration: none;
 }
 /* The mark is the app's own logo, passed in as Config.Mark; it draws
@@ -85,7 +82,7 @@
 }
 .toggle::-webkit-details-marker { display: none; }
 .toggle:hover { background: var(--color-surface-soft); }
-.toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.toggle:focus-visible { outline: var(--stroke-focus) solid var(--color-text-subtle); outline-offset: var(--stroke-focus-offset); }
 /* The three bars turn into the cross: both icons share one cell and
    swap with a quarter turn. */
 .icon-open,
@@ -121,7 +118,7 @@
   display: flex;
   align-items: center;
   min-block-size: var(--spacing-touch-target);
-  border-block-end: 1px solid var(--color-border);
+  border-block-end: var(--stroke-thin) solid var(--color-border);
   color: var(--color-text-muted);
   font-size: var(--text-lg);
   font-weight: var(--font-weight-medium);

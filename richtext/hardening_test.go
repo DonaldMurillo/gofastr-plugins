@@ -137,3 +137,23 @@ func TestReadViewNoScriptCSP(t *testing.T) {
 		t.Errorf("read view CSP must keep style-src 'unsafe-inline' (SSR inline color spans): %q", csp)
 	}
 }
+
+// TestUploadRejectsUnstorableName proves the name guard: a file name that is
+// not valid UTF-8 never reaches the host's upload hook, which would bind it
+// into SQL.
+func TestUploadRejectsUnstorableName(t *testing.T) {
+	app, _ := newTestApp(t, WithDevGrantAll())
+	srv := httptest.NewServer(app.Router())
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+UploadURL, bytes.NewReader(onePixelPNG))
+	req.Header.Set("X-Upload-Name", "\xff.png")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("an upload named with invalid UTF-8 answered %d; want 400", resp.StatusCode)
+	}
+}

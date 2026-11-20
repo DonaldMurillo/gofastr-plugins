@@ -451,6 +451,15 @@ func TestCreateEditPublishDelete(t *testing.T) {
 		t.Error("the published post is not in the feed")
 	}
 
+	// Unpublish takes it back off the public site.
+	_, _ = post(t, c, srv.URL+"/admin/posts/"+id+"/status", url.Values{"status": {StatusDraft}})
+	if unpublished, _ := a.store.ByID(id); unpublished.Published() {
+		t.Fatal("unpublish did not take")
+	}
+	if _, home := get(t, c, srv.URL+"/"); strings.Contains(home, "A test post") {
+		t.Error("the unpublished post is still on the homepage")
+	}
+
 	// Delete.
 	_, _ = post(t, c, srv.URL+"/admin/posts/"+id+"/delete", url.Values{})
 	if _, err := a.store.ByID(id); err == nil {

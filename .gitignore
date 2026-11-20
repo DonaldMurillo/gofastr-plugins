@@ -51,6 +51,10 @@ example/latency-gate.json
 /relayboard
 /blogsite
 /blogapp
+# The same binaries as built on Windows.
+/relayboard.exe
+/blogsite.exe
+/blogapp.exe
 
 # Loose debug screenshots at the repo root, same sweep, same cause.
 /*.png
@@ -58,3 +62,4 @@ example/latency-gate.json
 # Written by `gofastr verify` and `gofastr gen styles` for editor completion
 # (theme tokens as CSS); never served, regenerated on every run.
 /.gofastr/
+/recipes/*/.gofastr/

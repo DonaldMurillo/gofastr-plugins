@@ -17,8 +17,9 @@
 //     sets aria-current on the nav links.
 //
 // The bar is the page's banner landmark and a direct child of the
-// page-tall ui.Stack, which is what lets it stay pinned for the whole
-// page. This package is the app's own code: edit it freely.
+// page-tall ui.Stack, which pins it for the whole page when the layout
+// sets StickyHeader (the stack also tells sticky parts below where the
+// bar ends). This package is the app's own code: edit it freely.
 package siteheader
 
 import (
@@ -36,7 +37,7 @@ type Link struct {
 	Label, Href string
 	// Section keeps the link current on every page under Href (Help
 	// stays lit on /help/billing), through the runtime's
-	// data-fui-match-prefix.
+	// data-cui-match-prefix.
 	Section bool
 }
 
@@ -71,7 +72,7 @@ func Render(cfg Config) render.HTML {
 		for _, l := range cfg.Links {
 			var attrs html.Attrs
 			if l.Section {
-				attrs = html.Attrs{"data-fui-match-prefix": ""}
+				attrs = html.Attrs{"data-cui-match-prefix": ""}
 			}
 			out = append(out, html.Link(html.LinkConfig{Href: l.Href, Text: l.Label, ExtraAttrs: attrs}))
 		}
@@ -91,7 +92,7 @@ func Render(cfg Config) render.HTML {
 
 	var primary, barCTA, menu render.HTML
 	if len(cfg.Links) > 0 {
-		primary = html.Nav(html.NavConfig{Class: Style.Links(), Label: i18nui.T(ctx, i18nui.KeyNavPrimary)}, links()...)
+		primary = html.Nav(html.NavConfig{Class: Style.Links(), Label: i18nui.NavPrimary.Text(ctx)}, links()...)
 	}
 	if cfg.CTA.Href != "" {
 		barCTA = html.Div(html.DivConfig{Class: Style.BarCta()},
@@ -99,7 +100,7 @@ func Render(cfg Config) render.HTML {
 	}
 	if len(cfg.Links) > 0 || cfg.CTA.Href != "" {
 		panel := []render.HTML{
-			html.Nav(html.NavConfig{Class: Style.PanelLinks(), Label: i18nui.T(ctx, i18nui.KeyNavMobilePrimary)}, links()...),
+			html.Nav(html.NavConfig{Class: Style.PanelLinks(), Label: i18nui.NavMobilePrimary.Text(ctx)}, links()...),
 		}
 		if cfg.CTA.Href != "" {
 			panel = append(panel, html.Div(html.DivConfig{Class: Style.PanelCta()},
@@ -113,7 +114,7 @@ func Render(cfg Config) render.HTML {
 			Content: render.Join(panel...),
 			Trap:    true,
 			Parts: headless.Parts{Attrs: headless.PartAttrs{
-				headless.PartSummary: {"aria-label": i18nui.T(ctx, i18nui.KeyNavToggle)},
+				headless.PartSummary: {"aria-label": i18nui.NavToggle.Text(ctx)},
 			}},
 		}, headless.Classes{
 			headless.PartRoot:    Style.Menu(),

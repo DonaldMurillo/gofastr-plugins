@@ -168,7 +168,7 @@ deferred to Phase 1.)
    `init`.
 4. On `docChanged`: writes `params.doc` (JSON.stringified) into the hidden input
    named `<jsonField>` and `params.markdown` into `<mdField>` in the enclosing
-   form, so a normal form POST / `data-fui-rpc` submit round-trips it.
+   form, so a normal form POST / `data-cui-rpc` submit round-trips it.
 5. On `save`: POSTs `{doc, markdown}` to the plugin's save RPC route (§ Go API).
 6. On `resize`: sets `iframe.style.height`.
 7. On `requestUpload`: POSTs the bytes to the plugin's upload RPC route (with the

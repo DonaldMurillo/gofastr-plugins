@@ -40,7 +40,7 @@ func (a *app) newLayout() *appui.Layout {
 			actions = append(actions,
 				ui.LinkButton(ui.LinkButtonConfig{Label: "Admin", Href: "/admin", Variant: ui.ButtonSecondary, Size: ui.ButtonSizeSmall}))
 		}
-		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+		return ui.Stack(ui.StackConfig{Screen: true, StickyHeader: true, Gap: ui.GapNone},
 			siteheader.Render(siteheader.Config{
 				Ctx:  ctx,
 				Name: siteName,

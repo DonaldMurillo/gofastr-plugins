@@ -512,7 +512,7 @@ func TagSlug(tag string) string {
 // It runs at LOAD time, not render time. ui.Markdown parses the source and
 // upgrades every fenced block into a highlighted ui.CodeBlock with a copy
 // button, which is real work to repeat on every request for output that can
-// never change. The component's style marker (data-fui-comp) travels inside
+// never change. The component's style marker (data-cui-comp) travels inside
 // the returned HTML, so the host still finds it when scanning the page for
 // which stylesheets to link — pre-rendering costs nothing on that side.
 func renderProse(body string) render.HTML {

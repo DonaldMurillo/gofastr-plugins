@@ -1,11 +1,15 @@
 package docpage_test
 
 import (
+	"context"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/DonaldMurillo/gofastr-plugins/recipes/blogsite/docpage"
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
+	"github.com/DonaldMurillo/gofastr/core/i18n"
 	"github.com/DonaldMurillo/gofastr/core/render"
 )
 
@@ -32,7 +36,7 @@ func TestRenderPageRegions(t *testing.T) {
 	html := string(docpage.Render(full()))
 	for _, want := range []string{
 		// The owned root and its three regions.
-		`data-fui-scope="docpage"`, `class="nav"`, `class="article"`, `class="toc"`,
+		`data-cui-scope="docpage"`, `class="nav"`, `class="article"`, `class="toc"`,
 		// The crumbs sit inside the article, above the body.
 		`class="crumbs"`, "Getting started",
 		// The TOC content lands in its rail.
@@ -52,8 +56,9 @@ func TestRenderTocRegionCollapse(t *testing.T) {
 	if !strings.Contains(filled, "On this page") {
 		t.Fatalf("the filled TOC should render its content")
 	}
-	// An empty region is one of two shapes the sheet's collapse keys
-	// on: an empty child (an outlet with no fill)...
+	// An empty region element (an outlet with no fill) is the shape the
+	// sheet's :has(.toc > :only-child:empty) collapse keys on: the rail stays in
+	// the markup, holding an empty child.
 	cfg := full()
 	cfg.Toc = html.Div(html.DivConfig{}, render.HTML(""))
 	empty := string(docpage.Render(cfg))
@@ -61,13 +66,42 @@ func TestRenderTocRegionCollapse(t *testing.T) {
 	if !strings.Contains(empty, want) {
 		t.Errorf("an empty TOC region should render the collapse shape %q:\n%s", want, empty)
 	}
-	// ... and a region the caller left unset entirely, which is what
+	// A region the caller left unset renders a self-empty rail: what
 	// this blog's screens pass for Nav and Toc.
 	cfg = full()
 	cfg.Toc = ""
 	unset := string(docpage.Render(cfg))
 	if !strings.Contains(unset, `<div class="toc"></div>`) {
 		t.Errorf("an unset TOC region should render a self-empty rail:\n%s", unset)
+	}
+}
+
+func TestRenderNavRegionEmpty(t *testing.T) {
+	// An unset Nav renders an empty .nav element, no child at all:
+	// the shape the sheet's .nav:empty collapse keys on.
+	cfg := full()
+	cfg.Nav = render.HTML("")
+	got := string(docpage.Render(cfg))
+	want := `<div class="nav"></div>`
+	if !strings.Contains(got, want) {
+		t.Errorf("an unset nav should render the empty element %q:\n%s", want, got)
+	}
+}
+
+func TestEmptyRailSelectorsUseOnlyChild(t *testing.T) {
+	// A rail is empty when it has no child or its sole child is empty.
+	// A bare `> :empty` also matches a rail holding content beside an
+	// empty outlet, so a media rule spelled that way collapses a filled
+	// rail at that width only.
+	src, err := os.ReadFile("docpage.style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare := regexp.MustCompile(`>\s*:empty`)
+	for i, line := range strings.Split(string(src), "\n") {
+		if bare.MatchString(line) {
+			t.Errorf("docpage.style.css:%d uses a bare > :empty, want > :only-child:empty: %s", i+1, strings.TrimSpace(line))
+		}
 	}
 }
 
@@ -106,5 +140,30 @@ func TestPager(t *testing.T) {
 	// No neighbours, no pager at all.
 	if got := string(docpage.Pager(docpage.PagerConfig{})); got != "" {
 		t.Errorf("a pager with no hrefs should render nothing, got %q", got)
+	}
+}
+
+// The pager's own words, its nav label and the direction defaults, come
+// from the request's catalog through Ctx, as siteheader's do; English
+// when no context is given.
+func TestPagerSpeaksTheLocale(t *testing.T) {
+	cat := i18n.NewMapCatalog()
+	cat.Set("es", "ui.pagination.previous", i18n.Message{Text: "Anterior"})
+	cat.Set("es", "ui.pagination.next", i18n.Message{Text: "Siguiente"})
+	cat.Set("es", "blogsite.nav.morePosts", i18n.Message{Text: "Más entradas"})
+	ctx := i18n.WithTranslator(i18n.WithContext(context.Background(), i18n.Locale{Tag: "es"}), i18n.NewTranslator(cat, "en"))
+	got := string(docpage.Pager(docpage.PagerConfig{
+		Ctx:      ctx,
+		PrevHref: "/a", PrevLabel: "A",
+		NextHref: "/c", NextLabel: "C",
+	}))
+	for _, want := range []string{"Anterior", "Siguiente", `aria-label="Más entradas"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("an es pager lacks %q:\n%s", want, got)
+		}
+	}
+	en := string(docpage.Pager(docpage.PagerConfig{PrevHref: "/a", PrevLabel: "A"}))
+	if !strings.Contains(en, `aria-label="More posts"`) || !strings.Contains(en, "Previous") {
+		t.Errorf("a pager with no Ctx should read English:\n%s", en)
 	}
 }
