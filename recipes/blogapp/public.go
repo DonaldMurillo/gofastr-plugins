@@ -236,7 +236,7 @@ type tagScreen struct {
 }
 
 func (s *tagScreen) SetParams(params map[string]string) { s.tag = params["tag"] }
-func (s *tagScreen) ScreenTitle(context.Context) string                { return "Tagged " + s.tag }
+func (s *tagScreen) ScreenTitle(context.Context) string { return "Tagged " + s.tag }
 
 func (s *tagScreen) RenderCtx(context.Context) render.HTML {
 	posts, err := s.app.store.PublishedByTag(s.tag)

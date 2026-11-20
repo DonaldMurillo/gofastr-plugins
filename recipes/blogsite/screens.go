@@ -286,8 +286,10 @@ type searchScreen struct {
 	site *Site
 }
 
-func (s *searchScreen) ScreenTitle(context.Context) string       { return "Search" }
-func (s *searchScreen) ScreenDescription(context.Context) string { return "Search every published post." }
+func (s *searchScreen) ScreenTitle(context.Context) string { return "Search" }
+func (s *searchScreen) ScreenDescription(context.Context) string {
+	return "Search every published post."
+}
 
 func (s *searchScreen) RenderCtx(ctx context.Context) render.HTML {
 	query := appui.QueryFromContext(ctx).Get("q")
