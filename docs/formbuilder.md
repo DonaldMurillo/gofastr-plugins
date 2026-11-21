@@ -116,7 +116,7 @@ exists to demonstrate. Input *types* stay (`email`/`number`/`date` are
 typing aids; the server re-parses anyway).
 
 The page runs with no UIHost, so the ui.* components' registered stylesheets
-are inlined by scanning the rendered form's own `data-fui-comp` markers
+are inlined by scanning the rendered form's own `data-cui-comp` markers
 (`registry.Scan` → `Entry.CSSFor` under the demo theme) — the set can never
 drift from what the form renders.
 

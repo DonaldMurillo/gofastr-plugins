@@ -4,6 +4,75 @@ All notable changes to gofastr-plugins. Follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 `0.x-phase` until the platform API stabilises.
 
+### Changed — gofastr v0.97.0 (2026-11-20)
+
+Sixteen tags since v0.86.0, patch releases included. Most of the work is
+ports of renames, plus fixes for what the new analyzers in
+`gofastr verify --strict` found. The Go floor moves to 1.27.4.
+
+- **Kernel attributes are `data-cui-*`.** `data-fui-comp`, `-scope`,
+  `-match-prefix` and `-rpc` became `data-cui-*`. richtext's read-view sheet
+  (74 selectors), its tests, relayboard's hero script and the docs now use the
+  new names. `data-fui-plugin*` and the kit's `fui-*` classes are unchanged.
+  `docs/design/isolation-crux-glm.md` keeps the old names because it records
+  a past review.
+- **Screen metadata takes a context.** `ScreenTitle` and `ScreenDescription`
+  are `func(context.Context) string`, and the old shape panics at
+  registration. All 35 methods in the three recipes and the posthog e2e app
+  are ported.
+- **Sticky headers.** Each recipe's layout sets `ui.StackConfig.StickyHeader`
+  instead of putting `position: sticky` in the header sheet.
+- **Recopied packages.** `siteheader` and `sitefooter` in all three recipes,
+  and blogsite's `docpage`, are recopied from v0.97.0 with their style files
+  regenerated. The recopied sheets use the new `--stroke-*`, `--leading-*` and
+  `--tracking-*` tokens (GOFASTR1807). The local edits are reapplied:
+  blogsite's footer columns stay at `minmax(8rem, 1fr)`, and docpage's scope
+  still brings no padding or measure, because the page mounts inside the
+  layout's `ui.Container`. docpage's pager label is its own phrase,
+  `i18n.Define("blogsite.nav.morePosts", "More posts")`, because this blog
+  says "posts" where the upstream copy says "articles". The chromium test
+  regains its rail-less centring check.
+- **blogapp, for the new analyzers.**
+  - 5xx responses no longer echo `err.Error()`. A `serverError` helper logs
+    the error and answers "internal server error". A value that fails
+    `textsafe.Storable` gets a 400.
+  - Every request string bound into SQL is checked with `textsafe.Storable`
+    first: the post form fields, ids, and image name, type and data.
+  - Each `ParseForm` sits behind `http.MaxBytesReader`, capped at 64 KiB for
+    login and status forms and 4 MiB for the post form. Over the cap the
+    handler answers 413.
+  - The login `next` parameter goes through `textsafe.SanitizeControlBytes`
+    before the same-origin check. The login redirect query-escapes the path.
+  - The `posts` and `images` tables declare `id TEXT NOT NULL PRIMARY KEY`
+    (GOFASTR1418).
+  - Startup fails if the initial post read errors, where it used to drop the
+    error.
+- **relayboard** caps the JSON body it decodes from its upstream at 1 MiB.
+- **richtext** rejects an upload whose `X-Upload-Name` is not storable text
+  with `400 E_BAD_NAME`, before the host's upload hook sees it.
+- **The publish journey waited for nothing.** `toggleStatus` went to
+  `/admin`, clicked, then called `waitForURL("/admin")`, which returns at
+  once because the page is already there. The homepage check raced the
+  status change, and it lost in both engines on this run. The helper now
+  waits for the hidden `status` input on the reloaded list to flip. A
+  matching unpublish step joins `TestCreateEditPublishDelete`, which only
+  covered publishing.
+- **Line endings.** A new `.gitattributes` keeps `*.golden.svg` LF. On a
+  Windows checkout with `core.autocrlf` the chart golden test compared CRLF
+  files against LF output and failed. `.gitignore` now also covers the
+  `.exe` recipe binaries and the `.gofastr/` directory `verify` writes in
+  each recipe.
+
+`gofastr upgrade --from v0.86.0 --to v0.97.0` exits 0.
+
+Gates: build, vet (plain and `-tags chromium`), the full Go suite (34
+packages), the chromium-tagged recipe suites run alone (10 packages),
+`gofastr verify --strict` in each recipe, and 484/484 Playwright journeys
+across WebKit, Chromium and the two mobile projects, with no retries used.
+An earlier desktop-only run finished 462/464, failing the publish journey
+above in both engines. The fixed blogapp spec then passed 66/66, three
+repeats in each desktop engine, before the clean 484/484 run.
+
 ### Changed — gofastr v0.86.0 (2026-10-02)
 
 v0.86.0 deletes the kit chrome the three recipes were built on

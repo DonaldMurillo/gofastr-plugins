@@ -263,18 +263,23 @@ test("the document survives a reload — the body is server-rendered back into t
  */
 async function toggleStatus(page: Page, id: string): Promise<void> {
   await page.goto(`${BLOGAPP}/admin`);
-  await Promise.all([
-    // Wait for the REDIRECT TO LAND, not merely for the POST to answer.
-    //
-    // Waiting on the response alone was the first attempt at this, and it
-    // fixed the original stale-homepage race while creating a second one: the
-    // POST answers 303, the browser then navigates to /admin, and the caller's
-    // next goto collided with that in-flight navigation. CI said so exactly:
-    // "Navigation to /  is interrupted by another navigation to /admin".
-    // Landing on /admin implies the POST both completed and succeeded.
-    page.waitForURL((u) => u.pathname.startsWith("/admin"), { timeout: 15_000 }),
-    page.locator(`form[action="/admin/posts/${id}/status"] button`).click(),
-  ]);
+  const form = page.locator(`form[action="/admin/posts/${id}/status"]`);
+  const target = form.locator('input[name="status"]');
+  const before = await target.getAttribute("value");
+  await form.locator("button").click();
+  // Wait for the REDIRECT TO LAND, not merely for the POST to answer.
+  //
+  // Waiting on the response alone was the first attempt at this, and it fixed
+  // the original stale-homepage race while creating a second one: the POST
+  // answers 303, the browser then navigates to /admin, and the caller's next
+  // goto collided with that in-flight navigation. CI said so exactly:
+  // "Navigation to /  is interrupted by another navigation to /admin".
+  //
+  // waitForURL("/admin") was the second attempt, and it waited for nothing:
+  // the page is already on /admin, and waitForURL returns at once when the
+  // URL already matches. The flipped hidden input exists only on the /admin
+  // page the redirect lands on, after the status change has committed.
+  await expect(target).not.toHaveValue(before ?? "", { timeout: 15_000 });
 }
 
 test("publish and unpublish move a post on and off the public site", async ({ page }) => {

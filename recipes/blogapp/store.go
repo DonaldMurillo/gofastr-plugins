@@ -18,11 +18,18 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/DonaldMurillo/gofastr/core/textsafe"
 )
 
 // ErrNotFound is returned by the lookups rather than sql.ErrNoRows, so callers
 // branch on this package's vocabulary instead of the driver's.
 var ErrNotFound = errors.New("blogapp: post not found")
+
+// ErrNotStorable refuses a value holding a NUL byte or invalid UTF-8.
+// SQLite would store those bytes; Postgres answers 22021, so the store
+// refuses them on both and the handler answers 400 instead of 500.
+var ErrNotStorable = errors.New("blogapp: text holds a NUL byte or invalid UTF-8")
 
 // Status values. Kept as strings in one column rather than a separate table:
 // there are two of them and there is no third coming.
@@ -86,7 +93,7 @@ func NewStore(db *sql.DB) (*Store, error) {
 func (s *Store) migrate() error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS posts (
-			id TEXT PRIMARY KEY,
+			id TEXT NOT NULL PRIMARY KEY,
 			title TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
 			summary TEXT NOT NULL DEFAULT '',
@@ -102,7 +109,7 @@ func (s *Store) migrate() error {
 		// recipe stays on the portable subset of the engine; a real app puts
 		// these in object storage and keeps only the URL here.
 		`CREATE TABLE IF NOT EXISTS images (
-			id TEXT PRIMARY KEY,
+			id TEXT NOT NULL PRIMARY KEY,
 			mime TEXT NOT NULL,
 			name TEXT NOT NULL DEFAULT '',
 			data TEXT NOT NULL,
@@ -185,6 +192,9 @@ func (s *Store) Update(p *Post) error {
 // UpdateBody persists the document. This is what the editor's autosave calls,
 // via the plugin's save handler.
 func (s *Store) UpdateBody(id, bodyJSON, bodyMD string) error {
+	if !textsafe.Storable(id) || !textsafe.Storable(bodyJSON) || !textsafe.Storable(bodyMD) {
+		return ErrNotStorable
+	}
 	res, err := s.db.Exec(`UPDATE posts SET body_json=?, body_md=?, updated_at=? WHERE id=?`,
 		bodyJSON, bodyMD, fmtTime(time.Now().UTC()), id)
 	if err != nil {
@@ -215,6 +225,9 @@ func (s *Store) SetStatus(id, status string) error {
 }
 
 func (s *Store) Delete(id string) error {
+	if !textsafe.Storable(id) {
+		return ErrNotStorable
+	}
 	_, err := s.db.Exec(`DELETE FROM posts WHERE id=?`, id)
 	if err != nil {
 		return fmt.Errorf("blogapp: delete post: %w", err)
@@ -223,6 +236,9 @@ func (s *Store) Delete(id string) error {
 }
 
 func (s *Store) ByID(id string) (*Post, error) {
+	if !textsafe.Storable(id) {
+		return nil, ErrNotStorable
+	}
 	row := s.db.QueryRow(`SELECT `+postColumns+` FROM posts WHERE id=?`, id)
 	p, err := scanPost(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -395,6 +411,9 @@ func (s *Store) PutImage(img *Image) (string, error) {
 }
 
 func (s *Store) Image(id string) (*Image, error) {
+	if !textsafe.Storable(id) {
+		return nil, ErrNotStorable
+	}
 	var img Image
 	err := s.db.QueryRow(`SELECT id, mime, name, data FROM images WHERE id=?`, id).
 		Scan(&img.ID, &img.Mime, &img.Name, &img.Data)

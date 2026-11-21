@@ -42,6 +42,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -172,7 +173,7 @@ func siteFooter() render.HTML {
 
 type landing struct{}
 
-func (*landing) ScreenTitle() string { return "" }
+func (*landing) ScreenTitle(context.Context) string { return "" }
 func (*landing) Render() render.HTML {
 	return render.Join(
 		ui.Hero(ui.HeroConfig{
@@ -200,7 +201,7 @@ func (*landing) Render() render.HTML {
 
 type pricing struct{}
 
-func (*pricing) ScreenTitle() string { return "Pricing" }
+func (*pricing) ScreenTitle(context.Context) string { return "Pricing" }
 func (*pricing) Render() render.HTML {
 	return render.Join(
 		ui.PageHeader(ui.PageHeaderConfig{
@@ -234,7 +235,7 @@ func (*pricing) Render() render.HTML {
 // branch); login sets the session and redirects (303).
 type account struct{}
 
-func (*account) ScreenTitle() string { return "Account" }
+func (*account) ScreenTitle(context.Context) string { return "Account" }
 func (a *account) Render() render.HTML {
 	return a.RenderCtx(context.Background())
 }
@@ -309,7 +310,7 @@ type beta struct {
 	enabled func(ctx context.Context) bool
 }
 
-func (*beta) ScreenTitle() string { return "Beta" }
+func (*beta) ScreenTitle(context.Context) string { return "Beta" }
 func (b *beta) Render() render.HTML {
 	return b.RenderCtx(context.Background())
 }
@@ -383,7 +384,7 @@ func (s phFlagStore) Get(ctx context.Context, key string) (*featureflag.Flag, er
 			Enabled bool `json:"enabled"`
 		} `json:"flags"`
 	}
-	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&out); err != nil {
 		return nil, err
 	}
 	v, found := out.Flags[key]
@@ -434,7 +435,7 @@ var abJS = []byte(`(function () {
     if (!ph || !ph.getFeatureFlag) return;
     var v = ph.getFeatureFlag('hero-copy-test');
     if (!v || location.pathname !== '/') return;
-    var h1 = document.querySelector('[data-fui-comp="ui-hero"] h1');
+    var h1 = document.querySelector('[data-cui-comp="ui-hero"] h1');
     if (!h1) return;
     h1.textContent = v === 'punchy' ? 'Ship analytics without leaving your origin' : 'RelayBoard';
     h1.setAttribute('data-ab-variant', v);
@@ -483,7 +484,7 @@ func newApp(db *sql.DB, cfg config) (*framework.App, *relayboard, error) {
 		Dark:    &uitheme.Overrides{Primary: "#5EEAD4"},
 	}).Extend(siteheader.Tokens))
 	layout := appui.NewLayout("site", appui.LayoutSpec{}, func(ctx context.Context, l *appui.LayoutTree) render.HTML {
-		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+		return ui.Stack(ui.StackConfig{Screen: true, StickyHeader: true, Gap: ui.GapNone},
 			siteHeader(ctx),
 			ui.Container(ui.ContainerConfig{Width: ui.ContainerPage, Pad: ui.ContainerPadPage}, l.Primary()),
 			siteFooter(),

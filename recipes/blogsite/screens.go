@@ -36,8 +36,8 @@ type postScreen struct {
 	post *Post
 }
 
-func (s *postScreen) ScreenTitle() string       { return s.post.Title }
-func (s *postScreen) ScreenDescription() string { return s.post.Summary }
+func (s *postScreen) ScreenTitle(context.Context) string       { return s.post.Title }
+func (s *postScreen) ScreenDescription(context.Context) string { return s.post.Summary }
 
 func (s *postScreen) Render() render.HTML {
 	p := s.post
@@ -92,7 +92,7 @@ type listScreen struct {
 	totalPages int
 }
 
-func (s *listScreen) ScreenTitle() string {
+func (s *listScreen) ScreenTitle(context.Context) string {
 	// Page 1 is the site root: an empty title lets the host use the bare app
 	// name for <title> rather than "Posts — Notes on a flat file".
 	if s.page == 1 {
@@ -101,7 +101,7 @@ func (s *listScreen) ScreenTitle() string {
 	return fmt.Sprintf("Posts, page %d", s.page)
 }
 
-func (s *listScreen) ScreenDescription() string { return tagline }
+func (s *listScreen) ScreenDescription(context.Context) string { return tagline }
 
 func (s *listScreen) Render() render.HTML {
 	start := (s.page - 1) * postsPerPage
@@ -167,8 +167,8 @@ func pager(page, total int) render.HTML {
 
 type tagIndexScreen struct{ site *Site }
 
-func (s *tagIndexScreen) ScreenTitle() string { return "Tags" }
-func (s *tagIndexScreen) ScreenDescription() string {
+func (s *tagIndexScreen) ScreenTitle(context.Context) string { return "Tags" }
+func (s *tagIndexScreen) ScreenDescription(context.Context) string {
 	return fmt.Sprintf("Every tag used across %d posts.", len(s.site.Posts))
 }
 
@@ -194,8 +194,8 @@ type tagScreen struct {
 	posts []*Post
 }
 
-func (s *tagScreen) ScreenTitle() string { return "Tagged " + s.tag.Tag }
-func (s *tagScreen) ScreenDescription() string {
+func (s *tagScreen) ScreenTitle(context.Context) string { return "Tagged " + s.tag.Tag }
+func (s *tagScreen) ScreenDescription(context.Context) string {
 	return fmt.Sprintf("%d posts tagged %s.", s.tag.Count, s.tag.Tag)
 }
 
@@ -216,8 +216,8 @@ func (s *tagScreen) Render() render.HTML {
 
 type archiveScreen struct{ site *Site }
 
-func (s *archiveScreen) ScreenTitle() string { return "Archive" }
-func (s *archiveScreen) ScreenDescription() string {
+func (s *archiveScreen) ScreenTitle(context.Context) string { return "Archive" }
+func (s *archiveScreen) ScreenDescription(context.Context) string {
 	return "Every post, grouped by year, newest first."
 }
 
@@ -262,8 +262,8 @@ func (s *archiveScreen) Render() render.HTML {
 
 type pageScreen struct{ page *Page }
 
-func (s *pageScreen) ScreenTitle() string       { return s.page.Title }
-func (s *pageScreen) ScreenDescription() string { return "" }
+func (s *pageScreen) ScreenTitle(context.Context) string       { return s.page.Title }
+func (s *pageScreen) ScreenDescription(context.Context) string { return "" }
 
 func (s *pageScreen) Render() render.HTML {
 	// The same rail-less docpage shape as a post, with no crumbs and no
@@ -286,8 +286,10 @@ type searchScreen struct {
 	site *Site
 }
 
-func (s *searchScreen) ScreenTitle() string       { return "Search" }
-func (s *searchScreen) ScreenDescription() string { return "Search every published post." }
+func (s *searchScreen) ScreenTitle(context.Context) string { return "Search" }
+func (s *searchScreen) ScreenDescription(context.Context) string {
+	return "Search every published post."
+}
 
 func (s *searchScreen) RenderCtx(ctx context.Context) render.HTML {
 	query := appui.QueryFromContext(ctx).Get("q")

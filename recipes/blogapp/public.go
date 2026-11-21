@@ -58,14 +58,14 @@ func (s *listScreen) SetParams(params map[string]string) {
 	}
 }
 
-func (s *listScreen) ScreenTitle() string {
+func (s *listScreen) ScreenTitle(context.Context) string {
 	if s.page <= 1 {
 		return ""
 	}
 	return fmt.Sprintf("Posts, page %d", s.page)
 }
 
-func (s *listScreen) ScreenDescription() string { return tagline }
+func (s *listScreen) ScreenDescription(context.Context) string { return tagline }
 
 func (s *listScreen) RenderCtx(ctx context.Context) render.HTML {
 	posts, err := s.app.store.Published()
@@ -140,14 +140,14 @@ func (s *postScreen) SetParams(params map[string]string) { s.slug = params["slug
 
 // ScreenTitle is re-read per request after params are injected, which is what
 // gives each post its own <title> and Open Graph title.
-func (s *postScreen) ScreenTitle() string {
+func (s *postScreen) ScreenTitle(context.Context) string {
 	if p, err := s.app.store.BySlug(s.slug); err == nil {
 		return p.Title
 	}
 	return ""
 }
 
-func (s *postScreen) ScreenDescription() string {
+func (s *postScreen) ScreenDescription(context.Context) string {
 	if p, err := s.app.store.BySlug(s.slug); err == nil {
 		return p.Summary
 	}
@@ -199,8 +199,8 @@ type tagIndexScreen struct {
 	app *app
 }
 
-func (s *tagIndexScreen) ScreenTitle() string       { return "Tags" }
-func (s *tagIndexScreen) ScreenDescription() string { return "Every tag in use." }
+func (s *tagIndexScreen) ScreenTitle(context.Context) string       { return "Tags" }
+func (s *tagIndexScreen) ScreenDescription(context.Context) string { return "Every tag in use." }
 
 func (s *tagIndexScreen) RenderCtx(context.Context) render.HTML {
 	tags, err := s.app.store.Tags()
@@ -236,7 +236,7 @@ type tagScreen struct {
 }
 
 func (s *tagScreen) SetParams(params map[string]string) { s.tag = params["tag"] }
-func (s *tagScreen) ScreenTitle() string                { return "Tagged " + s.tag }
+func (s *tagScreen) ScreenTitle(context.Context) string { return "Tagged " + s.tag }
 
 func (s *tagScreen) RenderCtx(context.Context) render.HTML {
 	posts, err := s.app.store.PublishedByTag(s.tag)
@@ -273,7 +273,7 @@ type archiveScreen struct {
 	app *app
 }
 
-func (s *archiveScreen) ScreenTitle() string { return "Archive" }
+func (s *archiveScreen) ScreenTitle(context.Context) string { return "Archive" }
 
 func (s *archiveScreen) RenderCtx(context.Context) render.HTML {
 	posts, err := s.app.store.Published()
@@ -318,7 +318,7 @@ type searchScreen struct {
 	app *app
 }
 
-func (s *searchScreen) ScreenTitle() string { return "Search" }
+func (s *searchScreen) ScreenTitle(context.Context) string { return "Search" }
 
 func (s *searchScreen) RenderCtx(ctx context.Context) render.HTML {
 	query := appui.QueryFromContext(ctx).Get("q")
@@ -403,7 +403,7 @@ type notFoundScreen struct {
 	app *app
 }
 
-func (s *notFoundScreen) ScreenTitle() string { return "Not found" }
+func (s *notFoundScreen) ScreenTitle(context.Context) string { return "Not found" }
 
 func (s *notFoundScreen) RenderCtx(context.Context) render.HTML { return notFoundBody(s.app) }
 

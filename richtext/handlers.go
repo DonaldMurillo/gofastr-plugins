@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+
+	"github.com/DonaldMurillo/gofastr/core/textsafe"
 )
 
 // Request-body ceilings (DoS guard): a save envelope is JSON text; an upload is
@@ -94,8 +96,16 @@ func (p *Plugin) handleUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnsupportedMediaType, "E_NOT_IMAGE", "upload body is not an image")
 		return
 	}
+	// The name is the caller's header, handed to a hook that will likely
+	// store it. A NUL byte or invalid UTF-8 is a 500 on Postgres and
+	// silently stored on SQLite, so it stops here for every host.
+	name := r.Header.Get("X-Upload-Name")
+	if !textsafe.Storable(name) {
+		writeJSONError(w, http.StatusBadRequest, "E_BAD_NAME", "upload name is not valid UTF-8 text")
+		return
+	}
 	req := UploadRequest{
-		Name:  r.Header.Get("X-Upload-Name"),
+		Name:  name,
 		Type:  sniffed,
 		Bytes: bytes,
 	}

@@ -31,7 +31,7 @@ const tagline = "A blog that is a directory of markdown files."
 // touching this file.
 func newLayout(site *Site) *appui.Layout {
 	return appui.NewLayout("site", appui.LayoutSpec{}, func(ctx context.Context, l *appui.LayoutTree) render.HTML {
-		return ui.Stack(ui.StackConfig{Screen: true, Gap: ui.GapNone},
+		return ui.Stack(ui.StackConfig{Screen: true, StickyHeader: true, Gap: ui.GapNone},
 			siteheader.Render(siteheader.Config{
 				Ctx:  ctx,
 				Name: siteName,

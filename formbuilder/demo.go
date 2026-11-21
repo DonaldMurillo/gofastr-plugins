@@ -537,7 +537,7 @@ func liveAcceptedCard(doc Doc, values url.Values) string {
 // form actually used. These demo pages run with NO UIHost, so the registry's
 // runtime auto-load (which needs the gofastr client runtime) never fires —
 // the same reason richtext/ssr ships ReadCSS. Instead of a hand-maintained
-// list, the form's own data-fui-comp markers are scanned and each registered
+// list, the form's own data-cui-comp markers are scanned and each registered
 // stylesheet is inlined under the demo theme — the set can never drift from
 // what the form renders.
 func liveFormCSS(formHTML string) string {

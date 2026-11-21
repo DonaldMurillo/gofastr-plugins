@@ -18,6 +18,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -149,7 +150,7 @@ func requireAdmin(next http.Handler) http.Handler {
 			return
 		}
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
-			http.Redirect(w, r, "/admin/login?next="+r.URL.Path, http.StatusSeeOther)
+			http.Redirect(w, r, "/admin/login?next="+url.QueryEscape(r.URL.Path), http.StatusSeeOther)
 			return
 		}
 		http.Error(w, "sign in first", http.StatusForbidden)

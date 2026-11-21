@@ -325,7 +325,7 @@ func (f *fakeVendor) sawPath(path string) bool {
 // SPA-navigation tests click.
 type landingScreen struct{}
 
-func (s *landingScreen) ScreenTitle() string { return "Home" }
+func (s *landingScreen) ScreenTitle(context.Context) string { return "Home" }
 
 func (s *landingScreen) Render() render.HTML {
 	return render.HTML(`<h1 id="hero">Ship first-party</h1>` +
@@ -336,7 +336,7 @@ func (s *landingScreen) Render() render.HTML {
 // captures on click.
 type pricingScreen struct{}
 
-func (s *pricingScreen) ScreenTitle() string { return "Pricing" }
+func (s *pricingScreen) ScreenTitle(context.Context) string { return "Pricing" }
 
 func (s *pricingScreen) Render() render.HTML {
 	return render.HTML(`<h1>Pricing</h1>` +
@@ -349,7 +349,7 @@ func (s *pricingScreen) Render() render.HTML {
 // real button does.
 type registerScreen struct{}
 
-func (s *registerScreen) ScreenTitle() string { return "Create account" }
+func (s *registerScreen) ScreenTitle(context.Context) string { return "Create account" }
 
 func (s *registerScreen) Render() render.HTML {
 	return render.HTML(`<h1>Create account</h1>` +
@@ -365,7 +365,7 @@ func (s *registerScreen) Render() render.HTML {
 // reveal which addresses are taken), so a new account signs in here next.
 type loginScreen struct{}
 
-func (s *loginScreen) ScreenTitle() string { return "Sign in" }
+func (s *loginScreen) ScreenTitle(context.Context) string { return "Sign in" }
 
 func (s *loginScreen) Render() render.HTML {
 	return render.HTML(`<h1>Sign in</h1>` +

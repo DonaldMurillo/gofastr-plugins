@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/DonaldMurillo/gofastr/core-ui/component"
 	"github.com/DonaldMurillo/gofastr/core-ui/html"
 	"github.com/DonaldMurillo/gofastr/core/render"
+	"github.com/DonaldMurillo/gofastr/core/textsafe"
 	"github.com/DonaldMurillo/gofastr/framework/headless"
 	"github.com/DonaldMurillo/gofastr/framework/ui"
 
@@ -38,7 +40,7 @@ type loginScreen struct {
 	app *app
 }
 
-func (s *loginScreen) ScreenTitle() string { return "Sign in" }
+func (s *loginScreen) ScreenTitle(context.Context) string { return "Sign in" }
 
 func (s *loginScreen) RenderCtx(ctx context.Context) render.HTML {
 	q := appui.QueryFromContext(ctx)
@@ -87,9 +89,31 @@ func (s *loginScreen) RenderCtx(ctx context.Context) render.HTML {
 	return ui.Stack(ui.StackConfig{Gap: ui.GapLG}, parts...)
 }
 
-func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
+// Admin form bodies are capped below the stdlib's 10 MiB floor. The post
+// form is the big one: its hidden body_json carries the whole document.
+const (
+	maxSmallForm = 64 << 10
+	maxPostForm  = 4 << 20
+)
+
+// parseForm reads r's form under a cap of limit bytes. On failure it has
+// already answered: 413 for a body over the cap, 400 for anything else.
+func parseForm(w http.ResponseWriter, r *http.Request, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			http.Error(w, "form too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "bad form", http.StatusBadRequest)
+		}
+		return false
+	}
+	return true
+}
+
+func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !parseForm(w, r, maxSmallForm) {
 		return
 	}
 	if !checkPassword(r.PostFormValue("password")) {
@@ -100,8 +124,10 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Only follow `next` when it is a local absolute path. Without that check
 	// the login form is an open redirect: ?next=https://evil.example bounces a
-	// freshly authenticated admin off-site.
-	next := r.PostFormValue("next")
+	// freshly authenticated admin off-site. Control bytes go first, so the
+	// check sees what the browser will: a tab in "/	/evil.example" is
+	// dropped by the browser, which would leave "//evil.example".
+	next := textsafe.SanitizeControlBytes(r.PostFormValue("next"))
 	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/admin"
 	}
@@ -123,7 +149,7 @@ type adminListScreen struct {
 	app *app
 }
 
-func (s *adminListScreen) ScreenTitle() string { return "Admin" }
+func (s *adminListScreen) ScreenTitle(context.Context) string { return "Admin" }
 
 func (s *adminListScreen) RenderCtx(context.Context) render.HTML {
 	posts, err := s.app.store.All()
@@ -194,7 +220,7 @@ type editScreen struct {
 
 func (s *editScreen) SetParams(params map[string]string) { s.id = params["id"] }
 
-func (s *editScreen) ScreenTitle() string {
+func (s *editScreen) ScreenTitle(context.Context) string {
 	if p, err := s.app.store.ByID(s.id); err == nil && p.Title != "" {
 		return "Editing " + p.Title
 	}
@@ -296,7 +322,7 @@ func (a *app) handleNewPost(w http.ResponseWriter, r *http.Request) {
 	// by post id: with no row, the first autosave would have nowhere to land.
 	p, err := a.store.Create(&Post{Title: "Untitled post", Status: StatusDraft})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	http.Redirect(w, r, "/admin/posts/"+p.ID, http.StatusSeeOther)
@@ -309,7 +335,15 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	if !parseForm(w, r, maxPostForm) {
+		return
+	}
+	title := strings.TrimSpace(r.PostFormValue("title"))
+	summary := strings.TrimSpace(r.PostFormValue("summary"))
+	submittedSlug := strings.TrimSpace(r.PostFormValue("slug"))
+	rawTags := r.PostFormValue("tags")
+	if !textsafe.Storable(title) || !textsafe.Storable(summary) ||
+		!textsafe.Storable(submittedSlug) || !textsafe.Storable(rawTags) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
@@ -326,8 +360,8 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 	// deliberate choice and its URL never follows the title it is finally given.
 	autoSlug := stripSlugSuffix(p.Slug) == TagSlug(p.Title)
 
-	p.Title = strings.TrimSpace(r.PostFormValue("title"))
-	p.Summary = strings.TrimSpace(r.PostFormValue("summary"))
+	p.Title = title
+	p.Summary = summary
 
 	// Slug rule, in one place: a hand-typed value always wins; otherwise a
 	// derived slug follows the title while the post is a draft; publishing
@@ -339,14 +373,14 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 	// choice. Checking autoSlug rather than only the draft status is what stops
 	// the opposite bug: a slug you typed by hand on a draft must survive the
 	// save that publishes it under a new title.
-	switch submitted := strings.TrimSpace(r.PostFormValue("slug")); {
+	switch submitted := submittedSlug; {
 	case submitted != "" && submitted != p.Slug:
 		p.Slug = submitted // hand-edited in the form
 	case !wasPublished && autoSlug:
 		p.Slug = "" // derived, still a draft — let uniqueSlug re-derive it
 	}
 
-	p.Tags = splitTags(r.PostFormValue("tags"))
+	p.Tags = splitTags(rawTags)
 	if status := r.PostFormValue("status"); status == StatusDraft || status == StatusPublished {
 		p.Status = status
 	}
@@ -357,7 +391,7 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 		p.Title = "Untitled post"
 	}
 	if err := a.store.Update(p); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 
@@ -367,7 +401,7 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 	// form was submitted with scripts off.
 	if bodyJSON := r.PostFormValue("body_json"); strings.TrimSpace(bodyJSON) != "" {
 		if err := a.store.UpdateBody(p.ID, bodyJSON, r.PostFormValue("body_md")); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			serverError(w, err)
 			return
 		}
 	}
@@ -375,13 +409,16 @@ func (a *app) handleSavePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleSetStatus(w http.ResponseWriter, r *http.Request) {
+	if !parseForm(w, r, maxSmallForm) {
+		return
+	}
 	status := r.PostFormValue("status")
 	if status != StatusDraft && status != StatusPublished {
 		http.Error(w, "unknown status", http.StatusBadRequest)
 		return
 	}
 	if err := a.store.SetStatus(r.PathValue("id"), status); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
@@ -389,7 +426,7 @@ func (a *app) handleSetStatus(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	if err := a.store.Delete(r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)

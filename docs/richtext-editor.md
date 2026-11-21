@@ -46,7 +46,7 @@ recolors with the theme (Hard Rule 7, see schema §3).
   `callout`/`toggle` degrade to HTML-passthrough; `columns` flatten; color marks
   drop to plain text. Full fidelity always remains in the JSON.
 - **Form integration:** two hidden inputs (`body_json`, `body_md`) are synced on
-  `docChanged`, so a normal form POST / `data-fui-rpc` submit round-trips both
+  `docChanged`, so a normal form POST / `data-cui-rpc` submit round-trips both
   the canonical JSON and the portable markdown.
 
 ## SSR read view (`richtext/ssr`)
@@ -62,7 +62,7 @@ render.RespondHTML(w, r, html)
 ```
 
 - The stylesheet auto-loads via `registry.RegisterStyle("richtext-read", …)` —
-  the runtime loads its CSS the first time a `data-fui-comp="richtext-read"`
+  the runtime loads its CSS the first time a `data-cui-comp="richtext-read"`
   marker appears, so no manual `<link>` is needed.
 - The only inline styles are per-node color-slot assignments of the form
   `style="color:var(--richtext-fg-<slot>,var(--color-<token>))"` — token refs

@@ -150,7 +150,7 @@ func TestHighlightCSSTokensParity(t *testing.T) {
 // TestHighlightCSSRuleParity guards the `.hl-*` RULE bodies (not just the
 // `--richtext-hl-*` variable definitions the sibling test covers). The two
 // stylesheets use different selector prefixes (`.ProseMirror …` vs
-// `[data-fui-comp=…] …`), but the declarations inside each `.hl-<name>{…}` block
+// `[data-cui-comp=…] …`), but the declarations inside each `.hl-<name>{…}` block
 // — the `color: var(…, #fallback)` and `font-style: italic` — must match, or a
 // comment would render italic in one surface and upright in the other.
 func TestHighlightCSSRuleParity(t *testing.T) {

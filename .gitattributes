@@ -1,0 +1,2 @@
+# Golden files are compared byte for byte; keep them LF on every checkout.
+*.golden.svg text eol=lf

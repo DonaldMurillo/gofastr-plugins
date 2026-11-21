@@ -17,7 +17,7 @@ the editing UX.
 1. **#38 as written** → "markdown source + live preview pane." Three competing
    plans were drafted (Claude, GLM-5.2, GPT-5.6-sol). GLM caught a real flaw:
    live-preview-via-input-trigger and native form-POST persistence **cannot
-   coexist on one form** (runtime hijacks submit on any `data-fui-rpc` form —
+   coexist on one form** (runtime hijacks submit on any `data-cui-rpc` form —
    `runtime.js:429`; input-trigger requires such a form — `runtime.js:528`; HTML
    forbids nested forms). Verified. All three plans made obsolete by the reframe.
 2. **Reframe → full Rich Text.** A real Rich Text is inherently a fat client, which

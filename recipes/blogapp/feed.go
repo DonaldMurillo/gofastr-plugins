@@ -12,6 +12,8 @@ package main
 
 import (
 	"encoding/xml"
+	"errors"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -75,7 +77,7 @@ type rssGUID struct {
 func (a *app) handleFeed(w http.ResponseWriter, r *http.Request) {
 	posts, err := a.store.Published()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	base := baseURL(r)
@@ -130,12 +132,12 @@ type sitemapU struct {
 func (a *app) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	posts, err := a.store.Published()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	tags, err := a.store.Tags()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	base := baseURL(r)
@@ -175,4 +177,17 @@ func (a *app) handleRobots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte("User-agent: *\nDisallow: /admin\nDisallow: /search\nSitemap: " +
 		baseURL(r) + "/sitemap.xml\n"))
+}
+
+// serverError logs err and answers 500 with a fixed message. The error's
+// own text can carry SQL, file paths or a DSN, so it never reaches the
+// client. A value the store refused as unstorable is the caller's fault,
+// so that one answers 400.
+func serverError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrNotStorable) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	log.Printf("blogapp: %v", err)
+	http.Error(w, "internal server error", http.StatusInternalServerError)
 }
